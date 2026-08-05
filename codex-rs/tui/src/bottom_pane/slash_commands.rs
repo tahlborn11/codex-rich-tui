@@ -304,6 +304,7 @@ mod tests {
             vec![
                 SlashCommand::Ide,
                 SlashCommand::Copy,
+                SlashCommand::CopyCode,
                 SlashCommand::Raw,
                 SlashCommand::Diff,
                 SlashCommand::Mention,

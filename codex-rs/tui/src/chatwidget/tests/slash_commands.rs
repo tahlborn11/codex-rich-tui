@@ -1965,6 +1965,62 @@ async fn slash_copy_stores_clipboard_lease_and_preserves_it_on_failure() {
 }
 
 #[tokio::test]
+async fn slash_copy_code_copies_the_last_fenced_block() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.transcript.last_agent_markdown =
+        Some("```rust\nfn first() {}\n```\n\n```text\ncopy me\n```\n".to_string());
+
+    chat.copy_last_agent_code_block_with(|code| {
+        assert_eq!(code, "copy me\n");
+        Ok(Some(crate::clipboard_copy::ClipboardLease::test()))
+    });
+
+    assert!(chat.clipboard_lease.is_some());
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one success message");
+    assert!(
+        lines_to_single_string(&cells[0]).contains("Copied last code block to clipboard"),
+        "expected code-copy confirmation"
+    );
+}
+
+#[tokio::test]
+async fn slash_copy_code_reports_when_no_fenced_block_exists() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.transcript.last_agent_markdown = Some("No code here".to_string());
+
+    chat.copy_last_agent_code_block_with(|_| {
+        panic!("clipboard must not be called without a fenced code block")
+    });
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one error message");
+    assert!(
+        lines_to_single_string(&cells[0]).contains("No fenced code block to copy"),
+        "expected missing-code message"
+    );
+}
+
+#[tokio::test]
+async fn alt_y_routes_to_code_block_copy() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.transcript.last_agent_markdown = Some("No code here".to_string());
+
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::ALT));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(
+        cells.len(),
+        1,
+        "expected the shortcut to dispatch code copy"
+    );
+    assert!(
+        lines_to_single_string(&cells[0]).contains("No fenced code block to copy"),
+        "expected missing-code message"
+    );
+}
+
+#[tokio::test]
 async fn slash_copy_state_is_preserved_during_running_task() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
 
