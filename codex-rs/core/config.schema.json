@@ -3834,6 +3834,7 @@
             "global": {
               "clear_terminal": null,
               "copy": null,
+              "copy_code": null,
               "open_agents": null,
               "open_external_editor": null,
               "open_transcript": null,
@@ -4456,6 +4457,14 @@
           ],
           "description": "Copy the last agent response to the clipboard."
         },
+        "copy_code": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Copy the last fenced code block to the clipboard."
+        },
         "open_agents": {
           "allOf": [
             {
@@ -4639,6 +4648,7 @@
           "default": {
             "clear_terminal": null,
             "copy": null,
+            "copy_code": null,
             "open_agents": null,
             "open_external_editor": null,
             "open_transcript": null,

@@ -19,7 +19,7 @@ pub(crate) fn last_fenced_code_block(markdown: &str) -> Option<String> {
             Event::Start(Tag::CodeBlock(CodeBlockKind::Indented)) => {}
             Event::End(TagEnd::CodeBlock) => {
                 if let Some(block) = current.take()
-                    && !block.is_empty()
+                    && !block.trim().is_empty()
                 {
                     latest = Some(block);
                 }
