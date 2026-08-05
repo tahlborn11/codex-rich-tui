@@ -225,7 +225,6 @@ pub(crate) fn simulate_stream_markdown_for_tests(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::render::highlight::foreground_style_for_scopes;
     use pretty_assertions::assert_eq;
     use ratatui::style::Color;
 
@@ -249,23 +248,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn e2e_stream_blockquote_simple_follows_theme() {
+    async fn e2e_stream_blockquote_has_green_rail() {
         let out = super::simulate_stream_markdown_for_tests(&["> Hello\n"], /*finalize*/ true);
         assert_eq!(out.len(), 1);
         let l = &out[0];
-        assert_eq!(
-            l.style.fg,
-            foreground_style_for_scopes(&["markup.quote"])
-                .unwrap()
-                .fg
-                .map(|color| crate::style::readable_color_on(color, /*background*/ None)),
-            "expected themed blockquote foreground, got {:?}",
-            l.style.fg
-        );
+        assert_eq!(l.spans[0].content, "│ ");
+        assert_eq!(l.spans[0].style.fg, Some(Color::Green));
+        assert_eq!(l.spans[1].style.fg, None);
     }
 
     #[tokio::test]
-    async fn e2e_stream_blockquote_nested_follows_theme() {
+    async fn e2e_stream_nested_blockquote_has_green_rails() {
         let out = super::simulate_stream_markdown_for_tests(
             &["> Level 1\n>> Level 2\n"],
             /*finalize*/ true,
@@ -276,33 +269,24 @@ mod tests {
             .filter(|l| {
                 let s = l.to_string();
                 let t = s.trim();
-                // Ignore quote-only blank lines like ">" inserted at paragraph boundaries.
-                !(t.is_empty() || t == ">")
+                // Ignore quote-only blank lines inserted at paragraph boundaries.
+                !(t.is_empty() || t == "│")
             })
             .collect();
         assert_eq!(non_blank.len(), 2);
-        let expected_color = foreground_style_for_scopes(&["markup.quote"])
-            .unwrap()
-            .fg
-            .map(|color| crate::style::readable_color_on(color, /*background*/ None));
-        assert_eq!(
-            [non_blank[0].style.fg, non_blank[1].style.fg],
-            [expected_color; 2]
-        );
+        assert_eq!(non_blank[0].spans[0].style.fg, Some(Color::Green));
+        assert_eq!(non_blank[1].spans[0].style.fg, Some(Color::Green));
     }
 
     #[tokio::test]
-    async fn e2e_stream_blockquote_with_list_items_follows_theme() {
+    async fn e2e_stream_blockquote_with_list_items_has_green_rails() {
         let out = super::simulate_stream_markdown_for_tests(
             &["> - item 1\n> - item 2\n"],
             /*finalize*/ true,
         );
         assert_eq!(out.len(), 2);
-        let expected_color = foreground_style_for_scopes(&["markup.quote"])
-            .unwrap()
-            .fg
-            .map(|color| crate::style::readable_color_on(color, /*background*/ None));
-        assert_eq!([out[0].style.fg, out[1].style.fg], [expected_color; 2]);
+        assert_eq!(out[0].spans[0].style.fg, Some(Color::Green));
+        assert_eq!(out[1].spans[0].style.fg, Some(Color::Green));
     }
 
     #[tokio::test]
@@ -337,7 +321,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn e2e_stream_blockquote_wrap_preserves_theme_style() {
+    async fn e2e_stream_blockquote_wrap_keeps_green_style_on_rail_only() {
         let long = "> This is a very long quoted line that should wrap across multiple columns to verify style preservation.";
         let out = super::simulate_stream_markdown_for_tests(&[long, "\n"], /*finalize*/ true);
         // Wrap to a narrow width to force multiple output lines.
@@ -354,16 +338,16 @@ mod tests {
             non_blank.len() >= 2,
             "expected wrapped blockquote to span multiple lines"
         );
-        let expected_color = foreground_style_for_scopes(&["markup.quote"])
-            .unwrap()
-            .fg
-            .map(|color| crate::style::readable_color_on(color, /*background*/ None));
-        for (i, l) in non_blank.iter().enumerate() {
-            assert_eq!(
-                l.spans[0].style.fg, expected_color,
-                "wrapped line {i} should preserve the adapted quote style"
-            );
-        }
+        assert_eq!(non_blank[0].spans[0].content, "│ ");
+        assert_eq!(non_blank[0].spans[0].style.fg, Some(Color::Green));
+        assert!(
+            non_blank
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .skip(1)
+                .all(|span| span.style.fg != Some(Color::Green)),
+            "green rail styling should not bleed into wrapped quote text"
+        );
     }
 
     #[tokio::test]
@@ -405,7 +389,7 @@ mod tests {
             .collect();
         assert_eq!(
             s2,
-            vec!["", "## Heading"],
+            vec!["", "Heading"],
             "expected a blank separator then the heading line"
         );
 
@@ -418,7 +402,7 @@ mod tests {
         };
 
         assert_eq!(line_to_string(&out1[0]), "Hello.");
-        assert_eq!(line_to_string(&out2[1]), "## Heading");
+        assert_eq!(line_to_string(&out2[1]), "Heading");
     }
 
     #[tokio::test]
@@ -465,7 +449,7 @@ mod tests {
             .collect();
         assert_eq!(
             s2,
-            vec!["", "## Adding Bird subcommand"],
+            vec!["", "Adding Bird subcommand"],
             "expected the heading line only on the final commit"
         );
 
@@ -650,7 +634,7 @@ mod tests {
         );
         // Expect the heading and no fence markers. A blank separator may or may not be rendered at start.
         assert!(
-            texts.iter().any(|s| s == "## Heading"),
+            texts.iter().any(|s| s == "Heading"),
             "expected heading line: {texts:?}"
         );
     }
@@ -664,7 +648,7 @@ mod tests {
             Some(i) => i,
             None => panic!("para present"),
         };
-        let head_idx = match texts.iter().position(|s| s == "## Title") {
+        let head_idx = match texts.iter().position(|s| s == "Title") {
             Some(i) => i,
             None => panic!("heading present"),
         };
