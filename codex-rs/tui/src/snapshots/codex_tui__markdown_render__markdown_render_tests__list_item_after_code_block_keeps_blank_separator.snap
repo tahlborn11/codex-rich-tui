@@ -4,6 +4,8 @@ expression: "lines.join(\"\\n\")"
 ---
 1. First:
 
-   fn first() {}
+   ╭─ rust · alt+y copy
+   │ fn first() {}
+   ╰─
 
 2. Second:
