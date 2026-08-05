@@ -1989,9 +1989,7 @@ async fn slash_copy_code_reports_when_no_fenced_block_exists() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.transcript.last_agent_markdown = Some("No code here".to_string());
 
-    chat.copy_last_agent_code_block_with(|_| {
-        panic!("clipboard must not be called without a fenced code block")
-    });
+    submit_composer_text(&mut chat, "/copy-code");
 
     let cells = drain_insert_history(&mut rx);
     assert_eq!(cells.len(), 1, "expected one error message");
@@ -2017,6 +2015,33 @@ async fn alt_y_routes_to_code_block_copy() {
     assert!(
         lines_to_single_string(&cells[0]).contains("No fenced code block to copy"),
         "expected missing-code message"
+    );
+}
+
+#[tokio::test]
+async fn code_copy_shortcut_can_be_remapped() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.transcript.last_agent_markdown = Some("No code here".to_string());
+    let mut keymap_config = chat.config_ref().tui_keymap.clone();
+    keymap_config.global.copy_code = Some(codex_config::types::KeybindingsSpec::One(
+        codex_config::types::KeybindingSpec("f12".to_string()),
+    ));
+    let runtime_keymap =
+        crate::keymap::RuntimeKeymap::from_config(&keymap_config).expect("valid code copy remap");
+    chat.apply_keymap_update(keymap_config, &runtime_keymap);
+
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::ALT));
+    assert!(
+        drain_insert_history(&mut rx).is_empty(),
+        "old code copy shortcut should no longer copy"
+    );
+
+    chat.handle_key_event(KeyEvent::new(KeyCode::F(12), KeyModifiers::NONE));
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one error message");
+    assert!(
+        lines_to_single_string(&cells[0]).contains("No fenced code block to copy"),
+        "expected remapped code copy shortcut to run"
     );
 }
 

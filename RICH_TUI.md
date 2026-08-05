@@ -16,7 +16,7 @@ history, and configuration continue to use the upstream implementation.
   disclosure marker instead of raw tags.
 - Terminal titles are reasserted after shell and MCP activity so external processes cannot leave
   stale tab titles behind.
-- The work is isolated on the `rich-markdown` branch for straightforward upstream rebases.
+- The fork's `main` branch carries these customizations on top of upstream Codex.
 
 ## Planned changes
 
@@ -59,23 +59,36 @@ without replacing an existing Codex install:
 ```bash
 mkdir -p ~/.local/bin
 mkdir -p ~/.local/share/codex-rich-tui
-cp -R codex-rs/target/codex-rich-tui/. ~/.local/share/codex-rich-tui/
+rsync -a --exclude '/bin/codex' --exclude '/bin/codex-code-mode-host' \
+  codex-rs/target/codex-rich-tui/ ~/.local/share/codex-rich-tui/
+cp codex-rs/target/codex-rich-tui/bin/codex \
+  ~/.local/share/codex-rich-tui/bin/codex.next
+mv ~/.local/share/codex-rich-tui/bin/codex.next \
+  ~/.local/share/codex-rich-tui/bin/codex
+cp codex-rs/target/codex-rich-tui/bin/codex-code-mode-host \
+  ~/.local/share/codex-rich-tui/bin/codex-code-mode-host.next
+mv ~/.local/share/codex-rich-tui/bin/codex-code-mode-host.next \
+  ~/.local/share/codex-rich-tui/bin/codex-code-mode-host
 ln -sfn ~/.local/share/codex-rich-tui/bin/codex ~/.local/bin/codex-rich
 ```
 
-Rebuild and repeat the copy when you want to update the installed version. The executable resolves
-the package through the symlink, so it can still find its companion host and resources.
+Rebuild and repeat the install when you want to update the installed version. The executable
+replacements are atomic so macOS never observes an in-place rewrite of a signed Mach-O binary. The
+executable resolves the package through the symlink, so it can still find its companion host and
+resources.
 
 ## Keep the fork current
 
 The personal GitHub fork is configured as `origin`, and the official OpenAI repository is
-configured as `upstream`. Fetch and rebase this branch onto upstream main:
+configured as `upstream`. Merge current upstream changes into the customized main branch:
 
 ```bash
+git switch main
 git fetch upstream
-git rebase upstream/main
+git merge upstream/main
+git push origin main
 ```
 
-Run the TUI tests and rebuild the stable package after resolving any conflicts. Keep upstream
-updates supervised: renderer conflicts and snapshot changes should be reviewed rather than merged
+Run the TUI tests and rebuild the stable package before pushing the merge. Keep upstream updates
+supervised: renderer conflicts and snapshot changes should be reviewed rather than merged
 automatically.

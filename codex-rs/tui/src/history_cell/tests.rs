@@ -9,6 +9,7 @@ use crate::legacy_core::config::ConfigBuilder;
 use crate::line_truncation::line_width;
 use crate::render::highlight::MAX_HIGHLIGHT_LINE_BYTES;
 use crate::session_state::ThreadSessionState;
+use crate::width::display_width;
 use crate::wrapping::word_wrap_lines;
 use codex_app_server_protocol::AskForApproval;
 use codex_app_server_protocol::McpAuthStatus;
@@ -582,6 +583,50 @@ fn unified_exec_interaction_cell_renders_wait() {
     let cell = new_unified_exec_interaction(/*command_display*/ None, String::new());
     let lines = render_transcript(&cell);
     assert_eq!(lines, vec!["• Waited for background terminal"]);
+}
+
+#[test]
+fn unified_exec_interaction_cell_renders_wait_like_completed_command() {
+    let cell = new_unified_exec_interaction(
+        Some(
+            concat!(
+                "results_dir=$(mktemp -d)\n",
+                "dotnet test tests/SystemTests/SystemTests.csproj \\\n",
+                "  --no-restore --results-directory \"$results_dir\"",
+            )
+            .to_string(),
+        ),
+        String::new(),
+    );
+
+    let lines = cell.display_lines(/*width*/ 72);
+    let foreground_colors = lines
+        .iter()
+        .flat_map(|line| &line.spans)
+        .filter_map(|span| span.style.fg)
+        .collect::<Vec<_>>();
+    assert_eq!(foreground_colors, Vec::new());
+    insta::assert_snapshot!(render_lines(&lines).join("\n"));
+}
+
+#[test]
+fn unified_exec_interaction_cell_wraps_wait_command_with_rails() {
+    let cell = new_unified_exec_interaction(
+        Some("first command segment with spaces\nsecond command segment".to_string()),
+        String::new(),
+    );
+
+    let lines = render_lines(&cell.display_lines(/*width*/ 34));
+    assert_eq!(
+        lines,
+        vec![
+            "• Waited for background terminal",
+            "  │ first command segment with",
+            "  │ spaces",
+            "  │ second command segment",
+        ]
+    );
+    assert!(lines.iter().all(|line| display_width(line) <= 34));
 }
 
 #[test]

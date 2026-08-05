@@ -214,6 +214,7 @@ define_runtime_action_bindings! {
         open_transcript,
         open_external_editor,
         copy,
+        copy_code,
         clear_terminal,
         toggle_vim_mode,
         toggle_fast_mode,

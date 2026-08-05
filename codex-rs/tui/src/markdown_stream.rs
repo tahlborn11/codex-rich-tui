@@ -629,20 +629,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn empty_fenced_block_is_dropped_and_separator_preserved_before_heading() {
-        // An empty fenced code block followed by a heading should not render the fence,
-        // but should preserve a blank separator line so the heading starts on a new line.
+    async fn empty_fenced_block_renders_panel_and_separator_before_heading() {
         let deltas = vec!["```bash\n```\n", "## Heading\n"]; // empty block and close in same commit
         let streamed = simulate_stream_markdown_for_tests(&deltas, /*finalize*/ true);
         let texts = lines_to_plain_strings(&streamed);
-        assert!(
-            texts.iter().all(|s| !s.contains("```")),
-            "no fence markers expected: {texts:?}"
-        );
-        // Expect the heading and no fence markers. A blank separator may or may not be rendered at start.
-        assert!(
-            texts.iter().any(|s| s == "Heading"),
-            "expected heading line: {texts:?}"
+        assert_eq!(
+            texts,
+            vec![
+                "╭─ bash · /copy-code".to_string(),
+                "╰─".to_string(),
+                String::new(),
+                "Heading".to_string(),
+            ]
         );
     }
 

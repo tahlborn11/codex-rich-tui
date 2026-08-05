@@ -19,6 +19,48 @@ async fn terminal_title_can_be_reasserted_after_an_external_overwrite() {
 }
 
 #[tokio::test]
+async fn command_completion_reasserts_terminal_title() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.config.tui_terminal_title = Some(vec!["project".to_string()]);
+    chat.refresh_terminal_title();
+    let begin_item = begin_exec(&mut chat, "title-exec", "echo hello");
+    take_terminal_title_writes();
+
+    end_exec(&mut chat, begin_item, "hello\n", "", 0);
+
+    assert_eq!(take_terminal_title_writes(), vec!["project".to_string()]);
+}
+
+#[tokio::test]
+async fn mcp_completion_reasserts_terminal_title() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.config.tui_terminal_title = Some(vec!["project".to_string()]);
+    chat.refresh_terminal_title();
+    take_terminal_title_writes();
+
+    chat.handle_mcp_tool_call_completed_now(AppServerThreadItem::McpToolCall {
+        id: "title-mcp".to_string(),
+        server: "example".to_string(),
+        tool: "lookup".to_string(),
+        status: codex_app_server_protocol::McpToolCallStatus::Completed,
+        arguments: serde_json::json!({}),
+        app_context: None,
+        mcp_app_resource_uri: None,
+        plugin_id: None,
+        read_only_hint: None,
+        result: Some(Box::new(codex_app_server_protocol::McpToolCallResult {
+            content: vec![],
+            structured_content: None,
+            meta: None,
+        })),
+        error: None,
+        duration_ms: Some(1),
+    });
+
+    assert_eq!(take_terminal_title_writes(), vec!["project".to_string()]);
+}
+
+#[tokio::test]
 async fn terminal_title_shows_action_required_while_exec_approval_is_pending() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.bottom_pane.set_task_running(/*running*/ true);
