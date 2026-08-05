@@ -503,7 +503,7 @@ fn blockquote_with_code_block() {
     assert_eq!(
         lines,
         vec![
-            "│ ╭─ code · alt+y copy",
+            "│ ╭─ code · /copy-code",
             "│ │ code",
             "│ ╰─",
         ]
@@ -527,7 +527,7 @@ fn blockquote_with_multiline_code_block() {
     assert_eq!(
         lines,
         vec![
-            "│ ╭─ code · alt+y copy",
+            "│ ╭─ code · /copy-code",
             "│ │ first",
             "│ │ second",
             "│ ╰─",
@@ -572,7 +572,7 @@ fn nested_blockquote_with_inline_and_fenced_code() {
             "│ ".to_string(),
             "│ │ Inner quote and inline code".to_string(),
             "│ │ ".to_string(),
-            "│ │ ╭─ code · alt+y copy".to_string(),
+            "│ │ ╭─ code · /copy-code".to_string(),
             "│ │ │ # fenced code inside a quote".to_string(),
             "│ │ │ echo \"hello from a quote\"".to_string(),
             "│ │ ╰─".to_string(),
@@ -1330,7 +1330,7 @@ fn code_block_known_lang_has_syntax_colors() {
     assert_eq!(
         content,
         vec![
-            "╭─ rust · alt+y copy",
+            "╭─ rust · /copy-code",
             "│ fn main() {}",
             "╰─",
         ]
@@ -1357,7 +1357,7 @@ fn fenced_code_panel_uses_full_available_width() {
     assert_eq!(
         lines,
         vec![
-            "╭─ rust ───────────── copy · alt+y ╮",
+            "╭─ rust ──────── copy · /copy-code ╮",
             "│ fn main() {}                     │",
             "╰──────────────────────────────────╯",
         ]
@@ -1381,7 +1381,7 @@ fn code_block_unknown_lang_plain() {
     assert_eq!(
         content,
         vec![
-            "╭─ xyzlang · alt+y copy",
+            "╭─ xyzlang · /copy-code",
             "│ hello world",
             "╰─",
         ]
@@ -1415,7 +1415,7 @@ fn code_block_no_lang_plain() {
     assert_eq!(
         content,
         vec![
-            "╭─ code · alt+y copy",
+            "╭─ code · /copy-code",
             "│ no lang specified",
             "╰─",
         ]
@@ -1431,7 +1431,7 @@ fn code_block_multiple_lines_root() {
             "╭─ ".dim(),
             "code".bold(),
             " · ".dim(),
-            "alt+y copy".dim(),
+            "/copy-code".dim(),
         ]),
         Line::from_iter(["│ ".dim(), "first".into()]),
         Line::from_iter(["│ ".dim(), "second".into()]),
@@ -1504,7 +1504,7 @@ Here is a code block that shows another fenced block:
     assert_eq!(
         trimmed,
         vec![
-            "╭─ text · alt+y copy",
+            "╭─ text · /copy-code",
             "│ Here is a code block that shows another fenced block:",
             "│ ",
             "│ ```md",
@@ -1536,7 +1536,7 @@ fn code_block_inside_unordered_list_item_is_indented() {
         vec![
             "- Item",
             "",
-            "  ╭─ code · alt+y copy",
+            "  ╭─ code · /copy-code",
             "  │ code line",
             "  ╰─",
         ]
@@ -1562,7 +1562,7 @@ fn code_block_multiple_lines_inside_unordered_list() {
         vec![
             "- Item",
             "",
-            "  ╭─ code · alt+y copy",
+            "  ╭─ code · /copy-code",
             "  │ first",
             "  │ second",
             "  ╰─",
@@ -1589,7 +1589,7 @@ fn code_block_inside_unordered_list_item_multiple_lines() {
         vec![
             "- Item",
             "",
-            "  ╭─ code · alt+y copy",
+            "  ╭─ code · /copy-code",
             "  │ first",
             "  │ second",
             "  ╰─",
@@ -1607,7 +1607,7 @@ fn list_item_after_code_block_keeps_blank_separator() {
         vec![
             "1. First:",
             "",
-            "   ╭─ rust · alt+y copy",
+            "   ╭─ rust · /copy-code",
             "   │ fn first() {}",
             "   ╰─",
             "",
@@ -1632,7 +1632,7 @@ fn outer_list_item_after_nested_code_block_keeps_blank_separator() {
             "1. First:",
             "    - Nested:",
             "",
-            "      ╭─ rust · alt+y copy",
+            "      ╭─ rust · /copy-code",
             "      │ fn first() {}",
             "      ╰─",
             "",
@@ -1782,7 +1782,7 @@ fn ordered_item_with_code_block_and_nested_bullet() {
             "1. item 1".to_string(),
             "2. item 2".to_string(),
             String::new(),
-            "   ╭─ code · alt+y copy".to_string(),
+            "   ╭─ code · /copy-code".to_string(),
             "   │ code".to_string(),
             "   ╰─".to_string(),
             "    - PROCESS_START (a OnceLock<Instant>) keeps the start time for the entire process.".to_string(),
@@ -1845,6 +1845,18 @@ fn details_html_renders_expanded_without_raw_tags() {
     let rendered = plain_lines(&text);
     assert_eq!(rendered, vec!["▾ Hidden treasure", "", "  You found a tiny dragon."]);
     assert_snapshot!("details_html_expanded", rendered.join("\n"));
+}
+
+#[test]
+fn details_and_summary_tags_can_share_one_html_line() {
+    let markdown =
+        "<details><summary>Hidden treasure</summary>Found it.</details>\n";
+    let text = render_markdown_text(markdown);
+
+    assert_eq!(
+        plain_lines(&text),
+        vec!["▾ Hidden treasure", "", "  Found it."]
+    );
 }
 
 #[test]

@@ -2,8 +2,7 @@
 source: tui/src/chatwidget/tests/exec_flow.rs
 expression: combined
 ---
-Chat:
-  [completion time]
+• Waited for background terminal just fix
 
 Transcript:
 • Waited for background terminal · just fix

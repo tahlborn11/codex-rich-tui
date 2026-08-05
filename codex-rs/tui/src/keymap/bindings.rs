@@ -276,6 +276,7 @@ define_runtime_action_bindings! {
         open_warnings => runtime_only,
         open_external_editor,
         copy,
+        copy_code,
         clear_terminal,
         toggle_vim_mode,
         toggle_fast_mode,
