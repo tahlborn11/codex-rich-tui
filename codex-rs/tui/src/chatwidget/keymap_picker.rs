@@ -170,6 +170,7 @@ impl ChatWidget {
     ) {
         self.local_settings.tui.keymap = keymap_config;
         self.copy_last_response_binding = runtime_keymap.app.copy.clone();
+        self.copy_last_code_block_binding = runtime_keymap.app.copy_code.clone();
         self.chat_keymap = runtime_keymap.chat.clone();
         self.bottom_pane.set_keymap_bindings(runtime_keymap);
         self.update_realtime_footer();

@@ -7,7 +7,7 @@ expression: text.lines
         Span::from("╭─ ").dim(),
         Span::from("rust").bold(),
         Span::from(" · ").dim(),
-        Span::from("alt+y copy").dim(),
+        Span::from("/copy-code").dim(),
     ]),
     Line::from_iter([
         Span::from("│ ").dim(),

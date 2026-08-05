@@ -1,5 +1,6 @@
 use super::helpers::drain_insert_history_transcript as drain_insert_history;
 use super::*;
+use crate::terminal_title::take_terminal_title_writes;
 use pretty_assertions::assert_eq;
 
 fn notify_mcp_status(chat: &mut ChatWidget, name: &str, status: McpServerStartupState) {
@@ -201,6 +202,7 @@ async fn mcp_startup_warning_identity_survives_resume_and_task_switch() {
 #[tokio::test]
 async fn mcp_startup_complete_does_not_clear_running_task() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.config.tui_terminal_title = Some(vec!["project".to_string()]);
 
     handle_turn_started(&mut chat, "turn-1");
 
@@ -209,8 +211,10 @@ async fn mcp_startup_complete_does_not_clear_running_task() {
 
     chat.set_mcp_startup_expected_servers(["schaltwerk".to_string()]);
     notify_mcp_status(&mut chat, "schaltwerk", McpServerStartupState::Starting);
+    take_terminal_title_writes();
     notify_mcp_status(&mut chat, "schaltwerk", McpServerStartupState::Ready);
 
+    assert_eq!(take_terminal_title_writes(), vec!["project".to_string()]);
     assert!(chat.bottom_pane.is_task_running());
     assert!(chat.bottom_pane.status_indicator_visible());
     assert_eq!(chat.status_state.current_status.header, "Working");
