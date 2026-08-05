@@ -6,6 +6,7 @@ set windows-shell := ["python", "-c", 'import os, runpy; runpy.run_path(os.envir
 
 rust_min_stack := "8388608" # 8 MiB
 python := if os_family() == "windows" { "python" } else { "python3" }
+rich_tui_dev_bin := if os_family() == "windows" { "target\\codex-rich-tui-dev\\bin\\codex.exe" } else { "./target/codex-rich-tui-dev/bin/codex" }
 
 # Display help
 help:
@@ -14,7 +15,13 @@ help:
 # `codex`
 alias c := codex
 codex *args:
-    cargo run --bin codex -- {args}
+    {{ python }} ../scripts/build_codex_package.py --cargo-profile dev-small --package-dir target/codex-rich-tui-dev --force
+    {{ rich_tui_dev_bin }} {args}
+
+# Build a self-contained release package for this fork. The package includes the
+# code-mode host and other runtime resources expected by the main executable.
+package-rich-tui:
+    {{ python }} ../scripts/build_codex_package.py --cargo-profile release --package-dir target/codex-rich-tui --force
 
 # `codex exec`
 exec *args:

@@ -1,4 +1,5 @@
 use pretty_assertions::assert_eq;
+use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -12,6 +13,7 @@ use crate::markdown_render::render_markdown_lines_with_width_and_cwd;
 use crate::markdown_render::render_markdown_text;
 use crate::markdown_render::render_markdown_text_with_width;
 use crate::markdown_render::render_markdown_text_with_width_and_cwd;
+use crate::width::display_width;
 use insta::assert_debug_snapshot;
 use insta::assert_snapshot;
 
@@ -151,17 +153,17 @@ fn headings() {
     let md = "# Heading 1\n## Heading 2\n### Heading 3\n#### Heading 4\n##### Heading 5\n###### Heading 6\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["# ".bold().underlined(), "Heading 1".bold().underlined()]),
+        Line::from_iter(["Heading 1".bold().underlined()]),
         Line::default(),
-        Line::from_iter(["## ".bold(), "Heading 2".bold()]),
+        Line::from_iter(["Heading 2".bold()]),
         Line::default(),
-        Line::from_iter(["### ".bold().italic(), "Heading 3".bold().italic()]),
+        Line::from_iter(["Heading 3".bold().italic()]),
         Line::default(),
-        Line::from_iter(["#### ".italic(), "Heading 4".italic()]),
+        Line::from_iter(["Heading 4".italic()]),
         Line::default(),
-        Line::from_iter(["##### ".italic(), "Heading 5".italic()]),
+        Line::from_iter(["Heading 5".italic()]),
         Line::default(),
-        Line::from_iter(["###### ".italic(), "Heading 6".italic()]),
+        Line::from_iter(["Heading 6".italic()]),
     ]);
     assert_eq!(text, expected);
 }
@@ -169,7 +171,7 @@ fn headings() {
 #[test]
 fn blockquote_single() {
     let text = render_markdown_text("> Blockquote");
-    let expected = Text::from(Line::from_iter(["> ", "Blockquote"]).green());
+    let expected = Text::from(Line::from_iter(["│ ".green(), "Blockquote".into()]));
     assert_eq!(text, expected);
 }
 
@@ -190,8 +192,8 @@ fn blockquote_soft_break() {
     assert_eq!(
         lines,
         vec![
-            "> This is a blockquote".to_string(),
-            "> with a soft break".to_string()
+            "│ This is a blockquote".to_string(),
+            "│ with a soft break".to_string()
         ]
     );
 }
@@ -200,9 +202,9 @@ fn blockquote_soft_break() {
 fn blockquote_multiple_with_break() {
     let text = render_markdown_text("> Blockquote 1\n\n> Blockquote 2\n");
     let expected = Text::from_iter([
-        Line::from_iter(["> ", "Blockquote 1"]).green(),
+        Line::from_iter(["│ ".green(), "Blockquote 1".into()]),
         Line::default(),
-        Line::from_iter(["> ", "Blockquote 2"]).green(),
+        Line::from_iter(["│ ".green(), "Blockquote 2".into()]),
     ]);
     assert_eq!(text, expected);
 }
@@ -212,11 +214,11 @@ fn blockquote_three_paragraphs_short_lines() {
     let md = "> one\n>\n> two\n>\n> three\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["> ", "one"]).green(),
-        Line::from_iter(["> "]).green(),
-        Line::from_iter(["> ", "two"]).green(),
-        Line::from_iter(["> "]).green(),
-        Line::from_iter(["> ", "three"]).green(),
+        Line::from_iter(["│ ".green(), "one".into()]),
+        Line::from_iter(["│ ".green()]),
+        Line::from_iter(["│ ".green(), "two".into()]),
+        Line::from_iter(["│ ".green()]),
+        Line::from_iter(["│ ".green(), "three".into()]),
     ]);
     assert_eq!(text, expected);
 }
@@ -226,9 +228,9 @@ fn blockquote_nested_two_levels() {
     let md = "> Level 1\n>> Level 2\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["> ", "Level 1"]).green(),
-        Line::from_iter(["> "]).green(),
-        Line::from_iter(["> ", "> ", "Level 2"]).green(),
+        Line::from_iter(["│ ".green(), "Level 1".into()]),
+        Line::from_iter(["│ ".green()]),
+        Line::from_iter(["│ ".green(), "│ ".green(), "Level 2".into()]),
     ]);
     assert_eq!(text, expected);
 }
@@ -238,8 +240,8 @@ fn blockquote_with_list_items() {
     let md = "> - item 1\n> - item 2\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["> ", "- ", "item 1"]).green(),
-        Line::from_iter(["> ", "- ", "item 2"]).green(),
+        Line::from_iter(["│ ".green(), "- ".into(), "item 1".into()]),
+        Line::from_iter(["│ ".green(), "- ".into(), "item 2".into()]),
     ]);
     assert_eq!(text, expected);
 }
@@ -250,17 +252,15 @@ fn blockquote_with_ordered_list() {
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
         Line::from_iter(vec![
-            Span::from("> "),
+            "│ ".green(),
             "1. ".light_blue(),
             Span::from("first"),
-        ])
-        .green(),
+        ]),
         Line::from_iter(vec![
-            Span::from("> "),
+            "│ ".green(),
             "2. ".light_blue(),
             Span::from("second"),
-        ])
-        .green(),
+        ]),
     ]);
     assert_eq!(text, expected);
 }
@@ -270,8 +270,13 @@ fn blockquote_list_then_nested_blockquote() {
     let md = "> - parent\n>   > child\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["> ", "- ", "parent"]).green(),
-        Line::from_iter(["> ", "  ", "> ", "child"]).green(),
+        Line::from_iter(["│ ".green(), "- ".into(), "parent".into()]),
+        Line::from_iter([
+            "│ ".green(),
+            "  ".into(),
+            "│ ".green(),
+            "child".into(),
+        ]),
     ]);
     assert_eq!(text, expected);
 }
@@ -282,9 +287,9 @@ fn list_item_with_inline_blockquote_on_same_line() {
     let text = render_markdown_text(md);
     let mut lines = text.lines.iter();
     let first = lines.next().expect("one line");
-    // Expect content to include the ordered marker, a space, "> ", and the text
+    // Expect content to include the ordered marker, a quote rail, and the text.
     let s: String = first.spans.iter().map(|sp| sp.content.clone()).collect();
-    assert_eq!(s, "1. > quoted");
+    assert_eq!(s, "1. │ quoted");
 }
 
 #[test]
@@ -306,7 +311,7 @@ fn blockquote_surrounded_by_blank_lines() {
         vec![
             "foo".to_string(),
             "".to_string(),
-            "> bar".to_string(),
+            "│ bar".to_string(),
             "".to_string(),
             "baz".to_string(),
         ]
@@ -329,7 +334,7 @@ fn blockquote_in_ordered_list_on_next_line() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["1. > quoted".to_string()]);
+    assert_eq!(lines, vec!["1. │ quoted".to_string()]);
 }
 
 #[test]
@@ -348,7 +353,7 @@ fn blockquote_in_unordered_list_on_next_line() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["- > quoted".to_string()]);
+    assert_eq!(lines, vec!["- │ quoted".to_string()]);
 }
 
 #[test]
@@ -369,9 +374,9 @@ fn blockquote_two_paragraphs_inside_ordered_list_has_blank_line() {
     assert_eq!(
         lines,
         vec![
-            "1. > para 1".to_string(),
-            "   > ".to_string(),
-            "   > para 2".to_string(),
+            "1. │ para 1".to_string(),
+            "   │ ".to_string(),
+            "   │ para 2".to_string(),
         ],
         "expected blockquote content to stay aligned after list marker"
     );
@@ -391,7 +396,7 @@ fn blockquote_inside_nested_list() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["1. A", "    - B", "      > inner"]);
+    assert_eq!(lines, vec!["1. A", "    - B", "      │ inner"]);
 }
 
 #[test]
@@ -408,7 +413,7 @@ fn list_item_text_then_blockquote() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["1. before", "   > quoted"]);
+    assert_eq!(lines, vec!["1. before", "   │ quoted"]);
 }
 
 #[test]
@@ -425,7 +430,7 @@ fn list_item_blockquote_then_text() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["1. > quoted", "   > after"]);
+    assert_eq!(lines, vec!["1. │ quoted", "   │ after"]);
 }
 
 #[test]
@@ -442,7 +447,7 @@ fn list_item_text_blockquote_text() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["1. before", "   > quoted", "   > after"]);
+    assert_eq!(lines, vec!["1. before", "   │ quoted", "   │ after"]);
 }
 
 #[test]
@@ -463,9 +468,9 @@ fn blockquote_with_heading_and_paragraph() {
     assert_eq!(
         lines,
         vec![
-            "> # Heading".to_string(),
-            "> ".to_string(),
-            "> paragraph text".to_string(),
+            "│ Heading".to_string(),
+            "│ ".to_string(),
+            "│ paragraph text".to_string(),
         ]
     );
 }
@@ -476,14 +481,9 @@ fn blockquote_heading_inherits_heading_style() {
     assert_eq!(
         text.lines,
         [
-            Line::from_iter([
-                "> ".into(),
-                "# ".bold().underlined(),
-                "test header".bold().underlined(),
-            ])
-            .green(),
-            Line::from_iter(["> "]).green(),
-            Line::from_iter(["> ", "in blockquote"]).green(),
+            Line::from_iter(["│ ".green(), "test header".bold().underlined()]),
+            Line::from_iter(["│ ".green()]),
+            Line::from_iter(["│ ".green(), "in blockquote".into()]),
         ]
     );
 }
@@ -502,7 +502,14 @@ fn blockquote_with_code_block() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["> code".to_string()]);
+    assert_eq!(
+        lines,
+        vec![
+            "│ ╭─ code · /copy-code",
+            "│ │ code",
+            "│ ╰─",
+        ]
+    );
 }
 
 #[test]
@@ -519,7 +526,15 @@ fn blockquote_with_multiline_code_block() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["> first", "> second"]);
+    assert_eq!(
+        lines,
+        vec![
+            "│ ╭─ code · /copy-code",
+            "│ │ first",
+            "│ │ second",
+            "│ ╰─",
+        ]
+    );
 }
 
 #[test]
@@ -555,12 +570,14 @@ fn nested_blockquote_with_inline_and_fenced_code() {
     assert_eq!(
         lines,
         vec![
-            "> Nested quote with code:".to_string(),
-            "> ".to_string(),
-            "> > Inner quote and inline code".to_string(),
-            "> > ".to_string(),
-            "> > # fenced code inside a quote".to_string(),
-            "> > echo \"hello from a quote\"".to_string(),
+            "│ Nested quote with code:".to_string(),
+            "│ ".to_string(),
+            "│ │ Inner quote and inline code".to_string(),
+            "│ │ ".to_string(),
+            "│ │ ╭─ code · /copy-code".to_string(),
+            "│ │ │ # fenced code inside a quote".to_string(),
+            "│ │ │ echo \"hello from a quote\"".to_string(),
+            "│ │ ╰─".to_string(),
         ]
     );
 }
@@ -1030,21 +1047,39 @@ fn code_block_known_lang_has_syntax_colors() {
                 .collect::<String>()
         })
         .collect();
-    // Content should be preserved; ignore trailing empty line from highlighting.
-    let content: Vec<&str> = content
-        .iter()
-        .map(std::string::String::as_str)
-        .filter(|s| !s.is_empty())
-        .collect();
-    assert_eq!(content, vec!["fn main() {}"]);
+    assert_eq!(
+        content,
+        vec![
+            "╭─ rust · /copy-code",
+            "│ fn main() {}",
+            "╰─",
+        ]
+    );
 
-    // At least one span should have non-default style (syntax highlighting).
-    let has_colored_span = text
-        .lines
+    // At least one code span should have non-default foreground syntax highlighting.
+    let has_colored_span = text.lines[1]
+        .spans
         .iter()
-        .flat_map(|l| l.spans.iter())
+        .skip(1)
         .any(|sp| sp.style.fg.is_some());
     assert!(has_colored_span, "expected syntax-highlighted spans with color");
+    assert_debug_snapshot!("fenced_code_block_chrome", text.lines);
+}
+
+#[test]
+fn fenced_code_panel_uses_full_available_width() {
+    let text = render_markdown_text_with_width("```rust\nfn main() {}\n```\n", Some(36));
+    let lines = plain_lines(&text);
+
+    assert_eq!(
+        lines,
+        vec![
+            "╭─ rust ──────── copy · /copy-code ╮",
+            "│ fn main() {}                     │",
+            "╰──────────────────────────────────╯",
+        ]
+    );
+    assert!(lines.iter().all(|line| display_width(line) == 36));
 }
 
 #[test]
@@ -1060,18 +1095,20 @@ fn code_block_unknown_lang_plain() {
                 .collect::<String>()
         })
         .collect();
-    let content: Vec<&str> = content
-        .iter()
-        .map(std::string::String::as_str)
-        .filter(|s| !s.is_empty())
-        .collect();
-    assert_eq!(content, vec!["hello world"]);
+    assert_eq!(
+        content,
+        vec![
+            "╭─ xyzlang · /copy-code",
+            "│ hello world",
+            "╰─",
+        ]
+    );
 
-    // No syntax coloring for unknown language — all spans have default style.
-    let has_colored_span = text
-        .lines
+    // No syntax coloring for an unknown language.
+    let has_colored_span = text.lines[1]
+        .spans
         .iter()
-        .flat_map(|l| l.spans.iter())
+        .skip(1)
         .any(|sp| sp.style.fg.is_some());
     assert!(!has_colored_span, "expected no syntax coloring for unknown lang");
 }
@@ -1089,12 +1126,14 @@ fn code_block_no_lang_plain() {
                 .collect::<String>()
         })
         .collect();
-    let content: Vec<&str> = content
-        .iter()
-        .map(std::string::String::as_str)
-        .filter(|s| !s.is_empty())
-        .collect();
-    assert_eq!(content, vec!["no lang specified"]);
+    assert_eq!(
+        content,
+        vec![
+            "╭─ code · /copy-code",
+            "│ no lang specified",
+            "╰─",
+        ]
+    );
 }
 
 #[test]
@@ -1102,8 +1141,15 @@ fn code_block_multiple_lines_root() {
     let md = "```\nfirst\nsecond\n```\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["", "first"]),
-        Line::from_iter(["", "second"]),
+        Line::from_iter([
+            "╭─ ".dim(),
+            "code".bold(),
+            " · ".dim(),
+            "/copy-code".dim(),
+        ]),
+        Line::from_iter(["│ ".dim(), "first".into()]),
+        Line::from_iter(["│ ".dim(), "second".into()]),
+        Line::from("╰─".dim()),
     ]);
     assert_eq!(text, expected);
 }
@@ -1172,13 +1218,15 @@ Here is a code block that shows another fenced block:
     assert_eq!(
         trimmed,
         vec![
-            "Here is a code block that shows another fenced block:",
-            "",
-            "```md",
-            "# Inside fence",
-            "- bullet",
-            "- `inline code`",
-            "```",
+            "╭─ text · /copy-code",
+            "│ Here is a code block that shows another fenced block:",
+            "│ ",
+            "│ ```md",
+            "│ # Inside fence",
+            "│ - bullet",
+            "│ - `inline code`",
+            "│ ```",
+            "╰─",
         ]
     );
 }
@@ -1197,7 +1245,16 @@ fn code_block_inside_unordered_list_item_is_indented() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["- Item", "", "  code line"]);
+    assert_eq!(
+        lines,
+        vec![
+            "- Item",
+            "",
+            "  ╭─ code · /copy-code",
+            "  │ code line",
+            "  ╰─",
+        ]
+    );
 }
 
 #[test]
@@ -1214,7 +1271,17 @@ fn code_block_multiple_lines_inside_unordered_list() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["- Item", "", "  first", "  second"]);
+    assert_eq!(
+        lines,
+        vec![
+            "- Item",
+            "",
+            "  ╭─ code · /copy-code",
+            "  │ first",
+            "  │ second",
+            "  ╰─",
+        ]
+    );
 }
 
 #[test]
@@ -1231,7 +1298,17 @@ fn code_block_inside_unordered_list_item_multiple_lines() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["- Item", "", "  first", "  second"]);
+    assert_eq!(
+        lines,
+        vec![
+            "- Item",
+            "",
+            "  ╭─ code · /copy-code",
+            "  │ first",
+            "  │ second",
+            "  ╰─",
+        ]
+    );
 }
 
 #[test]
@@ -1241,7 +1318,15 @@ fn list_item_after_code_block_keeps_blank_separator() {
     let lines = plain_lines(&text);
     assert_eq!(
         lines,
-        vec!["1. First:", "", "   fn first() {}", "", "2. Second:"]
+        vec![
+            "1. First:",
+            "",
+            "   ╭─ rust · /copy-code",
+            "   │ fn first() {}",
+            "   ╰─",
+            "",
+            "2. Second:",
+        ]
     );
     assert_snapshot!(
         "list_item_after_code_block_keeps_blank_separator",
@@ -1260,7 +1345,9 @@ fn outer_list_item_after_nested_code_block_keeps_blank_separator() {
             "1. First:",
             "    - Nested:",
             "",
-            "      fn first() {}",
+            "      ╭─ rust · /copy-code",
+            "      │ fn first() {}",
+            "      ╰─",
             "",
             "2. Second:",
         ]
@@ -1408,7 +1495,9 @@ fn ordered_item_with_code_block_and_nested_bullet() {
             "1. item 1".to_string(),
             "2. item 2".to_string(),
             String::new(),
-            "   code".to_string(),
+            "   ╭─ code · /copy-code".to_string(),
+            "   │ code".to_string(),
+            "   ╰─".to_string(),
             "    - PROCESS_START (a OnceLock<Instant>) keeps the start time for the entire process.".to_string(),
         ]
     );
@@ -1449,6 +1538,35 @@ fn html_block_is_verbatim_multiline() {
         Line::from_iter(["</div>"]),
     ]);
     assert_eq!(text, expected);
+}
+
+#[test]
+fn task_lists_use_semantic_status_markers() {
+    let text = render_markdown_text("- [x] Completed task\n- [ ] Pending task\n");
+    assert_eq!(plain_lines(&text), vec!["- ✓ Completed task", "- ○ Pending task"]);
+    assert_eq!(text.lines[0].spans[1].style.fg, Some(Color::Green));
+    assert!(text.lines[1].spans[1].style.add_modifier.contains(Modifier::DIM));
+}
+
+#[test]
+fn details_html_renders_expanded_without_raw_tags() {
+    let markdown = "<details>\n<summary>Hidden treasure</summary>\n\nYou found a tiny dragon.\n</details>\n";
+    let text = render_markdown_text(markdown);
+    let rendered = plain_lines(&text);
+    assert_eq!(rendered, vec!["▾ Hidden treasure", "", "  You found a tiny dragon."]);
+    assert_snapshot!("details_html_expanded", rendered.join("\n"));
+}
+
+#[test]
+fn details_and_summary_tags_can_share_one_html_line() {
+    let markdown =
+        "<details><summary>Hidden treasure</summary>Found it.</details>\n";
+    let text = render_markdown_text(markdown);
+
+    assert_eq!(
+        plain_lines(&text),
+        vec!["▾ Hidden treasure", "", "  Found it."]
+    );
 }
 
 #[test]
@@ -1541,20 +1659,21 @@ fn code_block_preserves_trailing_blank_lines() {
                 .collect::<String>()
         })
         .collect();
-    // Should have: "fn main() {}" then "" (the blank line).
-    // Filter only to content lines (skip leading/trailing empty from rendering).
+    // The code line and its intentional trailing blank both keep the visual body rail.
     assert!(
-        content.iter().any(|c| c == "fn main() {}"),
+        content.iter().any(|c| c == "│ fn main() {}"),
         "expected code line, got {content:?}"
     );
-    // The trailing blank line inside the fence should be preserved.
-    let code_start = content.iter().position(|c| c == "fn main() {}").unwrap();
+    let code_start = content
+        .iter()
+        .position(|c| c == "│ fn main() {}")
+        .unwrap();
     assert!(
         content.len() > code_start + 1,
         "expected a line after 'fn main() {{}}' but content ends: {content:?}"
     );
     assert_eq!(
-        content[code_start + 1], "",
+        content[code_start + 1], "│ ",
         "trailing blank line inside code fence was lost: {content:?}"
     );
 }
@@ -1752,7 +1871,7 @@ fn table_inside_blockquote_has_quote_prefix() {
         .map(|line| line.spans.iter().map(|span| span.content.clone()).collect())
         .collect();
 
-    assert!(lines.iter().all(|line| line.starts_with("> ")));
+    assert!(lines.iter().all(|line| line.starts_with("│ ")));
     assert!(lines.iter().any(|line| line.contains("━━━━━  ━━━━━")));
 }
 

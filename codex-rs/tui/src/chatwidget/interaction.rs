@@ -51,6 +51,16 @@ impl ChatWidget {
             return;
         }
 
+        if key_event.kind == KeyEventKind::Press
+            && self.copy_last_code_block_binding.is_pressed(key_event)
+        {
+            self.bottom_pane.clear_quit_shortcut_hint();
+            self.quit_shortcut_expires_at = None;
+            self.quit_shortcut_key = None;
+            self.copy_last_agent_code_block();
+            return;
+        }
+
         match key_event {
             KeyEvent {
                 code: KeyCode::Char(c),
@@ -301,6 +311,40 @@ impl ChatWidget {
             },
             _ => self.add_to_history(history_cell::new_error_event(
                 "No agent response to copy".into(),
+            )),
+        }
+        self.request_redraw();
+    }
+
+    /// Copy the last non-empty fenced code block in the latest agent response.
+    pub(crate) fn copy_last_agent_code_block(&mut self) {
+        self.copy_last_agent_code_block_with(crate::clipboard_copy::copy_to_clipboard);
+    }
+
+    pub(super) fn copy_last_agent_code_block_with(
+        &mut self,
+        copy_fn: impl FnOnce(&str) -> Result<Option<crate::clipboard_copy::ClipboardLease>, String>,
+    ) {
+        let code = self
+            .transcript
+            .last_agent_markdown
+            .as_deref()
+            .and_then(crate::markdown_code_blocks::last_fenced_code_block);
+        match code {
+            Some(code) => match copy_fn(&code) {
+                Ok(lease) => {
+                    self.clipboard_lease = lease;
+                    self.add_to_history(history_cell::new_info_event(
+                        "Copied last code block to clipboard".into(),
+                        /*hint*/ None,
+                    ));
+                }
+                Err(error) => self.add_to_history(history_cell::new_error_event(format!(
+                    "Copy failed: {error}"
+                ))),
+            },
+            None => self.add_to_history(history_cell::new_error_event(
+                "No fenced code block to copy".into(),
             )),
         }
         self.request_redraw();

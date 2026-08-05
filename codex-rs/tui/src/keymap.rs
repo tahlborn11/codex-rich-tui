@@ -80,6 +80,8 @@ pub(crate) struct AppKeymap {
     pub(crate) open_external_editor: Vec<KeyBinding>,
     /// Copy the last agent response to the clipboard.
     pub(crate) copy: Vec<KeyBinding>,
+    /// Copy the last fenced code block to the clipboard.
+    pub(crate) copy_code: Vec<KeyBinding>,
     /// Clear the terminal UI.
     pub(crate) clear_terminal: Vec<KeyBinding>,
     /// Toggle Vim mode for the composer input.
@@ -537,10 +539,32 @@ impl RuntimeKeymap {
         let chords = Arc::new(RuntimeChordKeymap::from_config(keymap)?);
         let side_toggle_default_is_shadowed = keymap.global.toggle_side_conversation.is_none()
             && ["ctrl-/", "ctrl-7"].into_iter().any(|alias| {
-                configured_main_surface_alias_is_used(keymap, alias)
-                    || configured_context_alias_is_used(&keymap.list, alias)
-                    || configured_context_alias_is_used(&keymap.approval, alias)
+                configured_main_surface_alias_is_used(keymap, alias, ConfiguredAliasMatch::Exact)
+                    || configured_context_alias_is_used(
+                        &keymap.list,
+                        alias,
+                        ConfiguredAliasMatch::Exact,
+                    )
+                    || configured_context_alias_is_used(
+                        &keymap.approval,
+                        alias,
+                        ConfiguredAliasMatch::Exact,
+                    )
             });
+        let copy_code_default_is_shadowed = keymap.global.copy_code.is_none()
+            && (configured_main_surface_alias_is_used(
+                keymap,
+                "alt-y",
+                ConfiguredAliasMatch::ExactOrChordPrefix,
+            ) || configured_context_alias_is_used(
+                &keymap.list,
+                "alt-y",
+                ConfiguredAliasMatch::ExactOrChordPrefix,
+            ) || configured_context_alias_is_used(
+                &keymap.approval,
+                "alt-y",
+                ConfiguredAliasMatch::ExactOrChordPrefix,
+            ));
 
         let app = AppKeymap {
             open_transcript: resolve_bindings(
@@ -558,6 +582,15 @@ impl RuntimeKeymap {
                 &defaults.app.copy,
                 "tui.keymap.global.copy",
             )?,
+            copy_code: if copy_code_default_is_shadowed {
+                Vec::new()
+            } else {
+                resolve_bindings(
+                    keymap.global.copy_code.as_ref(),
+                    &defaults.app.copy_code,
+                    "tui.keymap.global.copy_code",
+                )?
+            },
             clear_terminal: resolve_bindings(
                 keymap.global.clear_terminal.as_ref(),
                 &defaults.app.clear_terminal,
@@ -908,13 +941,21 @@ impl RuntimeKeymap {
         // bindings on the same input path keep the keys, while explicit
         // reasoning bindings remain authoritative.
         if keymap.chat.decrease_reasoning_effort.is_none()
-            && configured_main_surface_alias_is_used(keymap, "shift-down")
+            && configured_main_surface_alias_is_used(
+                keymap,
+                "shift-down",
+                ConfiguredAliasMatch::Exact,
+            )
         {
             chat.decrease_reasoning_effort
                 .retain(|binding| *binding != key_hint::shift(KeyCode::Down));
         }
         if keymap.chat.increase_reasoning_effort.is_none()
-            && configured_main_surface_alias_is_used(keymap, "shift-up")
+            && configured_main_surface_alias_is_used(
+                keymap,
+                "shift-up",
+                ConfiguredAliasMatch::Exact,
+            )
         {
             chat.increase_reasoning_effort
                 .retain(|binding| *binding != key_hint::shift(KeyCode::Up));
@@ -960,6 +1001,7 @@ impl RuntimeKeymap {
                 app.open_external_editor.as_slice(),
             ),
             (keymap.global.copy.as_ref(), app.copy.as_slice()),
+            (keymap.global.copy_code.as_ref(), app.copy_code.as_slice()),
             (
                 keymap.global.clear_terminal.as_ref(),
                 app.clear_terminal.as_slice(),
@@ -1098,6 +1140,7 @@ impl RuntimeKeymap {
                 open_transcript: default_bindings![ctrl(KeyCode::Char('t'))],
                 open_external_editor: default_bindings![ctrl(KeyCode::Char('g'))],
                 copy: default_bindings![ctrl(KeyCode::Char('o'))],
+                copy_code: default_bindings![alt(KeyCode::Char('y'))],
                 clear_terminal: default_bindings![ctrl(KeyCode::Char('l'))],
                 toggle_vim_mode: default_bindings![],
                 toggle_fast_mode: default_bindings![],
@@ -1371,6 +1414,7 @@ impl RuntimeKeymap {
                     self.app.open_external_editor.as_slice(),
                 ),
                 ("copy", self.app.copy.as_slice()),
+                ("copy_code", self.app.copy_code.as_slice()),
                 ("clear_terminal", self.app.clear_terminal.as_slice()),
                 ("toggle_vim_mode", self.app.toggle_vim_mode.as_slice()),
                 ("toggle_fast_mode", self.app.toggle_fast_mode.as_slice()),
@@ -1415,6 +1459,7 @@ impl RuntimeKeymap {
                     self.app.open_external_editor.as_slice(),
                 ),
                 ("copy", self.app.copy.as_slice()),
+                ("copy_code", self.app.copy_code.as_slice()),
                 ("clear_terminal", self.app.clear_terminal.as_slice()),
                 ("toggle_vim_mode", self.app.toggle_vim_mode.as_slice()),
                 ("toggle_fast_mode", self.app.toggle_fast_mode.as_slice()),
@@ -1465,6 +1510,7 @@ impl RuntimeKeymap {
                     self.app.open_external_editor.as_slice(),
                 ),
                 ("copy", self.app.copy.as_slice()),
+                ("copy_code", self.app.copy_code.as_slice()),
                 ("clear_terminal", self.app.clear_terminal.as_slice()),
                 ("toggle_vim_mode", self.app.toggle_vim_mode.as_slice()),
                 ("toggle_fast_mode", self.app.toggle_fast_mode.as_slice()),
@@ -1530,6 +1576,7 @@ impl RuntimeKeymap {
                     self.app.open_external_editor.as_slice(),
                 ),
                 ("copy", self.app.copy.as_slice()),
+                ("copy_code", self.app.copy_code.as_slice()),
                 ("clear_terminal", self.app.clear_terminal.as_slice()),
                 ("chat.interrupt_turn", self.chat.interrupt_turn.as_slice()),
                 (
@@ -2083,7 +2130,17 @@ fn configured_bindings_to_preserve<const N: usize>(
     configured_bindings
 }
 
-fn configured_main_surface_alias_is_used(keymap: &TuiKeymap, alias: &str) -> bool {
+#[derive(Clone, Copy)]
+enum ConfiguredAliasMatch {
+    Exact,
+    ExactOrChordPrefix,
+}
+
+fn configured_main_surface_alias_is_used(
+    keymap: &TuiKeymap,
+    alias: &str,
+    alias_match: ConfiguredAliasMatch,
+) -> bool {
     let mut global = keymap.global.clone();
     if keymap.composer.submit.is_some() {
         global.submit = None;
@@ -2098,31 +2155,44 @@ fn configured_main_surface_alias_is_used(keymap: &TuiKeymap, alias: &str) -> boo
     // Reasoning shortcuts run before composer/editor key handling, so fallback
     // aliases must yield to any explicit binding on the same main-surface input
     // path.
-    configured_context_alias_is_used(&global, alias)
-        || configured_context_alias_is_used(&keymap.chat, alias)
-        || configured_context_alias_is_used(&keymap.composer, alias)
-        || configured_context_alias_is_used(&keymap.editor, alias)
-        || configured_context_alias_is_used(&keymap.vim_normal, alias)
-        || configured_context_alias_is_used(&keymap.vim_operator, alias)
-        || configured_context_alias_is_used(&keymap.vim_text_object, alias)
+    configured_context_alias_is_used(&global, alias, alias_match)
+        || configured_context_alias_is_used(&keymap.chat, alias, alias_match)
+        || configured_context_alias_is_used(&keymap.composer, alias, alias_match)
+        || configured_context_alias_is_used(&keymap.editor, alias, alias_match)
+        || configured_context_alias_is_used(&keymap.vim_normal, alias, alias_match)
+        || configured_context_alias_is_used(&keymap.vim_operator, alias, alias_match)
+        || configured_context_alias_is_used(&keymap.vim_text_object, alias, alias_match)
 }
 
-fn configured_context_alias_is_used(context: &impl Serialize, alias: &str) -> bool {
+fn configured_context_alias_is_used(
+    context: &impl Serialize,
+    alias: &str,
+    alias_match: ConfiguredAliasMatch,
+) -> bool {
     let Ok(value) = serde_json::to_value(context) else {
         return false;
     };
-    keymap_value_contains_alias(&value, alias)
+    keymap_value_contains_alias(&value, alias, alias_match)
 }
 
-fn keymap_value_contains_alias(value: &serde_json::Value, alias: &str) -> bool {
+fn keymap_value_contains_alias(
+    value: &serde_json::Value,
+    alias: &str,
+    alias_match: ConfiguredAliasMatch,
+) -> bool {
     match value {
-        serde_json::Value::String(value) => value == alias,
+        serde_json::Value::String(value) => match alias_match {
+            ConfiguredAliasMatch::Exact => value == alias,
+            ConfiguredAliasMatch::ExactOrChordPrefix => {
+                value.split_whitespace().next() == Some(alias)
+            }
+        },
         serde_json::Value::Array(values) => values
             .iter()
-            .any(|value| keymap_value_contains_alias(value, alias)),
+            .any(|value| keymap_value_contains_alias(value, alias, alias_match)),
         serde_json::Value::Object(values) => values
             .values()
-            .any(|value| keymap_value_contains_alias(value, alias)),
+            .any(|value| keymap_value_contains_alias(value, alias, alias_match)),
         serde_json::Value::Bool(_) | serde_json::Value::Number(_) | serde_json::Value::Null => {
             false
         }
@@ -2305,6 +2375,62 @@ mod tests {
 
         let err = RuntimeKeymap::from_config(&keymap).expect_err("expected shadowing conflict");
         assert!(err.contains("copy"));
+        assert!(err.contains("editor.yank"));
+    }
+
+    #[test]
+    fn default_code_copy_shortcut_yields_to_explicit_editor_binding() {
+        let mut keymap = TuiKeymap::default();
+        keymap.editor.yank = Some(one("alt-y"));
+
+        let runtime = RuntimeKeymap::from_config(&keymap).expect("legacy binding should win");
+        assert!(runtime.app.copy_code.is_empty());
+        assert_eq!(runtime.editor.yank, vec![key_hint::alt(KeyCode::Char('y'))]);
+    }
+
+    #[test]
+    fn default_code_copy_shortcut_yields_to_explicit_chord_prefix() {
+        let mut keymap = TuiKeymap::default();
+        keymap.editor.yank = Some(one("alt-y ctrl-x"));
+
+        let runtime = RuntimeKeymap::from_config(&keymap).expect("legacy chord should win");
+        assert!(runtime.app.copy_code.is_empty());
+    }
+
+    #[test]
+    fn default_code_copy_shortcut_yields_to_explicit_list_binding() {
+        let mut keymap = TuiKeymap::default();
+        keymap.list.move_up = Some(one("alt-y"));
+
+        let runtime = RuntimeKeymap::from_config(&keymap).expect("legacy binding should win");
+        assert!(runtime.app.copy_code.is_empty());
+        assert_eq!(
+            runtime.list.move_up,
+            vec![key_hint::alt(KeyCode::Char('y'))]
+        );
+    }
+
+    #[test]
+    fn default_code_copy_shortcut_yields_to_explicit_approval_binding() {
+        let mut keymap = TuiKeymap::default();
+        keymap.approval.approve = Some(one("alt-y"));
+
+        let runtime = RuntimeKeymap::from_config(&keymap).expect("legacy binding should win");
+        assert!(runtime.app.copy_code.is_empty());
+        assert_eq!(
+            runtime.approval.approve,
+            vec![key_hint::alt(KeyCode::Char('y'))]
+        );
+    }
+
+    #[test]
+    fn explicit_code_copy_shortcut_rejects_editor_conflict() {
+        let mut keymap = TuiKeymap::default();
+        keymap.global.copy_code = Some(one("alt-y"));
+        keymap.editor.yank = Some(one("alt-y"));
+
+        let err = RuntimeKeymap::from_config(&keymap).expect_err("expected shadowing conflict");
+        assert!(err.contains("copy_code"));
         assert!(err.contains("editor.yank"));
     }
 

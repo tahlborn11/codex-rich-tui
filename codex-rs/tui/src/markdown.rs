@@ -512,9 +512,11 @@ mod tests {
         assert_eq!(
             rendered,
             vec![
-                "| A | B |".to_string(),
-                "|---|---|".to_string(),
-                "| 1 | 2 |".to_string(),
+                "╭─ rust · /copy-code".to_string(),
+                "│ | A | B |".to_string(),
+                "│ |---|---|".to_string(),
+                "│ | 1 | 2 |".to_string(),
+                "╰─".to_string(),
             ]
         );
     }
