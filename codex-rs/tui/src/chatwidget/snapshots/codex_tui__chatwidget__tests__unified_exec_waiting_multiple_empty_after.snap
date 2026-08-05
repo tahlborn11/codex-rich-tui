@@ -3,8 +3,7 @@ source: tui/src/chatwidget/tests/exec_flow.rs
 assertion_line: 1229
 expression: combined
 ---
-Chat:
-  Worked for [duration] • [completion time]
+• Waited for background terminal just fix
 
 Transcript:
 • Waited for background terminal · just fix
