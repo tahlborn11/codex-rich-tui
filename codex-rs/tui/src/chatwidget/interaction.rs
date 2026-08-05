@@ -119,6 +119,16 @@ impl ChatWidget {
             return;
         }
 
+        if key_event.kind == KeyEventKind::Press
+            && key_hint::alt(KeyCode::Char('y')).is_press(key_event)
+        {
+            self.bottom_pane.clear_quit_shortcut_hint();
+            self.quit_shortcut_expires_at = None;
+            self.quit_shortcut_key = None;
+            self.copy_last_agent_code_block();
+            return;
+        }
+
         match key_event {
             KeyEvent {
                 code: KeyCode::Char(c),
@@ -453,6 +463,39 @@ impl ChatWidget {
         copy_fn: impl FnOnce(&str) -> Result<crate::clipboard_copy::CopyOutcome, String>,
     ) -> Result<crate::clipboard_copy::CopyStatus, String> {
         Ok(copy_fn(text)?.store(&mut self.clipboard_lease))
+    }
+
+    /// Copy the last non-empty fenced code block in the latest agent response.
+    pub(crate) fn copy_last_agent_code_block(&mut self) {
+        self.copy_last_agent_code_block_with(|text| {
+            crate::clipboard_copy::copy_to_clipboard(text, CopyFormat::PlainText)
+        });
+    }
+
+    pub(super) fn copy_last_agent_code_block_with(
+        &mut self,
+        copy_fn: impl FnOnce(&str) -> Result<crate::clipboard_copy::CopyOutcome, String>,
+    ) {
+        let code = self
+            .transcript
+            .last_agent_markdown
+            .as_deref()
+            .and_then(crate::markdown_code_blocks::last_fenced_code_block);
+        match code {
+            Some(code) => match self.write_clipboard(&code, copy_fn) {
+                Ok(status) => self.add_to_history(history_cell::new_info_event(
+                    status.message("last code block"),
+                    /*hint*/ None,
+                )),
+                Err(error) => self.add_to_history(history_cell::new_error_event(format!(
+                    "Copy failed: {error}"
+                ))),
+            },
+            None => self.add_to_history(history_cell::new_error_event(
+                "No fenced code block to copy".into(),
+            )),
+        }
+        self.request_redraw();
     }
 
     #[cfg(test)]
