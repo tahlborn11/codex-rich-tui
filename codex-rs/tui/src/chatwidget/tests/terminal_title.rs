@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::bottom_pane::goal_status_indicator_line;
+use crate::terminal_title::take_terminal_title_writes;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
@@ -60,6 +61,20 @@ async fn goal_clock_refresh_redraws_only_when_elapsed_label_changes() {
     Pursuing goal (1m)
     Pursuing goal (2m)
     ");
+}
+
+#[tokio::test]
+async fn terminal_title_can_be_reasserted_after_an_external_overwrite() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.config.tui_terminal_title = Some(vec!["project".to_string()]);
+    take_terminal_title_writes();
+
+    chat.reassert_terminal_title();
+    assert_eq!(take_terminal_title_writes(), vec!["project".to_string()]);
+
+    chat.reassert_terminal_title();
+    assert_eq!(take_terminal_title_writes(), vec!["project".to_string()]);
+    assert_eq!(chat.last_terminal_title, Some("project".to_string()));
 }
 
 #[tokio::test]

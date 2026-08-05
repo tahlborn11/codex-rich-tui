@@ -207,6 +207,7 @@ impl ChatWidget {
         else {
             return;
         };
+        self.reassert_terminal_title();
         let invocation = McpInvocation {
             server,
             tool,
