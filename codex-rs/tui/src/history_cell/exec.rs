@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::width::display_width;
+use textwrap::WordSplitter;
 
 #[derive(Debug)]
 pub(crate) struct UnifiedExecInteractionCell {
@@ -26,11 +27,66 @@ impl HistoryCell for UnifiedExecInteractionCell {
         let wrap_width = width as usize;
         let waited_only = self.stdin.is_empty();
 
-        let mut header_spans = if waited_only {
-            vec!["• Waited for background terminal".bold()]
-        } else {
-            vec!["↳ ".dim(), "Interacted with background terminal".bold()]
-        };
+        if waited_only {
+            let mut header = Line::from(vec![
+                "•".bold(),
+                " ".into(),
+                "Waited for background terminal".bold(),
+            ]);
+            let Some(command) = self
+                .command_display
+                .as_ref()
+                .filter(|command| !command.is_empty())
+            else {
+                return vec![header];
+            };
+
+            let command_lines = command.lines().map(Line::from).collect::<Vec<_>>();
+            let mut continuation_lines = Vec::new();
+            if let Some((first, rest)) = command_lines.split_first() {
+                let continuation_options = RtOptions::new(wrap_width.saturating_sub(4).max(1))
+                    .word_splitter(WordSplitter::NoHyphenation);
+                let available_first_width = wrap_width.saturating_sub(header.width() + 1);
+                let first_word_width = first
+                    .to_string()
+                    .split_whitespace()
+                    .next()
+                    .map(display_width)
+                    .unwrap_or_default();
+                if first_word_width <= available_first_width {
+                    header.push_span(" ");
+                    let first_options = RtOptions::new(available_first_width.max(1))
+                        .word_splitter(WordSplitter::NoHyphenation);
+                    let mut first_wrapped = Vec::new();
+                    push_owned_lines(
+                        &adaptive_wrap_line(first, first_options),
+                        &mut first_wrapped,
+                    );
+                    let mut first_wrapped = first_wrapped.into_iter();
+                    if let Some(first_segment) = first_wrapped.next() {
+                        header.extend(first_segment);
+                    }
+                    continuation_lines.extend(first_wrapped);
+                } else {
+                    push_owned_lines(
+                        &adaptive_wrap_line(first, continuation_options.clone()),
+                        &mut continuation_lines,
+                    );
+                }
+                for line in rest {
+                    push_owned_lines(
+                        &adaptive_wrap_line(line, continuation_options.clone()),
+                        &mut continuation_lines,
+                    );
+                }
+            }
+
+            let mut out = vec![header];
+            out.extend(prefix_lines(continuation_lines, "  │ ".dim(), "  │ ".dim()));
+            return out;
+        }
+
+        let mut header_spans = vec!["↳ ".dim(), "Interacted with background terminal".bold()];
         if let Some(command) = &self.command_display
             && !command.is_empty()
         {
@@ -42,10 +98,6 @@ impl HistoryCell for UnifiedExecInteractionCell {
         let mut out: Vec<Line<'static>> = Vec::new();
         let header_wrapped = adaptive_wrap_line(&header, RtOptions::new(wrap_width));
         push_owned_lines(&header_wrapped, &mut out);
-
-        if waited_only {
-            return out;
-        }
 
         let input_lines: Vec<Line<'static>> = self
             .stdin

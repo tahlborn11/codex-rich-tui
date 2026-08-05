@@ -5,6 +5,6 @@ expression: normalize_completion_timestamps(& (combined))
 ↳ Interacted with background terminal · just fix
   └ pwd
 
-• Waited for background terminal · just fix
+• Waited for background terminal just fix
 
   done [completion time]

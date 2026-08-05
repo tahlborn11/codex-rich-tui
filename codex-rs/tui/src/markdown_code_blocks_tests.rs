@@ -14,5 +14,8 @@ fn returns_the_last_non_empty_fenced_block_verbatim() {
 
 #[test]
 fn returns_none_without_a_non_empty_fenced_block() {
-    assert_eq!(last_fenced_code_block("Text\n\n    indented code\n"), None);
+    assert_eq!(
+        last_fenced_code_block("Text\n\n    indented code\n\n```text\n \n\t\n```\n"),
+        None
+    );
 }

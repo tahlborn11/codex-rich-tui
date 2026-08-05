@@ -45,7 +45,7 @@ expression: "normalize_completion_timestamps(&\n(normalize_snapshot_paths(term.b
   printf 'fenced within fenced\n'
   ```
 
-  ╭─ jsonc · alt+y copy
+  ╭─ jsonc · /copy-code
   │ {
   │   // comment allowed in jsonc
   │   "path": "C:\\Program Files\\App",
