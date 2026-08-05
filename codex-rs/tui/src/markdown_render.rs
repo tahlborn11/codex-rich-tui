@@ -87,8 +87,8 @@ const TABLE_COLUMN_GAP: usize = 2;
 const TABLE_CELL_PADDING: usize = 1;
 const TABLE_HEADER_SEPARATOR_CHAR: char = '━';
 const TABLE_BODY_SEPARATOR_CHAR: char = '─';
-const CODE_BLOCK_COPY_HINT: &str = "copy · alt+y";
-const COMPACT_CODE_BLOCK_COPY_HINT: &str = "alt+y copy";
+const CODE_BLOCK_COPY_HINT: &str = "copy · /copy-code";
+const COMPACT_CODE_BLOCK_COPY_HINT: &str = "/copy-code";
 
 struct MarkdownStyles {
     h1: Style,
@@ -802,42 +802,82 @@ where
 
         self.pending_marker_line = false;
         for line in html.lines() {
-            let trimmed = line.trim();
-            let lowercase = trimmed.to_ascii_lowercase();
-            if lowercase.starts_with("<details") {
-                self.details_depth += 1;
-                continue;
-            }
-            if lowercase.starts_with("</details") {
-                self.details_depth = self.details_depth.saturating_sub(1);
-                self.details_summary_open = false;
-                continue;
-            }
-            if lowercase.starts_with("<summary") {
-                let content_start = trimmed.find('>').map_or(trimmed.len(), |index| index + 1);
-                let content_end = lowercase[content_start..]
-                    .find("</summary>")
-                    .map_or(trimmed.len(), |index| content_start + index);
-                let content = trimmed[content_start..content_end].trim();
-                self.push_line(vec!["▾ ".cyan(), Span::from(content.to_string()).bold()].into());
-                self.details_summary_open = !lowercase.contains("</summary>");
-                self.needs_newline = !self.details_summary_open;
-                continue;
-            }
-            if lowercase.starts_with("</summary") {
-                self.details_summary_open = false;
-                self.needs_newline = true;
-                continue;
-            }
-            if trimmed.is_empty() {
-                self.push_blank_line();
-            } else {
-                if self.needs_newline {
-                    self.push_line(Line::default());
+            let mut remaining = line.trim();
+            loop {
+                let lowercase = remaining.to_ascii_lowercase();
+                if lowercase.starts_with("<details") {
+                    let content_start = remaining
+                        .find('>')
+                        .map_or(remaining.len(), |index| index + 1);
+                    self.details_depth += 1;
+                    remaining = remaining[content_start..].trim_start();
+                    if remaining.is_empty() {
+                        break;
+                    }
+                    continue;
                 }
-                self.push_line(Line::from(vec!["  ".into(), trimmed.to_string().into()]));
+                if lowercase.starts_with("</details") {
+                    let content_start = remaining
+                        .find('>')
+                        .map_or(remaining.len(), |index| index + 1);
+                    self.details_depth = self.details_depth.saturating_sub(1);
+                    self.details_summary_open = false;
+                    remaining = remaining[content_start..].trim_start();
+                    if remaining.is_empty() {
+                        break;
+                    }
+                    continue;
+                }
+                if lowercase.starts_with("<summary") {
+                    let content_start = remaining
+                        .find('>')
+                        .map_or(remaining.len(), |index| index + 1);
+                    let content_end = lowercase[content_start..]
+                        .find("</summary>")
+                        .map_or(remaining.len(), |index| content_start + index);
+                    let content = remaining[content_start..content_end].trim();
+                    self.push_line(
+                        vec!["▾ ".cyan(), Span::from(content.to_string()).bold()].into(),
+                    );
+                    self.details_summary_open = content_end == remaining.len();
+                    self.needs_newline = !self.details_summary_open;
+                    if self.details_summary_open {
+                        break;
+                    }
+                    remaining = remaining[content_end + "</summary>".len()..].trim_start();
+                    if remaining.is_empty() {
+                        break;
+                    }
+                    continue;
+                }
+                if lowercase.starts_with("</summary") {
+                    let content_start = remaining
+                        .find('>')
+                        .map_or(remaining.len(), |index| index + 1);
+                    self.details_summary_open = false;
+                    self.needs_newline = true;
+                    remaining = remaining[content_start..].trim_start();
+                    if remaining.is_empty() {
+                        break;
+                    }
+                    continue;
+                }
+                let content_end = lowercase.find("</details>").unwrap_or(remaining.len());
+                let content = remaining[..content_end].trim_end();
+                if content.is_empty() {
+                    self.push_blank_line();
+                } else {
+                    if self.needs_newline {
+                        self.push_line(Line::default());
+                    }
+                    self.push_line(Line::from(vec!["  ".into(), content.to_string().into()]));
+                }
+                self.needs_newline = true;
+                if content_end == remaining.len() {
+                    break;
+                }
+                remaining = &remaining[content_end..];
             }
-            self.needs_newline = true;
         }
         if !inline && !self.details_summary_open {
             self.needs_newline = true;
@@ -2676,7 +2716,7 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "╭─ code · alt+y copy".to_string(),
+                "╭─ code · /copy-code".to_string(),
                 "│ fn main() { println!(\"hi from a long line\"); }".to_string(),
                 "╰─".to_string(),
             ]
@@ -2728,7 +2768,7 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "╭─ rust · alt+y copy".to_string(),
+                "╭─ rust · /copy-code".to_string(),
                 "│ fn main() {}".to_string(),
                 "│     line2".to_string(),
                 "╰─".to_string(),

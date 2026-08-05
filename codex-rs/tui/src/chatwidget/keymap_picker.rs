@@ -171,6 +171,7 @@ impl ChatWidget {
     ) {
         self.config.tui_keymap = keymap_config;
         self.copy_last_response_binding = runtime_keymap.app.copy.clone();
+        self.copy_last_code_block_binding = runtime_keymap.app.copy_code.clone();
         self.chat_keymap = runtime_keymap.chat.clone();
         self.queued_message_edit_hint_binding =
             queued_message_edit_hint_binding(runtime_keymap, terminal_info());

@@ -52,7 +52,7 @@ impl ChatWidget {
         }
 
         if key_event.kind == KeyEventKind::Press
-            && key_hint::alt(KeyCode::Char('y')).is_press(key_event)
+            && self.copy_last_code_block_binding.is_pressed(key_event)
         {
             self.bottom_pane.clear_quit_shortcut_hint();
             self.quit_shortcut_expires_at = None;
