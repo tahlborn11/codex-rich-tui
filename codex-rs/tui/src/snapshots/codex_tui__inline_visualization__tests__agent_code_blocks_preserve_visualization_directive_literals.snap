@@ -4,7 +4,9 @@ expression: text
 ---
 • Fenced:
 
-  ::codex-inline-vis{file="chart.html"}
+  ╭─ text ─────────────────────────────────────────────────────── copy · alt+y ╮
+  │ ::codex-inline-vis{file="chart.html"}                                      │
+  ╰────────────────────────────────────────────────────────────────────────────╯
 
   Indented:
 
