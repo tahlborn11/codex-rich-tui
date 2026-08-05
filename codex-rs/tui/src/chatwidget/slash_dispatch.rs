@@ -503,6 +503,9 @@ impl ChatWidget {
             SlashCommand::Export => {
                 self.show_transcript_export_popup();
             }
+            SlashCommand::CopyCode => {
+                self.copy_last_agent_code_block();
+            }
             SlashCommand::Raw => {
                 let enabled = self.toggle_raw_output_mode_and_notify();
                 self.emit_raw_output_mode_changed(enabled);
@@ -1314,6 +1317,7 @@ impl ChatWidget {
             | SlashCommand::Plugins
             | SlashCommand::Rollout
             | SlashCommand::Copy
+            | SlashCommand::CopyCode
             | SlashCommand::Raw
             | SlashCommand::Vim
             | SlashCommand::Daybreak
