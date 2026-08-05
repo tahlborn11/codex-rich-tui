@@ -66,6 +66,7 @@ use pulldown_cmark::Parser;
 use pulldown_cmark::Tag;
 use pulldown_cmark::TagEnd;
 use ratatui::style::Style;
+use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
@@ -107,6 +108,8 @@ const TABLE_COLUMN_GAP: usize = 2;
 const TABLE_CELL_PADDING: usize = 1;
 const TABLE_HEADER_SEPARATOR_CHAR: char = '━';
 const TABLE_BODY_SEPARATOR_CHAR: char = '─';
+const CODE_BLOCK_COPY_HINT: &str = "copy · alt+y";
+const COMPACT_CODE_BLOCK_COPY_HINT: &str = "alt+y copy";
 
 struct MarkdownStyles {
     h1: Style,
@@ -154,7 +157,7 @@ impl MarkdownStyles {
             ordered_list_marker: Style::new().light_blue(),
             unordered_list_marker: Style::new(),
             link: Style::new().fg(accent_color()).underlined(),
-            blockquote: Style::new().green(),
+            blockquote: Style::new(),
         }
     }
 }
@@ -165,6 +168,29 @@ struct IndentContext {
     marker: Option<Vec<Span<'static>>>,
     copy_marker: String,
     is_list: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum CodeBlockChrome {
+    Fenced,
+    #[default]
+    Hidden,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum CodePanelLine {
+    Header,
+    Body,
+    Footer,
+    #[default]
+    Hidden,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct FenceDelimiter {
+    marker: char,
+    length: usize,
+    source_start: usize,
 }
 
 impl IndentContext {
@@ -402,6 +428,7 @@ pub(crate) fn render_markdown_lines_with_width_cwd_and_hidden_link_destinations(
     options.insert(Options::ENABLE_TABLES);
     options.set(Options::ENABLE_TASKLISTS, preferences::current().lists);
     let math = math::MathMarkdown::new(input, options, width);
+    options.insert(Options::ENABLE_TASKLISTS);
     let parser = DecodedTextMerge::new(source_tables::preserve(
         input,
         math.events(Parser::new_ext(&math.markdown, options).into_offset_iter()),
@@ -465,6 +492,11 @@ struct Writer<'a, 'policy> {
     code_block_lang: Option<String>,
     code_block_buffer: String,
     code_block_content_end: usize,
+    code_block_chrome: CodeBlockChrome,
+    code_panel_full_width: bool,
+    code_block_fence: Option<FenceDelimiter>,
+    details_depth: usize,
+    details_summary_open: bool,
     wrap_width: Option<usize>,
     cwd: Option<PathBuf>,
     is_hidden_link_destination: &'policy dyn Fn(&str) -> bool,
@@ -475,6 +507,7 @@ struct Writer<'a, 'policy> {
     current_subsequent_indent: Vec<Span<'static>>,
     current_line_style: Style,
     current_line_in_code_block: bool,
+    current_code_panel_line: CodePanelLine,
     table_state: Option<TableState>,
 }
 
@@ -510,6 +543,11 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             code_block_lang: None,
             code_block_buffer: String::new(),
             code_block_content_end: 0,
+            code_block_chrome: CodeBlockChrome::Hidden,
+            code_panel_full_width: false,
+            code_block_fence: None,
+            details_depth: 0,
+            details_summary_open: false,
             wrap_width,
             cwd: cwd.map(Path::to_path_buf),
             is_hidden_link_destination,
@@ -520,6 +558,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             current_subsequent_indent: Vec::new(),
             current_line_style: Style::default(),
             current_line_in_code_block: false,
+            current_code_panel_line: CodePanelLine::Hidden,
             table_state: None,
         }
     }
@@ -637,15 +676,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             }
             Tag::CodeBlock(kind) => {
                 self.code_block_content_end = range.end;
-                let indent = match kind {
-                    CodeBlockKind::Fenced(_) => None,
-                    CodeBlockKind::Indented => Some(Span::from(" ".repeat(4))),
-                };
-                let lang = match kind {
-                    CodeBlockKind::Fenced(lang) => Some(lang.to_string()),
-                    CodeBlockKind::Indented => None,
-                };
-                self.start_codeblock(lang, indent)
+                self.start_codeblock(kind, range)
             }
             Tag::List(start) => {
                 if self.pending_marker_line
@@ -795,10 +826,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             HeadingLevel::H5 => self.styles.h5,
             HeadingLevel::H6 => self.styles.h6,
         };
-        let content = format!("{} ", "#".repeat(level as usize));
-        let heading = content.len();
-        self.push_line(Line::from(vec![Span::styled(content, heading_style)]));
-        self.copy_line.heading = heading;
+        self.push_line(Line::default());
         self.push_inline_style(heading_style);
         self.needs_newline = false;
     }
@@ -820,7 +848,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             self.needs_newline = false;
         }
         self.indent_stack.push(IndentContext::new(
-            vec![Span::from("> ")],
+            vec!["│ ".green()],
             /*marker*/ None,
             /*is_list*/ false,
         ));
@@ -855,6 +883,16 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             self.push_line(Line::default());
         }
         self.pending_marker_line = false;
+
+        if self.details_depth > 0
+            && !self.details_summary_open
+            && self
+                .current_line_content
+                .as_ref()
+                .is_some_and(|line| line.line.spans.is_empty())
+        {
+            self.push_span("  ".into());
+        }
 
         // When inside a fenced code block with a known language, accumulate
         // text into the buffer for batch highlighting in end_codeblock().
@@ -929,6 +967,9 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             return;
         }
         self.line_ends_with_local_link_target = false;
+        if self.render_details_html(&html, inline) {
+            return;
+        }
         if self.in_table_cell() {
             let style = self.inline_styles.last().copied().unwrap_or_default();
             for (i, line) in html.lines().enumerate() {
@@ -955,6 +996,57 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             self.push_span(Span::styled(line.to_string(), style));
         }
         self.needs_newline = !inline;
+    }
+
+    fn render_details_html(&mut self, html: &str, inline: bool) -> bool {
+        let lowercase = html.to_ascii_lowercase();
+        if self.details_depth == 0 && !lowercase.contains("<details") {
+            return false;
+        }
+
+        self.pending_marker_line = false;
+        for line in html.lines() {
+            let trimmed = line.trim();
+            let lowercase = trimmed.to_ascii_lowercase();
+            if lowercase.starts_with("<details") {
+                self.details_depth += 1;
+                continue;
+            }
+            if lowercase.starts_with("</details") {
+                self.details_depth = self.details_depth.saturating_sub(1);
+                self.details_summary_open = false;
+                continue;
+            }
+            if lowercase.starts_with("<summary") {
+                let content_start = trimmed.find('>').map_or(trimmed.len(), |index| index + 1);
+                let content_end = lowercase[content_start..]
+                    .find("</summary>")
+                    .map_or(trimmed.len(), |index| content_start + index);
+                let content = trimmed[content_start..content_end].trim();
+                self.push_line(vec!["▾ ".cyan(), Span::from(content.to_string()).bold()].into());
+                self.details_summary_open = !lowercase.contains("</summary>");
+                self.needs_newline = !self.details_summary_open;
+                continue;
+            }
+            if lowercase.starts_with("</summary") {
+                self.details_summary_open = false;
+                self.needs_newline = true;
+                continue;
+            }
+            if trimmed.is_empty() {
+                self.push_blank_line();
+            } else {
+                if self.needs_newline {
+                    self.push_line(Line::default());
+                }
+                self.push_line(Line::from(vec!["  ".into(), trimmed.to_string().into()]));
+            }
+            self.needs_newline = true;
+        }
+        if !inline && !self.details_summary_open {
+            self.needs_newline = true;
+        }
+        true
     }
 
     fn hard_break(&mut self) {
@@ -1089,7 +1181,16 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         self.needs_newline = false;
     }
 
-    fn start_codeblock(&mut self, lang: Option<String>, indent: Option<Span<'static>>) {
+    fn task_list_marker(&mut self, checked: bool) {
+        let marker = if checked {
+            "✓ ".green()
+        } else {
+            "○ ".dim()
+        };
+        self.push_span(marker);
+    }
+
+    fn start_codeblock(&mut self, kind: CodeBlockKind<'a>, source_range: Range<usize>) {
         self.flush_current_line();
         let first_item_block = self.pending_marker_line
             && self
@@ -1103,20 +1204,64 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         }
         self.in_code_block = true;
 
-        // Extract the language token from the info string.  CommonMark info
-        // strings can contain metadata after the language, separated by commas,
-        // spaces, or other delimiters (e.g. "rust,no_run", "rust title=demo").
-        // Take only the first token so the syntax lookup succeeds.
-        let lang = lang
-            .as_deref()
-            .and_then(|s| s.split([',', ' ', '\t']).next())
-            .filter(|s| !s.is_empty())
-            .map(std::string::ToString::to_string);
-        self.code_block_lang = lang;
+        let indent = match kind {
+            CodeBlockKind::Fenced(info) => {
+                // CommonMark info strings can contain metadata after the language. Keep only the
+                // first token for both the compact label and syntax lookup.
+                let language = info
+                    .split([',', ' ', '\t'])
+                    .next()
+                    .filter(|language| !language.is_empty())
+                    .map(std::string::ToString::to_string);
+                let uses_table_wrapper_syntax =
+                    matches!(language.as_deref(), Some("md" | "markdown"));
+                let label = language.clone().unwrap_or_else(|| "code".to_string());
+                if !uses_table_wrapper_syntax {
+                    self.code_panel_full_width = self.code_panel_supports_full_width(&label);
+                    self.push_code_panel_line(
+                        self.code_panel_header(&label),
+                        CodePanelLine::Header,
+                    );
+                }
+                self.code_block_lang = language;
+                self.code_block_chrome = if uses_table_wrapper_syntax {
+                    CodeBlockChrome::Hidden
+                } else {
+                    CodeBlockChrome::Fenced
+                };
+                self.code_block_fence = self.input[source_range.start..]
+                    .lines()
+                    .next()
+                    .map(str::trim_start)
+                    .and_then(|mut line| {
+                        while let Some(remainder) = line.strip_prefix('>') {
+                            line = remainder.trim_start();
+                        }
+                        let marker = line.chars().next()?;
+                        let length = line.chars().take_while(|ch| *ch == marker).count();
+                        (matches!(marker, '`' | '~') && length >= 3).then_some(FenceDelimiter {
+                            marker,
+                            length,
+                            source_start: source_range.start,
+                        })
+                    });
+                if uses_table_wrapper_syntax {
+                    Span::default()
+                } else {
+                    "│ ".dim()
+                }
+            }
+            CodeBlockKind::Indented => {
+                self.code_block_lang = None;
+                self.code_block_chrome = CodeBlockChrome::Hidden;
+                self.code_block_fence = None;
+                Span::from(" ".repeat(4))
+            }
+        };
         self.code_block_buffer.clear();
 
         self.indent_stack.push(IndentContext::new(
-            vec![indent.unwrap_or_default()],
+            vec![indent],
             /*marker*/ None,
             /*is_list*/ false,
         ));
@@ -1157,9 +1302,36 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             }
         }
 
-        self.needs_newline = true;
         self.in_code_block = false;
         self.indent_stack.pop();
+        let has_closing_fence = self.code_block_fence.take().is_some_and(|fence| {
+            self.input[fence.source_start..]
+                .lines()
+                .skip(1)
+                .any(|mut line| {
+                    line = line.trim_start();
+                    while let Some(remainder) = line.strip_prefix('>') {
+                        line = remainder.trim_start();
+                    }
+                    let marker_count = line
+                        .chars()
+                        .take_while(|marker| *marker == fence.marker)
+                        .count();
+                    marker_count >= fence.length && line[marker_count..].trim().is_empty()
+                })
+        });
+        if self.code_block_chrome == CodeBlockChrome::Fenced {
+            // pulldown-cmark emits CodeBlock end at EOF before a closing fence arrives. Flush the
+            // final body row while the panel geometry is still active so streaming and finalized
+            // renders use the same right edge.
+            self.flush_current_line();
+            if has_closing_fence {
+                self.push_code_panel_line(self.code_panel_footer(), CodePanelLine::Footer);
+            }
+        }
+        self.code_block_chrome = CodeBlockChrome::Hidden;
+        self.code_panel_full_width = false;
+        self.needs_newline = true;
     }
 
     fn start_table(&mut self, alignments: Vec<Alignment>) {
@@ -2316,6 +2488,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             source.copy = Some(std::sync::Arc::new(std::mem::take(&mut self.copy_line)));
             // NB we don't wrap code in code blocks, in order to preserve whitespace for copy/paste.
             if !self.current_line_in_code_block
+                && self.current_code_panel_line == CodePanelLine::Hidden
                 && let Some(width) = self.wrap_width
             {
                 line.source = Some(source);
@@ -2333,6 +2506,11 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 source.prefix_bytes = spans.iter().map(|span| span.content.len()).sum();
                 source.continuation_indent = self.current_subsequent_indent.clone().into();
                 line.source = Some(source);
+                let panel_span_start = match self.current_code_panel_line {
+                    CodePanelLine::Body => spans.len().saturating_sub(1),
+                    CodePanelLine::Header | CodePanelLine::Footer => spans.len(),
+                    CodePanelLine::Hidden => usize::MAX,
+                };
                 let shift = Self::spans_display_width(&spans);
                 spans.append(&mut line.line.spans);
                 for hyperlink in &mut line.hyperlinks {
@@ -2340,11 +2518,13 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                         hyperlink.columns.start + shift..hyperlink.columns.end + shift;
                 }
                 line.line = Line::from_iter(spans);
+                self.finish_code_panel_line(&mut line.line, panel_span_start);
                 self.push_output_line(line.style(style));
             }
             self.current_initial_indent.clear();
             self.current_subsequent_indent.clear();
             self.current_line_in_code_block = false;
+            self.current_code_panel_line = CodePanelLine::Hidden;
             self.line_ends_with_local_link_target = false;
         }
     }
@@ -2359,7 +2539,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
     fn is_blockquote_active(&self) -> bool {
         self.indent_stack
             .iter()
-            .any(|ctx| ctx.prefix.iter().any(|p| p.content.contains('>')))
+            .any(|ctx| ctx.prefix.iter().any(|p| p.content.contains('│')))
     }
 
     fn push_prewrapped_line(&mut self, mut line: HyperlinkLine, pending_marker_line: bool) {
@@ -2422,9 +2602,91 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             .push(line.spans.iter().map(|span| span.content.len()).sum(), &[]);
         self.current_line_content = Some(HyperlinkLine::new(line));
         self.current_line_in_code_block = self.in_code_block;
+        self.current_code_panel_line =
+            if self.in_code_block && self.code_block_chrome == CodeBlockChrome::Fenced {
+                CodePanelLine::Body
+            } else {
+                CodePanelLine::Hidden
+            };
         self.line_ends_with_local_link_target = false;
 
         self.pending_marker_line = false;
+    }
+
+    fn push_code_panel_line(&mut self, line: Line<'static>, kind: CodePanelLine) {
+        self.push_line(line);
+        self.current_code_panel_line = kind;
+    }
+
+    fn code_panel_width(&self) -> Option<usize> {
+        let prefix_width = Self::spans_display_width(&self.prefix_spans(self.pending_marker_line));
+        self.wrap_width
+            .map(|width| width.saturating_sub(prefix_width))
+    }
+
+    fn code_panel_header(&self, label: &str) -> Line<'static> {
+        if !self.code_panel_full_width {
+            return vec![
+                "╭─ ".dim(),
+                label.to_string().bold(),
+                " · ".dim(),
+                COMPACT_CODE_BLOCK_COPY_HINT.dim(),
+            ]
+            .into();
+        }
+        let width = self.code_panel_width().unwrap_or_default();
+
+        let left = format!("╭─ {label} ");
+        let right = format!(" {CODE_BLOCK_COPY_HINT} ╮");
+        let fill = width.saturating_sub(display_width(&left) + display_width(&right));
+        vec![
+            "╭─ ".dim(),
+            label.to_string().bold(),
+            " ".dim(),
+            "─".repeat(fill).dim(),
+            right.dim(),
+        ]
+        .into()
+    }
+
+    fn code_panel_footer(&self) -> Line<'static> {
+        match self
+            .code_panel_width()
+            .filter(|_| self.code_panel_full_width)
+        {
+            Some(width) => {
+                let width = width.max(2);
+                Line::from(format!("╰{}╯", "─".repeat(width.saturating_sub(2))).dim())
+            }
+            None => Line::from("╰─".dim()),
+        }
+    }
+
+    fn code_panel_supports_full_width(&self, label: &str) -> bool {
+        let left_width = display_width(&format!("╭─ {label} "));
+        let right_width = display_width(&format!(" {CODE_BLOCK_COPY_HINT} ╮"));
+        self.code_panel_width()
+            .is_some_and(|width| width >= left_width + right_width)
+    }
+
+    fn finish_code_panel_line(&self, line: &mut Line<'static>, panel_span_start: usize) {
+        if panel_span_start == usize::MAX {
+            return;
+        }
+
+        let panel_style = crate::style::user_message_style();
+        if self.current_code_panel_line == CodePanelLine::Body
+            && self.code_panel_full_width
+            && let Some(width) = self.wrap_width
+            && line.width() < width
+        {
+            let padding = width.saturating_sub(line.width() + 1);
+            line.push_span(Span::styled(" ".repeat(padding), panel_style));
+            line.push_span(Span::styled("│", panel_style.dim()));
+        }
+        for span in line.spans.iter_mut().skip(panel_span_start) {
+            span.style = span.style.patch(panel_style);
+        }
     }
 
     fn push_hyperlink_line(&mut self, line: HyperlinkLine) {
@@ -2669,9 +2931,9 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "> block quote with".to_string(),
-                "> content that should".to_string(),
-                "> wrap nicely".to_string(),
+                "│ block quote with".to_string(),
+                "│ content that should".to_string(),
+                "│ wrap nicely".to_string(),
             ]
         );
     }
@@ -2685,8 +2947,8 @@ mod tests {
             lines,
             vec![
                 "• list item".to_string(),
-                "  > block quote inside".to_string(),
-                "  > list that wraps".to_string(),
+                "  │ block quote inside".to_string(),
+                "  │ list that wraps".to_string(),
             ]
         );
     }
@@ -2700,8 +2962,8 @@ mod tests {
             lines,
             vec![
                 "1. item with quote".to_string(),
-                "   > quoted text that".to_string(),
-                "   > should wrap".to_string(),
+                "   │ quoted text that".to_string(),
+                "   │ should wrap".to_string(),
             ]
         );
     }
@@ -2713,7 +2975,11 @@ mod tests {
         let lines = lines_to_strings(&rendered);
         assert_eq!(
             lines,
-            vec!["fn main() { println!(\"hi from a long line\"); }".to_string(),]
+            vec![
+                "╭─ code · alt+y copy".to_string(),
+                "│ fn main() { println!(\"hi from a long line\"); }".to_string(),
+                "╰─".to_string(),
+            ]
         );
     }
 
@@ -2764,10 +3030,15 @@ mod tests {
         let markdown = "```rust\r\nfn main() {}\r\n    line2\r\n```\r\n";
         let rendered = render_markdown_text(markdown);
         let lines = lines_to_strings(&rendered);
-        // Should be exactly two code lines; no spurious blank line between them.
+        // The two body lines should remain adjacent inside the frame.
         assert_eq!(
             lines,
-            vec!["fn main() {}".to_string(), "    line2".to_string()],
+            vec![
+                "╭─ rust · alt+y copy".to_string(),
+                "│ fn main() {}".to_string(),
+                "│     line2".to_string(),
+                "╰─".to_string(),
+            ],
             "CRLF code block should not produce extra blank lines: {lines:?}"
         );
     }
