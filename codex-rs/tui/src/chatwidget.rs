@@ -610,6 +610,7 @@ pub(crate) struct ChatWidget {
     /// Legacy terminals report auto-repeat as new presses; suppress the burst after a slow paste.
     suppress_image_paste_until: Instant,
     copy_last_response_binding: Vec<KeyBinding>,
+    copy_last_code_block_binding: Vec<KeyBinding>,
     running_commands: HashMap<String, RunningCommand>,
     collab_agent_metadata: HashMap<ThreadId, AgentMetadata>,
     pending_collab_spawn_requests: HashMap<String, multi_agents::SpawnRequestSummary>,
