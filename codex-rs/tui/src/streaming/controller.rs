@@ -816,6 +816,14 @@ mod tests {
     }
 
     #[test]
+    fn streamed_task_lists_use_semantic_status_markers() {
+        let streamed =
+            collect_streamed_lines(&["- [x] Checked\n", "- [ ] Unchecked\n", "\n"], Some(80));
+
+        assert_eq!(streamed, vec!["- ✓ Checked", "- ○ Unchecked"]);
+    }
+
+    #[test]
     fn queued_heading_is_emitted_once_after_incremental_append() {
         let mut ctrl = stream_controller(Some(80));
         assert!(ctrl.push("Paragraph.\n\n# Heading\n\n"));
@@ -833,7 +841,7 @@ mod tests {
         assert_eq!(
             streamed
                 .iter()
-                .filter(|line| line.contains("# Heading"))
+                .filter(|line| line.contains("Heading"))
                 .count(),
             1,
             "expected the streamed heading to be emitted once: {streamed:?}",
@@ -1703,13 +1711,13 @@ mod tests {
 
         assert_eq!(streamed, expected);
         assert!(
-            streamed.iter().any(|line| line.trim() == "| A | B |"),
+            streamed
+                .iter()
+                .any(|line| line.trim_matches('│').trim() == "| A | B |"),
             "expected code-fenced pipe line to remain raw: {streamed:?}"
         );
         assert!(
-            !streamed
-                .iter()
-                .any(|line| line.contains('━') || line.contains('─')),
+            !streamed.iter().any(|line| line.contains('━')),
             "did not expect a table separator for non-markdown fence: {streamed:?}"
         );
     }

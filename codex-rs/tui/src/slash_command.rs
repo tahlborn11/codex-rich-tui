@@ -48,6 +48,7 @@ pub enum SlashCommand {
     Btw,
     Copy,
     Export,
+    CopyCode,
     Raw,
     Diff,
     Mention,
@@ -106,6 +107,7 @@ impl SlashCommand {
             SlashCommand::Quit | SlashCommand::Exit => "exit Codex",
             SlashCommand::Copy => "copy the last response or part of it",
             SlashCommand::Export => "export the conversation as markdown",
+            SlashCommand::CopyCode => "copy the last fenced code block",
             SlashCommand::Raw => "toggle raw scrollback mode for copy-friendly terminal selection",
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
@@ -198,6 +200,7 @@ impl SlashCommand {
             SlashCommand::Copy
                 | SlashCommand::Agents
                 | SlashCommand::Export
+                | SlashCommand::CopyCode
                 | SlashCommand::Raw
                 | SlashCommand::Diff
                 | SlashCommand::Mention
@@ -240,6 +243,7 @@ impl SlashCommand {
             | SlashCommand::Personality
             | SlashCommand::Permissions
             | SlashCommand::Copy
+            | SlashCommand::CopyCode
             | SlashCommand::Raw
             | SlashCommand::Rename
             | SlashCommand::Mention
@@ -276,7 +280,7 @@ impl SlashCommand {
     fn is_visible(self) -> bool {
         match self {
             SlashCommand::SandboxReadRoot => cfg!(target_os = "windows"),
-            SlashCommand::Copy => !cfg!(target_os = "android"),
+            SlashCommand::Copy | SlashCommand::CopyCode => !cfg!(target_os = "android"),
             SlashCommand::App => cfg!(any(target_os = "macos", target_os = "windows")),
             SlashCommand::Voice => true,
             SlashCommand::Rollout | SlashCommand::TestApproval => cfg!(debug_assertions),

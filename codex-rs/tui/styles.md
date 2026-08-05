@@ -1,8 +1,14 @@
 # Headers, primary, and secondary text
 
-- **Headers:** Use `bold`. For markdown with various header levels, leave in the `#` signs.
+- **Headers:** Use typography rather than literal Markdown syntax. Heading levels should be
+  distinguished with bold, underline, and italic styling; do not render the leading `#` signs.
 - **Primary text:** Default.
 - **Secondary text:** Use `dim`.
+- **Blockquotes:** Use a green vertical rail with primary-color body text.
+- **Fenced code blocks:** Use a full-width terminal-native frame with a subtle palette-aware
+  background, show the language when known, and right-align copy affordances outside the semantic
+  code content.
+- **Task lists:** Use green `✓` and dim `○` status markers instead of raw checkbox syntax.
 
 # Foreground colors
 
