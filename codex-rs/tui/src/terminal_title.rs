@@ -20,6 +20,9 @@ use std::io;
 use std::io::IsTerminal;
 use std::io::stdout;
 
+#[cfg(test)]
+use std::cell::RefCell;
+
 use crossterm::Command;
 use ratatui::crossterm::execute;
 
@@ -29,6 +32,11 @@ use ratatui::crossterm::execute;
 /// 240 leaves headroom for the OSC framing bytes while keeping titles
 /// readable in tab bars and window managers.
 const MAX_TERMINAL_TITLE_CHARS: usize = 240;
+
+#[cfg(test)]
+thread_local! {
+    static TERMINAL_TITLE_WRITES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
 
 /// Outcome of a [`set_terminal_title`] call.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -54,6 +62,11 @@ pub(crate) enum SetTerminalTitleResult {
 /// to single spaces, drops disallowed codepoints, and bounds the result to
 /// [`MAX_TERMINAL_TITLE_CHARS`] visible characters before writing OSC 0.
 pub(crate) fn set_terminal_title(title: &str) -> io::Result<SetTerminalTitleResult> {
+    #[cfg(test)]
+    TERMINAL_TITLE_WRITES.with(|writes| {
+        writes.borrow_mut().push(sanitize_terminal_title(title));
+    });
+
     if !stdout().is_terminal() {
         return Ok(SetTerminalTitleResult::Applied);
     }
@@ -72,11 +85,19 @@ pub(crate) fn set_terminal_title(title: &str) -> io::Result<SetTerminalTitleResu
 /// This clears the visible title; it does not restore whatever title the shell
 /// or a previous program may have set before Codex started managing the title.
 pub(crate) fn clear_terminal_title() -> io::Result<()> {
+    #[cfg(test)]
+    TERMINAL_TITLE_WRITES.with(|writes| writes.borrow_mut().push(String::new()));
+
     if !stdout().is_terminal() {
         return Ok(());
     }
 
     execute!(stdout(), SetWindowTitle(String::new()))
+}
+
+#[cfg(test)]
+pub(crate) fn take_terminal_title_writes() -> Vec<String> {
+    TERMINAL_TITLE_WRITES.with(std::cell::RefCell::take)
 }
 
 #[derive(Debug, Clone)]
