@@ -291,6 +291,20 @@ impl ChatWidget {
         self.refresh_terminal_title_from_selections(&selections);
     }
 
+    /// Re-emits the managed terminal title after external terminal activity.
+    ///
+    /// Child processes can write their own OSC title while Codex is running. In
+    /// that case the visible title changes without invalidating this widget's
+    /// cache, so an ordinary refresh would incorrectly skip the write.
+    pub(crate) fn reassert_terminal_title(&mut self) {
+        if self.last_terminal_title.is_none() {
+            return;
+        }
+
+        self.last_terminal_title = None;
+        self.refresh_terminal_title();
+    }
+
     fn terminal_title_requires_action(&self) -> bool {
         self.bottom_pane.terminal_title_requires_action()
     }
