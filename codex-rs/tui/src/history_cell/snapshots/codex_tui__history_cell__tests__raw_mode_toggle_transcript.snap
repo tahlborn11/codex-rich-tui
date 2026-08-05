@@ -14,7 +14,7 @@ rich before:
   ━━━━━━  ━━━━━━━
    code    x = 1
 
-  ╭─ text ─────────────── copy · alt+y ╮
+  ╭─ text ────────── copy · /copy-code ╮
   │ copy me                            │
   ╰────────────────────────────────────╯
 • Called
@@ -52,7 +52,7 @@ rich after:
   ━━━━━━  ━━━━━━━
    code    x = 1
 
-  ╭─ text ─────────────── copy · alt+y ╮
+  ╭─ text ────────── copy · /copy-code ╮
   │ copy me                            │
   ╰────────────────────────────────────╯
 • Called
