@@ -224,6 +224,7 @@ impl ChatWidget {
         else {
             return;
         };
+        self.reassert_terminal_title();
 
         if invocation.is_computer_activity() {
             let call = history_cell::new_active_mcp_tool_call(

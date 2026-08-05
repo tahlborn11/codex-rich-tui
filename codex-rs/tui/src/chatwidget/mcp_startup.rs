@@ -236,6 +236,7 @@ impl ChatWidget {
             self.restore_reasoning_status_header();
         }
         self.maybe_send_next_queued_input();
+        self.reassert_terminal_title();
         self.request_redraw();
     }
 
