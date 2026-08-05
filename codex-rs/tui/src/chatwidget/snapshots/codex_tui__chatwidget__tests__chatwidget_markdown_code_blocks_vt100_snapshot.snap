@@ -44,7 +44,7 @@ expression: normalize_snapshot_paths(term.backend().vt100().screen().contents())
   printf 'fenced within fenced\n'
   ```
 
-  ╭─ jsonc · alt+y copy
+  ╭─ jsonc · /copy-code
   │ {
   │   // comment allowed in jsonc
   │   "path": "C:\\Program Files\\App",
