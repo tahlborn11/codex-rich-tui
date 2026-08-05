@@ -5,10 +5,7 @@ expression: render.lines
 ---
 [
     HyperlinkLine {
-        line: Line::from_iter([
-            Span::from("# ").bold().underlined(),
-            Span::from("Heading").bold().underlined(),
-        ]),
+        line: Line::from(Span::from("Heading").bold().underlined()),
         hyperlinks: [],
     },
     HyperlinkLine {
@@ -71,9 +68,9 @@ expression: render.lines
     },
     HyperlinkLine {
         line: Line::from_iter([
-            Span::from("> "),
+            Span::from("│ ").green(),
             Span::from("Quoted paragraph"),
-        ]).green(),
+        ]),
         hyperlinks: [],
     },
     HyperlinkLine {
@@ -82,7 +79,17 @@ expression: render.lines
     },
     HyperlinkLine {
         line: Line::from_iter([
-            Span::default(),
+            Span::from("╭─ ").dim(),
+            Span::from("rust").bold(),
+            Span::from(" ").dim(),
+            Span::from("─────────────────────────").dim(),
+            Span::from(" copy · alt+y ╮").dim(),
+        ]),
+        hyperlinks: [],
+    },
+    HyperlinkLine {
+        line: Line::from_iter([
+            Span::from("│ ").dim(),
             Span::from("fn").fg(Color::Rgb(203, 166, 247)),
             Span::from(" ").fg(Color::Rgb(205, 214, 244)),
             Span::from("main").fg(Color::Rgb(137, 180, 250)),
@@ -91,7 +98,13 @@ expression: render.lines
             Span::from(" ").fg(Color::Rgb(205, 214, 244)),
             Span::from("{").fg(Color::Rgb(147, 153, 178)),
             Span::from("}").fg(Color::Rgb(147, 153, 178)),
+            Span::from("                                 "),
+            Span::from("│").dim(),
         ]),
+        hyperlinks: [],
+    },
+    HyperlinkLine {
+        line: Line::from(Span::from("╰──────────────────────────────────────────────╯").dim()),
         hyperlinks: [],
     },
     HyperlinkLine {
