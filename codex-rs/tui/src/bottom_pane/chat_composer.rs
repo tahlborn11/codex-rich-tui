@@ -560,6 +560,7 @@ fn parent_owned_command_is_allowed(command: SlashCommand, args: &str) -> bool {
                 | SlashCommand::Exit
                 | SlashCommand::Logout
                 | SlashCommand::Copy
+                | SlashCommand::CopyCode
                 | SlashCommand::Raw
                 | SlashCommand::Diff
                 | SlashCommand::Mention
