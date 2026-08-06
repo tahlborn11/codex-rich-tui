@@ -606,6 +606,36 @@ fn unified_exec_interaction_cell_renders_wait_like_completed_command() {
         .filter_map(|span| span.style.fg)
         .collect::<Vec<_>>();
     assert_eq!(foreground_colors, Vec::new());
+    assert!(
+        lines[0].spans[0]
+            .style
+            .add_modifier
+            .contains(Modifier::BOLD)
+    );
+    assert!(!lines[0].spans[0].style.add_modifier.contains(Modifier::DIM));
+    assert!(
+        lines[0].spans[2]
+            .style
+            .add_modifier
+            .contains(Modifier::BOLD)
+    );
+    assert!(!lines[0].spans[2].style.add_modifier.contains(Modifier::DIM));
+    assert!(
+        lines[0]
+            .spans
+            .last()
+            .expect("command span")
+            .style
+            .add_modifier
+            .contains(Modifier::DIM)
+    );
+    assert!(
+        lines
+            .iter()
+            .skip(1)
+            .flat_map(|line| &line.spans)
+            .all(|span| span.style.add_modifier.contains(Modifier::DIM))
+    );
     insta::assert_snapshot!(render_lines(&lines).join("\n"));
 }
 
@@ -623,7 +653,7 @@ fn unified_exec_interaction_cell_wraps_wait_command_with_rails() {
             "• Waited for background terminal",
             "  │ first command segment with",
             "  │ spaces",
-            "  │ second command segment",
+            "  └ second command segment",
         ]
     );
     assert!(lines.iter().all(|line| display_width(line) <= 34));
