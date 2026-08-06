@@ -41,7 +41,10 @@ impl HistoryCell for UnifiedExecInteractionCell {
                 return vec![header];
             };
 
-            let command_lines = command.lines().map(Line::from).collect::<Vec<_>>();
+            let command_lines = command
+                .lines()
+                .map(|line| Line::from(line.to_string().dim()))
+                .collect::<Vec<_>>();
             let mut continuation_lines = Vec::new();
             if let Some((first, rest)) = command_lines.split_first() {
                 let continuation_options = RtOptions::new(wrap_width.saturating_sub(4).max(1))
@@ -82,7 +85,14 @@ impl HistoryCell for UnifiedExecInteractionCell {
             }
 
             let mut out = vec![header];
-            out.extend(prefix_lines(continuation_lines, "  │ ".dim(), "  │ ".dim()));
+            let mut continuation_lines =
+                prefix_lines(continuation_lines, "  │ ".dim(), "  │ ".dim());
+            if let Some(last) = continuation_lines.last_mut()
+                && let Some(prefix) = last.spans.first_mut()
+            {
+                *prefix = "  └ ".dim();
+            }
+            out.extend(continuation_lines);
             return out;
         }
 
