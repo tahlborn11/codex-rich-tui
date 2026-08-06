@@ -16,6 +16,7 @@ mod oauth;
 mod oauth_callback;
 mod oauth_client_registration;
 mod oauth_http_client;
+mod oauth_transport;
 mod perform_oauth_login;
 mod program_resolver;
 mod protocol_mode;
