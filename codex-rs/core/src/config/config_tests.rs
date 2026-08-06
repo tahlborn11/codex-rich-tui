@@ -5758,13 +5758,13 @@ fn local_dev_builds_force_file_cli_auth_store_modes() {
 }
 
 #[test]
-fn local_dev_builds_force_file_mcp_oauth_store_modes() {
+fn local_dev_builds_default_to_file_but_honor_explicit_mcp_oauth_store_modes() {
     assert_eq!(
         resolve_mcp_oauth_credentials_store_mode(
             OAuthCredentialsStoreMode::Keyring,
             LOCAL_DEV_BUILD_VERSION,
         ),
-        OAuthCredentialsStoreMode::File,
+        OAuthCredentialsStoreMode::Keyring,
     );
     assert_eq!(
         resolve_mcp_oauth_credentials_store_mode(

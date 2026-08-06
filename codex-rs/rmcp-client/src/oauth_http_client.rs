@@ -8,6 +8,8 @@ use codex_exec_server::HttpHeader;
 use codex_exec_server::HttpRedirectPolicy;
 use codex_exec_server::HttpRequestParams;
 use http::HeaderMap;
+use http::HeaderValue;
+use http::header::ACCEPT;
 use http::header::AUTHORIZATION;
 use oauth2::HttpRequest;
 use oauth2::HttpResponse;
@@ -105,11 +107,15 @@ impl OAuthHttpClientAdapter {
             }
         };
         let (parts, body) = request.into_parts();
+        let request_url = parts.uri.to_string();
         let mut headers = self.default_headers.clone();
         for name in parts.headers.keys() {
             headers.remove(name);
         }
         headers.extend(parts.headers);
+        headers.entry(ACCEPT).or_insert(HeaderValue::from_static(
+            "application/json, text/event-stream",
+        ));
         let redirect_policy = oauth_redirect_policy(
             self.redirect_mode,
             &headers,
@@ -142,7 +148,7 @@ impl OAuthHttpClientAdapter {
             .http_client
             .http_request_stream(HttpRequestParams {
                 method: parts.method.to_string(),
-                url: parts.uri.to_string(),
+                url: request_url.clone(),
                 headers,
                 body: (!body.is_empty()).then_some(body.into()),
                 timeout_ms,

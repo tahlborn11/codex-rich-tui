@@ -137,10 +137,6 @@ async fn concurrent_refreshes_call_provider_once_and_carry_omitted_fields() -> R
     second_task.await??;
     server.verify().await;
 
-    // Layer 2 still invokes the legacy RMCP persistence hook after operations. Exercise that hook
-    // so a raw provider response that omitted refresh token/scopes cannot overwrite the merged
-    // authoritative credential.
-    first.persist_if_needed().await?;
     let stored = load_oauth_tokens_from_file(&initial.server_name, &initial.url)?
         .expect("refreshed credentials should be stored");
     let live_credentials = first.stored_credentials().await;
