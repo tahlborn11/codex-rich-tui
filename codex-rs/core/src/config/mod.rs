@@ -305,10 +305,9 @@ fn resolve_mcp_oauth_credentials_store_mode(
     package_version: &str,
 ) -> OAuthCredentialsStoreMode {
     match (package_version, configured) {
-        (
-            LOCAL_DEV_BUILD_VERSION,
-            OAuthCredentialsStoreMode::Keyring | OAuthCredentialsStoreMode::Auto,
-        ) => OAuthCredentialsStoreMode::File,
+        (LOCAL_DEV_BUILD_VERSION, OAuthCredentialsStoreMode::Auto) => {
+            OAuthCredentialsStoreMode::File
+        }
         (_, mode) => mode,
     }
 }
