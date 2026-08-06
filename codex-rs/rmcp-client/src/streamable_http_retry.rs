@@ -6,15 +6,17 @@ use anyhow::Result;
 use anyhow::anyhow;
 use codex_exec_server::ExecServerError;
 use http::StatusCode;
+use oauth2::AccessToken;
 use rmcp::service::RoleClient;
 use rmcp::service::RunningService;
+use rmcp::transport::auth::AuthError;
 use rmcp::transport::streamable_http_client::StreamableHttpError;
 use tokio::time;
 use tracing::warn;
 
+use super::OAuthRuntime;
 use crate::elicitation_client_service::ElicitationClientService;
 use crate::http_client_adapter::StreamableHttpClientAdapterError;
-use crate::oauth::OAuthPersistor;
 
 use super::PendingTransport;
 use super::RmcpClient;
@@ -30,7 +32,7 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<(
         Arc<RunningService<RoleClient, ElicitationClientService>>,
-        Option<OAuthPersistor>,
+        Option<OAuthRuntime>,
     )> {
         let should_retry = match &initial_transport {
             PendingTransport::InProcess { .. } | PendingTransport::Stdio { .. } => false,
@@ -39,6 +41,7 @@ impl RmcpClient {
         };
         let mut retry_deadline = timeout.map(|duration| Instant::now() + duration);
         let mut pending_transport = Some(initial_transport);
+        let mut oauth_recovered = false;
 
         for (attempt, retry_delay_ms) in STREAMABLE_HTTP_RETRY_DELAYS_MS
             .iter()
@@ -62,14 +65,15 @@ impl RmcpClient {
                     }
                 }
             };
-            if let PendingTransport::StreamableHttpWithOAuth {
-                oauth_persistor, ..
-            } = &transport
-            {
+            let oauth_runtime = match &transport {
+                PendingTransport::StreamableHttpWithOAuth { oauth, .. } => Some(oauth.clone()),
+                _ => None,
+            };
+            if let Some(oauth) = oauth_runtime.as_ref() {
                 // OAuth refresh has its own lock and provider request bounds. Exclude it from the
                 // MCP handshake budget, and finish persistence before attempting initialize.
                 let refresh_started_at = Instant::now();
-                oauth_persistor.refresh_if_needed().await?;
+                oauth.persistor.refresh_if_needed().await?;
                 if let Some(deadline) = retry_deadline.as_mut() {
                     *deadline += refresh_started_at.elapsed();
                 }
@@ -81,6 +85,32 @@ impl RmcpClient {
                 .await
             {
                 Ok(result) => return Ok(result),
+                Err(error)
+                    if Self::rejected_access_token_from_initialize_error(&error).is_some() =>
+                {
+                    let Some(rejected_access_token) =
+                        Self::rejected_access_token_from_initialize_error(&error)
+                    else {
+                        return Err(error);
+                    };
+                    let Some(oauth) = oauth_runtime else {
+                        return Err(error);
+                    };
+                    if oauth_recovered {
+                        return Err(AuthError::AuthorizationRequired.into());
+                    }
+
+                    remaining_initialize_timeout(timeout, retry_deadline)?;
+                    let refresh_started_at = Instant::now();
+                    oauth
+                        .persistor
+                        .refresh_after_unauthorized(rejected_access_token)
+                        .await?;
+                    if let Some(deadline) = retry_deadline.as_mut() {
+                        *deadline += refresh_started_at.elapsed();
+                    }
+                    oauth_recovered = true;
+                }
                 Err(error) if should_retry && Self::is_retryable_initialize_error(&error) => {
                     let Some(retry_delay_ms) = retry_delay_ms else {
                         return Err(error);
@@ -143,6 +173,33 @@ impl RmcpClient {
                     })
             }
             _ => false,
+        }
+    }
+
+    fn rejected_access_token_from_initialize_error(error: &anyhow::Error) -> Option<AccessToken> {
+        error.chain().find_map(|source| {
+            source
+                .downcast_ref::<HandshakeError>()
+                .and_then(|error| {
+                    Self::rejected_access_token_from_client_initialize_error(&error.source)
+                })
+                .or_else(|| {
+                    source
+                        .downcast_ref::<rmcp::service::ClientInitializeError>()
+                        .and_then(Self::rejected_access_token_from_client_initialize_error)
+                })
+        })
+    }
+
+    fn rejected_access_token_from_client_initialize_error(
+        error: &rmcp::service::ClientInitializeError,
+    ) -> Option<AccessToken> {
+        match error {
+            rmcp::service::ClientInitializeError::TransportError { error, .. } => error
+                .error
+                .downcast_ref::<StreamableHttpError<StreamableHttpClientAdapterError>>()
+                .and_then(Self::rejected_access_token),
+            _ => None,
         }
     }
 

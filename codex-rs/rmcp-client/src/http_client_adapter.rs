@@ -34,6 +34,7 @@ use http::header::ACCEPT;
 use http::header::AUTHORIZATION;
 use http::header::CONTENT_TYPE;
 use http::header::WWW_AUTHENTICATE;
+use oauth2::AccessToken;
 use rmcp::model::ClientJsonRpcMessage;
 use rmcp::model::ClientNotification;
 use rmcp::model::ConstString;
@@ -86,6 +87,7 @@ pub(crate) struct StreamableHttpClientAdapter {
     has_configured_headers: bool,
     redirect_mode: StreamableHttpRedirectMode,
     initialize_deadline: Arc<Mutex<Option<Instant>>>,
+    attribute_rejected_access_token: bool,
 }
 
 struct EventStreamCancellation {
@@ -106,6 +108,8 @@ impl Drop for EventStreamCancellation {
 pub(crate) enum StreamableHttpClientAdapterError {
     #[error("streamable HTTP session expired with 404 Not Found")]
     SessionExpired404,
+    #[error("MCP server rejected the access token with HTTP 401 Unauthorized")]
+    AccessTokenRejected { rejected_access_token: AccessToken },
     #[error(transparent)]
     HttpRequest(#[from] ExecServerError),
     #[error("invalid HTTP header: {0}")]
@@ -131,7 +135,13 @@ impl StreamableHttpClientAdapter {
             has_configured_headers,
             redirect_mode,
             initialize_deadline,
+            attribute_rejected_access_token: false,
         }
+    }
+
+    pub(crate) fn with_rejected_token_attribution(mut self) -> Self {
+        self.attribute_rejected_access_token = true;
+        self
     }
 
     fn redirect_policy(&self, headers: &HeaderMap) -> HttpRedirectPolicy {
@@ -167,7 +177,7 @@ impl StreamableHttpClient for StreamableHttpClientAdapter {
             JSON_MIME_TYPE.to_string(),
             StreamableHttpClientAdapterError::Header,
         )?;
-        if let Some(auth_token) = auth_token {
+        if let Some(auth_token) = auth_token.as_ref() {
             insert_header(
                 &mut headers,
                 AUTHORIZATION,
@@ -277,6 +287,12 @@ impl StreamableHttpClient for StreamableHttpClientAdapter {
             return Err(StreamableHttpError::Client(
                 StreamableHttpClientAdapterError::SessionExpired404,
             ));
+        }
+        if self.attribute_rejected_access_token
+            && response.status == StatusCode::UNAUTHORIZED.as_u16()
+            && let Some(error) = access_token_rejected(auth_token.as_deref())
+        {
+            return Err(error);
         }
         if response.status == StatusCode::UNAUTHORIZED.as_u16()
             && let Some(header) = response_header(&response.headers, WWW_AUTHENTICATE)
@@ -456,7 +472,7 @@ impl StreamableHttpClient for StreamableHttpClientAdapter {
         let mut headers = self.default_headers.clone();
         headers.extend(custom_headers);
         self.add_auth_headers(&mut headers);
-        if let Some(auth_token) = auth_token {
+        if let Some(auth_token) = auth_token.as_ref() {
             insert_header(
                 &mut headers,
                 AUTHORIZATION,
@@ -490,6 +506,12 @@ impl StreamableHttpClient for StreamableHttpClientAdapter {
 
         if response.status == StatusCode::METHOD_NOT_ALLOWED.as_u16() {
             return Ok(());
+        }
+        if self.attribute_rejected_access_token
+            && response.status == StatusCode::UNAUTHORIZED.as_u16()
+            && let Some(error) = access_token_rejected(auth_token.as_deref())
+        {
+            return Err(error);
         }
         if !status_is_success(response.status) {
             return Err(StreamableHttpError::UnexpectedServerResponse(
@@ -535,7 +557,7 @@ impl StreamableHttpClient for StreamableHttpClientAdapter {
                 StreamableHttpClientAdapterError::Header,
             )?;
         }
-        if let Some(auth_token) = auth_token {
+        if let Some(auth_token) = auth_token.as_ref() {
             insert_header(
                 &mut headers,
                 AUTHORIZATION,
@@ -569,6 +591,12 @@ impl StreamableHttpClient for StreamableHttpClientAdapter {
                 StreamableHttpClientAdapterError::SessionExpired404,
             ));
         }
+        if self.attribute_rejected_access_token
+            && response.status == StatusCode::UNAUTHORIZED.as_u16()
+            && let Some(error) = access_token_rejected(auth_token.as_deref())
+        {
+            return Err(error);
+        }
         if !status_is_success(response.status) {
             return Err(StreamableHttpError::UnexpectedServerResponse(
                 format!("GET returned HTTP {}", response.status).into(),
@@ -598,6 +626,19 @@ impl StreamableHttpClient for StreamableHttpClientAdapter {
             uses_modern_protocol,
         ))
     }
+}
+
+fn access_token_rejected(
+    auth_token: Option<&str>,
+) -> Option<StreamableHttpError<StreamableHttpClientAdapterError>> {
+    // Attribute the response to the exact token sent. A delayed 401 can arrive after another
+    // request has already refreshed the shared credential, so reading the current token here
+    // would risk rotating the replacement a second time.
+    auth_token.map(|rejected_access_token| {
+        StreamableHttpError::Client(StreamableHttpClientAdapterError::AccessTokenRejected {
+            rejected_access_token: AccessToken::new(rejected_access_token.to_string()),
+        })
+    })
 }
 
 impl StreamableHttpClientAdapter {
