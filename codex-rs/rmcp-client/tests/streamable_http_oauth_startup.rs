@@ -17,8 +17,10 @@ use codex_rmcp_client::WrappedOAuthTokenResponse;
 use codex_rmcp_client::determine_streamable_http_auth_status;
 use codex_rmcp_client::is_authentication_required_error;
 use codex_rmcp_client::save_oauth_tokens;
+use codex_rmcp_client::stored_oauth_credentials;
 use oauth2::AccessToken;
 use oauth2::RefreshToken;
+use oauth2::TokenResponse;
 use oauth2::basic::BasicTokenType;
 use pretty_assertions::assert_eq;
 use rmcp::transport::auth::OAuthTokenResponse;
@@ -348,6 +350,25 @@ async fn oauth_startup_child() -> anyhow::Result<()> {
     .await?;
 
     initialize_client(&client).await?;
+    let stored = stored_oauth_credentials(
+        SERVER_NAME,
+        &server_url,
+        OAuthCredentialsStoreMode::File,
+        AuthKeyringBackendKind::default(),
+    )?
+    .expect("refreshed OAuth credentials should remain persisted");
+    assert_eq!(
+        stored.token_response.0.access_token().secret(),
+        REFRESHED_ACCESS_TOKEN
+    );
+    assert_eq!(
+        stored
+            .token_response
+            .0
+            .refresh_token()
+            .map(|token| token.secret().as_str()),
+        Some(REFRESH_TOKEN)
+    );
     Ok(())
 }
 

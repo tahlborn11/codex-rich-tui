@@ -297,6 +297,7 @@ mod tests {
     use axum::Json;
     use axum::Router;
     use axum::http::StatusCode;
+    use axum::http::header::ACCEPT;
     use axum::http::header::WWW_AUTHENTICATE;
     use axum::routing::get;
     use codex_exec_server::ExecServerError;
@@ -798,9 +799,15 @@ mod tests {
         let app = Router::new()
             .route(
                 "/mcp",
-                get(move || {
+                get(move |headers: HeaderMap| {
                     let challenge = challenge.clone();
-                    async move { (StatusCode::UNAUTHORIZED, [(WWW_AUTHENTICATE, challenge)]) }
+                    async move {
+                        assert_eq!(
+                            headers.get(ACCEPT).and_then(|value| value.to_str().ok()),
+                            Some("application/json, text/event-stream")
+                        );
+                        (StatusCode::UNAUTHORIZED, [(WWW_AUTHENTICATE, challenge)])
+                    }
                 }),
             )
             .route(
