@@ -16,17 +16,17 @@ help:
 # `codex`
 alias c := codex
 codex *args:
-    {{ python }} ../scripts/build_codex_package.py --cargo-profile dev-small --package-dir target/codex-rich-tui-dev --force
+    {{ python }} ../scripts/build_codex_rich_package.py --cargo-profile dev-small --package-dir target/codex-rich-tui-dev --force
     {{ rich_tui_dev_bin }} {args}
 
 # Build a self-contained release package for this fork. The package includes the
 # code-mode host and other runtime resources expected by the main executable.
 package-rich-tui:
-    {{ python }} ../scripts/build_codex_package.py --cargo-profile release --package-dir target/codex-rich-tui --force
+    {{ python }} ../scripts/build_codex_rich_package.py --cargo-profile release --package-dir target/codex-rich-tui --force
 
 # Build and install a locally signed package so macOS Keychain ACLs remain stable across rebuilds.
 install-rich-tui-local:
-    {{ python }} ../scripts/build_codex_package.py --cargo-profile dev-small --package-dir target/codex-rich-tui-dev --force
+    {{ python }} ../scripts/build_codex_rich_package.py --cargo-profile dev-small --package-dir target/codex-rich-tui-dev --force
     ../scripts/install_codex_rich_local.sh target/codex-rich-tui-dev
 
 # `codex exec`

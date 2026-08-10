@@ -136,6 +136,18 @@ test -x ~/.local/share/codex-rich-tui/bin/codex-code-mode-host
 codesign -d -r- ~/.local/share/codex-rich-tui/bin/codex 2>&1
 ```
 
+Successful fork builds use a calendar release version plus Git provenance without changing
+upstream's workspace crate version. A clean build reports an identity such as:
+
+```text
+codex-rich 2026.08.10+74432be3 (upstream d1093932)
+```
+
+The package records the full fork and upstream commit IDs in `codex-package.json`. Development
+builds from a modified checkout include `.dirty` after the fork commit abbreviation. Successful
+installed releases are tagged `codex-rich-YYYY.MM.DD`; if more than one release is needed on the
+same day, set `CODEX_RICH_RELEASE_VERSION=YYYY.MM.DD.N` and use the matching tag.
+
 ### 5. Sign in to Codex
 
 The fork uses the normal Codex home directory (`~/.codex`) and therefore shares configuration,
