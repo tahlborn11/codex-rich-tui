@@ -43,6 +43,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use supports_color::Stream;
 
+const CLI_NAME: &str = match option_env!("CODEX_RICH_VERSION") {
+    Some(_) => "codex-rich",
+    None => "codex-cli",
+};
+const CLI_VERSION: &str = match option_env!("CODEX_RICH_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod app_cmd;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -95,7 +104,8 @@ use codex_terminal_detection::TerminalName;
 #[derive(Debug, Parser)]
 #[clap(
     author,
-    version,
+    name = CLI_NAME,
+    version = CLI_VERSION,
     // If a sub‑command is given, ignore requirements of the default args.
     subcommand_negates_reqs = true,
     // The executable is sometimes invoked via a platform‑specific name like
