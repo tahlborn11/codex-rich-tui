@@ -88,6 +88,7 @@ async fn rmcp_owned_response_reports_rejected_token_without_refreshing() -> anyh
             /*auth_provider*/ None,
             /*has_configured_headers*/ false,
             StreamableHttpRedirectMode::Legacy,
+            /*initialize_deadline*/ Arc::new(std::sync::Mutex::new(None)),
         )
         .with_rejected_token_attribution(),
         manager,
