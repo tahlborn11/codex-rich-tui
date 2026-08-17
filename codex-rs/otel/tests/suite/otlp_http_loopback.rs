@@ -254,17 +254,17 @@ fn otlp_http_exporter_sends_metrics_to_collector() -> Result<()> {
     assert!(
         body.contains("codex.turns"),
         "expected metric name not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("codex.active"),
         "expected gauge not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("\"codex.api_request\""),
         "expected API-request counter not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains(EXEC_SERVER_CLIENT_REQUEST_COUNT_METRIC),
@@ -273,47 +273,47 @@ fn otlp_http_exporter_sends_metrics_to_collector() -> Result<()> {
     assert!(
         body.contains("\"codex.api_request.duration_ms\""),
         "expected API-request duration not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("\"codex.conversation.turn.count\""),
         "expected conversation turn count not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("\"codex.responses_api_engine_iapi_ttft.duration_ms\""),
         "expected engine IAPI TTFT duration not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("\"codex.responses_api_engine_service_tbt.duration_ms\""),
         "expected engine service TBT duration not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("\"codex.responses_api_engine_service_ttft.duration_ms\""),
         "expected engine service TTFT duration not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("\"codex.tool.call\""),
         "expected tool-call counter not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("\"codex.turn.token_usage\""),
         "expected turn-token histogram not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("\"codex.tool.call.duration_ms\""),
         "expected tool-call duration not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("component") && body.contains("test"),
         "expected gauge tag not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
 
     Ok(())
@@ -406,7 +406,7 @@ fn otlp_http_exporter_sends_logs_to_collector()
     assert!(
         body.contains("codex.test.log_exported"),
         "expected exported log event not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     Ok(())
 }
@@ -564,22 +564,22 @@ fn otlp_http_exporter_sends_traces_to_collector()
     assert!(
         body.contains("trace-loopback"),
         "expected span name not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("codex-cli"),
         "expected service name not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("test.configured_attribute") && body.contains("configured-value"),
         "expected configured span attribute not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("codex.test.trace_event"),
         "expected trace event not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
 
     Ok(())
@@ -680,12 +680,12 @@ async fn otlp_http_exporter_sends_traces_to_collector_with_bounded_shutdown_in_t
     assert!(
         body.contains("trace-loopback-tokio"),
         "expected span name not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("codex-cli"),
         "expected service name not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
 
     Ok(())
@@ -880,12 +880,12 @@ fn otlp_http_exporter_sends_traces_to_collector_in_current_thread_tokio_runtime(
     assert!(
         body.contains("trace-loopback-current-thread"),
         "expected span name not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
     assert!(
         body.contains("codex-cli"),
         "expected service name not found; body prefix: {}",
-        &body.chars().take(2000).collect::<String>()
+        body.chars().take(2000).collect::<String>()
     );
 
     Ok(())
