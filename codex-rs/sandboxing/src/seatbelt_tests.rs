@@ -1621,7 +1621,7 @@ fn create_seatbelt_args_with_read_only_git_and_codex_subpaths() {
     assert!(
         !output.status.success(),
         "command to write {} should fail under seatbelt",
-        &config_toml.display()
+        config_toml.display()
     );
     assert_seatbelt_denied(&output.stderr, &config_toml);
 
@@ -1659,7 +1659,7 @@ fn create_seatbelt_args_with_read_only_git_and_codex_subpaths() {
     assert!(
         !output.status.success(),
         "command to write {} should fail under seatbelt",
-        &pre_commit_hook.display()
+        pre_commit_hook.display()
     );
     assert_seatbelt_denied(&output.stderr, &pre_commit_hook);
 
@@ -1697,7 +1697,7 @@ fn create_seatbelt_args_with_read_only_git_and_codex_subpaths() {
     assert!(
         output.status.success(),
         "command to write {} should succeed under seatbelt",
-        &allowed_file.display()
+        allowed_file.display()
     );
     assert_eq!(
         "this is allowed\n",
