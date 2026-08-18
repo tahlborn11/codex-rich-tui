@@ -18,6 +18,8 @@ macOS-specific.
 - Task lists use semantic status markers, and expanded HTML `<details>` blocks render with a `▾`
   disclosure marker instead of raw tags.
 - Completed background-terminal waits use the same visual rail language as completed commands.
+- Successful commands remain individually visible in the conversation instead of being collapsed
+  into an aggregate `Ran N commands` entry.
 - Terminal titles can show live activity, project, thread, branch, model, and other configured
   values.
 - MCP OAuth recovery handles expired or rejected access tokens through a serialized refresh and
