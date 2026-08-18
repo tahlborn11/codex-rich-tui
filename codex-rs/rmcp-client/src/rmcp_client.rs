@@ -1287,7 +1287,7 @@ impl RmcpClient {
                 .err()
                 .and_then(Self::rejected_access_token_from_operation_error)
             {
-                let Some(oauth_runtime) = oauth_runtime.as_ref() else {
+                let Some(runtime) = oauth_runtime.as_ref() else {
                     return result.map_err(Into::into);
                 };
                 if oauth_recovered {
@@ -1295,7 +1295,7 @@ impl RmcpClient {
                         false
                     } else {
                         let remaining = remaining_operation_timeout(label, timeout, deadline)?;
-                        let adoption = oauth_runtime
+                        let adoption = runtime
                             .persistor
                             .adopt_newer_credentials_after_unauthorized(&rejected_access_token);
                         match remaining {
@@ -1313,6 +1313,9 @@ impl RmcpClient {
                         }
                     };
                     if adopted_newer_credentials {
+                        self.reinitialize_after_oauth_recovery(&service, label, timeout, deadline)
+                            .await?;
+                        (service, oauth_runtime) = self.service_and_oauth_runtime().await?;
                         retried_after_newer_credentials = true;
                         continue;
                     }
@@ -1320,7 +1323,7 @@ impl RmcpClient {
                 }
 
                 let remaining = remaining_operation_timeout(label, timeout, deadline)?;
-                let refresh = oauth_runtime
+                let refresh = runtime
                     .persistor
                     .refresh_after_unauthorized(rejected_access_token);
                 let refresh_result = match remaining {
@@ -1344,6 +1347,9 @@ impl RmcpClient {
                     }
                     return Err(error);
                 }
+                self.reinitialize_after_oauth_recovery(&service, label, timeout, deadline)
+                    .await?;
+                (service, oauth_runtime) = self.service_and_oauth_runtime().await?;
                 oauth_recovered = true;
                 continue;
             }
@@ -1502,6 +1508,31 @@ impl RmcpClient {
             ) => Some(rejected_access_token.clone()),
             _ => None,
         }
+    }
+
+    async fn reinitialize_after_oauth_recovery(
+        &self,
+        failed_service: &Arc<RunningService<RoleClient, ElicitationClientService>>,
+        label: &str,
+        timeout: Option<Duration>,
+        deadline: Option<Instant>,
+    ) -> Result<()> {
+        let remaining = remaining_operation_timeout(label, timeout, deadline)?;
+        let recovery = self.reinitialize_after_session_expiry(failed_service);
+        match remaining {
+            Some(remaining) => match time::timeout(remaining, recovery).await {
+                Ok(result) => result?,
+                Err(_) => {
+                    return Err(ClientOperationError::Timeout {
+                        label: label.to_string(),
+                        duration: timeout.unwrap_or(remaining),
+                    }
+                    .into());
+                }
+            },
+            None => recovery.await?,
+        }
+        Ok(())
     }
 
     async fn reinitialize_after_session_expiry(
