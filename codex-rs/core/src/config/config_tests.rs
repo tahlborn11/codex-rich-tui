@@ -1391,6 +1391,7 @@ fn config_toml_deserializes_model_availability_nux() {
         cfg.tui.expect("tui config should deserialize"),
         Tui {
             default_hosts: Default::default(),
+            local_auto: None,
             notification_settings: TuiNotificationSettings::default(),
             animations: true,
             screen_reader_detection_done: None,
@@ -4759,6 +4760,7 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
         tui,
         Tui {
             default_hosts: Default::default(),
+            local_auto: None,
             notification_settings: TuiNotificationSettings::default(),
             animations: true,
             screen_reader_detection_done: None,
@@ -4872,6 +4874,37 @@ async fn disable_paste_burst_preserves_layering_and_new_key_precedence() -> anyh
         );
     }
     Ok(())
+}
+
+#[tokio::test]
+async fn config_toml_deserializes_local_auto_defaults_and_runtime_config() {
+    let toml = r#"
+[tui.local_auto]
+classifier_model = "qwen2.5-coder:3b"
+"#;
+    let base: ConfigToml = toml::from_str(toml).expect("Local Auto config should deserialize");
+    let expected = TuiLocalAutoConfig {
+        classifier_model: "qwen2.5-coder:3b".to_string(),
+        endpoint: "http://localhost:11434/api/generate".to_string(),
+        timeout_ms: 500,
+        low_threshold: 0.4,
+        medium_threshold: 0.7,
+    };
+
+    assert_eq!(
+        base.tui.as_ref().and_then(|tui| tui.local_auto.as_ref()),
+        Some(&expected)
+    );
+
+    let runtime = Config::load_from_base_config_with_overrides(
+        base,
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect("Local Auto runtime config should load");
+
+    assert_eq!(runtime.tui_local_auto, Some(expected));
 }
 
 #[tokio::test]
