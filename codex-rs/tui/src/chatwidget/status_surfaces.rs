@@ -687,7 +687,11 @@ impl ChatWidget {
     /// git metadata.
     pub(super) fn status_line_value_for_item(&mut self, item: StatusLineItem) -> Option<String> {
         match item {
-            StatusLineItem::ModelName => Some(self.model_display_name().to_string()),
+            StatusLineItem::ModelName => Some(if self.local_auto_selected() {
+                "Local Auto".to_string()
+            } else {
+                self.model_display_name().to_string()
+            }),
             StatusLineItem::ModelWithReasoning => Some(self.model_with_reasoning_display_name()),
             StatusLineItem::Reasoning => Some(self.reasoning_display_name()),
             StatusLineItem::CurrentDir => {
@@ -936,6 +940,9 @@ impl ChatWidget {
     }
 
     fn model_with_reasoning_display_name(&self) -> String {
+        if self.local_auto_selected() {
+            return "Local Auto".to_string();
+        }
         let label = self.reasoning_display_name();
         let service_tier_label = self
             .current_service_tier()

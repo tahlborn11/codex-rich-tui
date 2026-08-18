@@ -3237,6 +3237,34 @@ async fn model_selection_popup_snapshot() {
 }
 
 #[tokio::test]
+async fn local_auto_model_selection_popup_snapshot() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.2")).await;
+    chat.config.tui_local_auto = Some(codex_config::types::TuiLocalAutoConfig {
+        classifier_model: "local-router".to_string(),
+        endpoint: "http://localhost:11434/api/generate".to_string(),
+        timeout_ms: 500,
+        low_threshold: 0.4,
+        medium_threshold: 0.7,
+    });
+    chat.thread_id = Some(ThreadId::new());
+    chat.open_model_popup();
+
+    let popup = render_bottom_popup(&chat, /*width*/ 80);
+    assert_chatwidget_snapshot!("local_auto_model_selection_popup", popup);
+}
+
+#[tokio::test]
+async fn manual_model_selection_clears_local_auto_state() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.2")).await;
+    chat.set_local_auto_selected();
+    assert!(chat.local_auto_selected());
+
+    chat.set_model("gpt-5.4");
+
+    assert!(!chat.local_auto_selected());
+}
+
+#[tokio::test]
 async fn personality_selection_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
     chat.thread_id = Some(ThreadId::new());
