@@ -270,7 +270,7 @@ impl HistoryCell for ExecCell {
     }
 
     fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
-        if self.is_exploring_cell() {
+        if self.is_exploring_cell() && (self.group.calls.len() == 1 || self.is_active()) {
             self.exploring_display_lines(width)
         } else {
             self.command_display_lines(width)
@@ -446,13 +446,25 @@ impl ExecCell {
     }
 
     fn command_display_lines(&self, width: u16) -> Vec<HyperlinkLine> {
-        self.command_display_lines_with_hidden_details(width).lines
+        self.group
+            .calls
+            .iter()
+            .flat_map(|call| self.command_call_display_lines_with_hidden_details(width, call).lines)
+            .collect()
     }
 
     fn command_display_lines_with_hidden_details(&self, width: u16) -> CommandDisplay {
         let [call] = &self.group.calls.as_slice() else {
             panic!("Expected exactly one call in a command display cell");
         };
+        self.command_call_display_lines_with_hidden_details(width, call)
+    }
+
+    fn command_call_display_lines_with_hidden_details(
+        &self,
+        width: u16,
+        call: &ExecCall,
+    ) -> CommandDisplay {
         let layout = EXEC_DISPLAY_LAYOUT;
         let success = call
             .duration

@@ -47,6 +47,86 @@ async fn external_writer_snapshot_freezes_active_command_and_mcp_rows() {
 }
 
 #[tokio::test]
+async fn command_activity_keeps_successes_visible_and_preserves_full_transcript() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.on_task_started();
+
+    let first = begin_exec(&mut chat, "call-first", "printf first");
+    end_exec(&mut chat, first, "first\n", "", /*exit_code*/ 0);
+
+    let second = begin_exec(&mut chat, "call-second", "printf second");
+    insta::assert_snapshot!(active_blob(&chat), @r"• Ran printf first
+  └ first
+• Running printf second
+");
+    end_exec(&mut chat, second, "second\n", "", /*exit_code*/ 0);
+
+    assert!(drain_insert_history(&mut rx).is_empty());
+    insta::assert_snapshot!(active_blob(&chat), @r"• Ran printf first
+  └ first
+• Ran printf second
+  └ second
+");
+
+    let transcript = chat
+        .active_cell_transcript_lines(/*width*/ 80)
+        .expect("active transcript");
+    let transcript = lines_to_single_string(&transcript);
+    assert!(transcript.contains("$ printf first\nfirst\n"));
+    assert!(transcript.contains("$ printf second\nsecond\n"));
+
+    chat.on_agent_message_delta("Finished\n".to_string());
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 2);
+    assert_eq!(
+        lines_to_single_string(&cells[0]),
+        "• Ran printf first\n  └ first\n• Ran printf second\n  └ second\n"
+    );
+}
+
+#[tokio::test]
+async fn command_activity_keeps_unified_exec_startup_commands_visible() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.on_task_started();
+
+    let first = begin_unified_exec_startup(&mut chat, "call-first", "proc-first", "printf first");
+    end_exec(&mut chat, first, "first\n", "", /*exit_code*/ 0);
+
+    let run_id = "pre-tool-use:0:/tmp/hooks.json";
+    handle_hook_started(
+        &mut chat,
+        hook_run(
+            run_id,
+            AppServerHookEventName::PreToolUse,
+            AppServerHookRunStatus::Running,
+            "checking command policy",
+            Vec::new(),
+        ),
+    );
+    handle_hook_completed(
+        &mut chat,
+        hook_run(
+            run_id,
+            AppServerHookEventName::PreToolUse,
+            AppServerHookRunStatus::Completed,
+            "checking command policy",
+            Vec::new(),
+        ),
+    );
+
+    let second =
+        begin_unified_exec_startup(&mut chat, "call-second", "proc-second", "printf second");
+    end_exec(&mut chat, second, "second\n", "", /*exit_code*/ 0);
+
+    assert!(drain_insert_history(&mut rx).is_empty());
+    insta::assert_snapshot!(active_blob(&chat), @r"• Ran printf first
+  └ first
+• Ran printf second
+  └ second
+");
+}
+
+#[tokio::test]
 async fn replayed_command_completion_preserves_tracking_without_duplicate_starts() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.on_task_started();
@@ -115,6 +195,106 @@ async fn replayed_completion_preserves_unrelated_running_command() {
         } else {
             "Running sleep 5"
         }));
+    }
+}
+
+#[tokio::test]
+async fn command_activity_preserves_overlapping_reads_after_success() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.on_task_started();
+    let prefix = begin_exec(&mut chat, "call-prefix", "printf before");
+    end_exec(&mut chat, prefix, "before\n", "", /*exit_code*/ 0);
+    let first = begin_exec(&mut chat, "call-first-read", "cat first.txt");
+    let second = begin_exec(&mut chat, "call-second-read", "cat second.txt");
+
+    assert!(drain_insert_history(&mut rx).is_empty());
+    chat.on_exec_command_output_delta("call-first-read", "streamed output\n");
+    assert!(
+        lines_to_single_string(
+            &chat
+                .active_cell_transcript_lines(/*width*/ 80)
+                .expect("overlapping reads remain active")
+        )
+        .contains("streamed output")
+    );
+    end_exec(&mut chat, first, "first\n", "", /*exit_code*/ 0);
+    end_exec(&mut chat, second, "second\n", "", /*exit_code*/ 0);
+    assert!(drain_insert_history(&mut rx).is_empty());
+    let activity = active_blob(&chat);
+    assert!(activity.contains("Ran printf before"));
+    assert!(activity.contains("Ran cat first.txt"));
+    assert!(activity.contains("Ran cat second.txt"));
+}
+
+#[tokio::test]
+async fn command_activity_keeps_failures_and_manual_shell_commands_visible() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.on_task_started();
+
+    let first = begin_exec(&mut chat, "call-first", "printf first");
+    end_exec(&mut chat, first, "first\n", "", /*exit_code*/ 0);
+
+    let mut failed = begin_exec(&mut chat, "call-failed", "printf broken");
+    if let AppServerThreadItem::CommandExecution {
+        status,
+        aggregated_output,
+        ..
+    } = &mut failed
+    {
+        *status = AppServerCommandExecutionStatus::Declined;
+        *aggregated_output = Some("broken\n".to_string());
+    }
+    handle_exec_end(&mut chat, failed);
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let failed_history = lines_to_single_string(&cells[0]);
+    insta::assert_snapshot!(failed_history, @r"• Ran printf first
+  └ first
+• Ran printf broken
+  └ broken
+");
+
+    let manual = begin_exec_with_source(
+        &mut chat,
+        "call-manual",
+        "printf manual",
+        ExecCommandSource::UserShell,
+    );
+    end_exec(&mut chat, manual, "manual\n", "", /*exit_code*/ 0);
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let manual_history = lines_to_single_string(&cells[0]);
+    assert!(manual_history.contains("You ran printf manual"));
+
+    for sources in [
+        [
+            ExecCommandSource::UnifiedExecInteraction,
+            ExecCommandSource::Agent,
+        ],
+        [
+            ExecCommandSource::Agent,
+            ExecCommandSource::UnifiedExecInteraction,
+        ],
+    ] {
+        let first = begin_exec_with_source(&mut chat, "call-first", "cat foo.txt", sources[0]);
+        let second = begin_exec_with_source(&mut chat, "call-second", "cat bar.txt", sources[1]);
+        assert!(drain_insert_history(&mut rx).is_empty());
+        end_exec(&mut chat, first, "content\n", "", /*exit_code*/ 0);
+        assert!(drain_insert_history(&mut rx).is_empty());
+        let transcript = lines_to_single_string(
+            &chat
+                .transcript
+                .active_cell
+                .as_ref()
+                .expect("overlapping commands remain active")
+                .transcript_lines(/*width*/ 80),
+        );
+        assert!(transcript.contains("foo.txt"));
+        assert!(transcript.contains("bar.txt"));
+        end_exec(&mut chat, second, "content\n", "", /*exit_code*/ 0);
+        let cells = drain_insert_history(&mut rx);
+        assert_eq!(cells.len(), 1);
+        assert!(lines_to_single_string(&cells[0]).contains("bar.txt"));
     }
 }
 
@@ -394,7 +574,11 @@ async fn replayed_commands_preserve_individual_output_and_failure_status() {
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert_eq!(cells.len(), 4);
+    assert_eq!(cells.len(), 3);
+    assert_eq!(
+        lines_to_single_string(&cells[0].display_lines(/*width*/ 80)),
+        "• Ran printf first\n  └ first\n• Ran printf second\n  └ second\n"
+    );
     let transcript = cells
         .iter()
         .map(|cell| lines_to_single_string(&cell.transcript_lines(/*width*/ 80)))
@@ -416,6 +600,87 @@ $ printf declined
 declined
 ✗ (1) • 5ms
 ");
+    assert!(
+        lines_to_single_string(&cells[1].display_lines(/*width*/ 80))
+            .contains("Ran printf failure")
+    );
+    assert!(
+        lines_to_single_string(&cells[2].display_lines(/*width*/ 80))
+            .contains("Ran printf declined")
+    );
+}
+
+#[tokio::test]
+async fn command_activity_bounds_completed_groups_without_flushing_active_calls() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.on_task_started();
+
+    for index in 0..32 {
+        let command = begin_exec(&mut chat, &format!("call-{index}"), "printf bounded");
+        end_exec(&mut chat, command, "bounded\n", "", /*exit_code*/ 0);
+    }
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let completed = lines_to_single_string(&cells[0]);
+    assert_eq!(
+        completed
+            .matches("• Ran printf bounded\n  └ bounded\n")
+            .count(),
+        32
+    );
+    assert!(chat.transcript.active_cell.is_none());
+
+    let commands = (0..33)
+        .map(|index| begin_exec(&mut chat, &format!("call-{index}"), "cat foo.txt"))
+        .collect::<Vec<_>>();
+
+    assert!(drain_insert_history(&mut rx).is_empty());
+    for command in commands {
+        end_exec(&mut chat, command, "content\n", "", /*exit_code*/ 0);
+    }
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    assert_eq!(
+        lines_to_single_string(&cells[0])
+            .matches("• Ran cat foo.txt\n  └ content\n")
+            .count(),
+        33
+    );
+}
+
+#[tokio::test]
+async fn command_activity_flushes_before_user_attention() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.on_task_started();
+
+    let first = begin_exec(&mut chat, "call-attention", "printf attention");
+    end_exec(&mut chat, first, "attention\n", "", /*exit_code*/ 0);
+    let second = begin_exec(&mut chat, "call-followup", "printf followup");
+    end_exec(&mut chat, second, "followup\n", "", /*exit_code*/ 0);
+
+    chat.handle_request_user_input_now(ToolRequestUserInputParams {
+        thread_id: "thread-1".to_string(),
+        item_id: "input-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        questions: Vec::new(),
+        is_blocking: true,
+        auto_resolution_ms: None,
+    });
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let commands = lines_to_single_string(&cells[0]);
+    assert!(commands.contains("Ran printf attention"));
+    assert!(commands.contains("Ran printf followup"));
+
+    let later = begin_exec(&mut chat, "call-after-request", "printf later");
+    end_exec(&mut chat, later, "later\n", "", /*exit_code*/ 0);
+    assert!(drain_insert_history(&mut rx).is_empty());
+    chat.pre_draw_tick();
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    assert!(lines_to_single_string(&cells[0]).contains("Ran printf later"));
 }
 
 #[tokio::test]
