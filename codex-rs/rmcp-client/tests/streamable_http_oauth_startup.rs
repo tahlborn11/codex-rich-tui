@@ -48,6 +48,7 @@ use streamable_http_test_support::initialize_client;
 
 const SERVER_NAME: &str = "test-streamable-http-oauth-startup";
 const EXPIRED_ACCESS_TOKEN: &str = "expired-access-token";
+const POST_INITIALIZATION_ACCESS_TOKEN: &str = "post-initialization-access-token";
 const REFRESH_TOKEN: &str = "valid-refresh-token";
 const REFRESHED_ACCESS_TOKEN: &str = "refreshed-access-token";
 const RESOURCE_API_KEY: &str = "resource-api-key-secret";
@@ -94,6 +95,193 @@ async fn refreshes_oauth_after_gateway_rejects_token_request() -> anyhow::Result
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn refresh_uses_discovered_protected_resource_audience() -> anyhow::Result<()> {
     assert_expired_token_refresh(OAuthStartupScenario::ProtectedResourceMetadata).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn refreshes_rejected_persisted_token_after_initialize() -> anyhow::Result<()> {
+    let server = MockServer::start().await;
+    let authorization_server = MockServer::start().await;
+    let resource_url = format!("{}/mcp", server.uri());
+    let server_url = format!("{resource_url}/");
+    let resource_metadata_url = format!("{}/resource-metadata", server.uri());
+
+    Mock::given(method("GET"))
+        .and(path("/mcp/"))
+        .respond_with(ResponseTemplate::new(401).insert_header(
+            "www-authenticate",
+            format!("Bearer resource_metadata=\"{resource_metadata_url}\""),
+        ))
+        .expect(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/resource-metadata"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "resource": resource_url,
+            "authorization_servers": [server.uri()],
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/.well-known/oauth-authorization-server"))
+        .and(header("user-agent", RESOURCE_USER_AGENT))
+        .and(header("x-api-key", RESOURCE_API_KEY))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "issuer": server.uri(),
+            "authorization_endpoint": format!("{}/oauth/authorize", authorization_server.uri()),
+            "token_endpoint": format!("{}/oauth/token", authorization_server.uri()),
+            "scopes_supported": [""],
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/oauth/token"))
+        .and(header("user-agent", MCP_USER_AGENT))
+        .and(body_string_contains("grant_type=refresh_token"))
+        .and(body_string_contains(format!(
+            "refresh_token={REFRESH_TOKEN}"
+        )))
+        .and({
+            let expected_resource = resource_url.clone();
+            move |request: &Request| {
+                url::form_urlencoded::parse(&request.body)
+                    .any(|(name, value)| name == "resource" && value == expected_resource)
+            }
+        })
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "access_token": REFRESHED_ACCESS_TOKEN,
+            "token_type": "Bearer",
+            "expires_in": 7200,
+            "refresh_token": REFRESH_TOKEN,
+        })))
+        .expect(1)
+        .mount(&authorization_server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/mcp/"))
+        .and(header("user-agent", RESOURCE_USER_AGENT))
+        .and(header("x-api-key", RESOURCE_API_KEY))
+        .respond_with(|request: &Request| {
+            let body: Value = match request.body_json() {
+                Ok(body) => body,
+                Err(_) => {
+                    return ResponseTemplate::new(400).set_body_string("invalid JSON-RPC request");
+                }
+            };
+            let access_token = request
+                .headers
+                .get("authorization")
+                .and_then(|value| value.to_str().ok());
+            match (body.get("method").and_then(Value::as_str), access_token) {
+                (Some("initialize"), Some(value))
+                    if value == format!("Bearer {POST_INITIALIZATION_ACCESS_TOKEN}") =>
+                {
+                    ResponseTemplate::new(200).set_body_json(json!({
+                        "jsonrpc": "2.0",
+                        "id": body.get("id").cloned().unwrap_or(Value::Null),
+                        "result": {
+                            "protocolVersion": body
+                                .pointer("/params/protocolVersion")
+                                .cloned()
+                                .unwrap_or_else(|| json!("2025-06-18")),
+                            "capabilities": {},
+                            "serverInfo": {
+                                "name": "oauth-post-initialization-recovery-test",
+                                "version": "0.0.0-test",
+                            },
+                        },
+                    }))
+                }
+                (Some("notifications/initialized"), Some(value))
+                    if value == format!("Bearer {POST_INITIALIZATION_ACCESS_TOKEN}") =>
+                {
+                    ResponseTemplate::new(202)
+                }
+                (Some("tools/list"), Some(value))
+                    if value == format!("Bearer {POST_INITIALIZATION_ACCESS_TOKEN}") =>
+                {
+                    ResponseTemplate::new(401)
+                }
+                (Some("initialize"), Some(value))
+                    if value == format!("Bearer {REFRESHED_ACCESS_TOKEN}") =>
+                {
+                    ResponseTemplate::new(200).set_body_json(json!({
+                        "jsonrpc": "2.0",
+                        "id": body.get("id").cloned().unwrap_or(Value::Null),
+                        "result": {
+                            "protocolVersion": body
+                                .pointer("/params/protocolVersion")
+                                .cloned()
+                                .unwrap_or_else(|| json!("2025-06-18")),
+                            "capabilities": {},
+                            "serverInfo": {
+                                "name": "oauth-post-initialization-recovery-test",
+                                "version": "0.0.0-test",
+                            },
+                        },
+                    }))
+                }
+                (Some("notifications/initialized"), Some(value))
+                    if value == format!("Bearer {REFRESHED_ACCESS_TOKEN}") =>
+                {
+                    ResponseTemplate::new(202)
+                }
+                (Some("tools/list"), Some(value))
+                    if value == format!("Bearer {REFRESHED_ACCESS_TOKEN}") =>
+                {
+                    ResponseTemplate::new(200).set_body_json(json!({
+                        "jsonrpc": "2.0",
+                        "id": body.get("id").cloned().unwrap_or(Value::Null),
+                        "result": { "tools": [] },
+                    }))
+                }
+                (method, authorization) => ResponseTemplate::new(400).set_body_string(format!(
+                    "unexpected JSON-RPC method {method:?} with authorization {authorization:?}"
+                )),
+            }
+        })
+        // Initial initialize/notification, rejected tools/list, then a rebuilt
+        // initialize/notification and the retried tools/list with refreshed credentials.
+        .expect(6)
+        .mount(&server)
+        .await;
+
+    let codex_home = TempDir::new()?;
+    let status = Command::new(std::env::current_exe()?)
+        .args([
+            "oauth_post_initialization_recovery_child",
+            "--exact",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env("CODEX_HOME", codex_home.path())
+        .env(CHILD_SERVER_URL_ENV, server_url)
+        .env(CHILD_RESOURCE_API_KEY_ENV, RESOURCE_API_KEY)
+        .status()
+        .await?;
+    assert!(
+        status.success(),
+        "post-initialization OAuth recovery child failed: {status}"
+    );
+
+    let authorization_requests = authorization_server
+        .received_requests()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("authorization server should record requests"))?;
+    assert_eq!(authorization_requests.len(), 1);
+    assert_eq!(authorization_requests[0].headers.get("x-api-key"), None);
+    assert_eq!(
+        authorization_requests[0]
+            .headers
+            .get("user-agent")
+            .map(http::HeaderValue::as_bytes),
+        Some(MCP_USER_AGENT.as_bytes())
+    );
+    server.verify().await;
+    authorization_server.verify().await;
+    Ok(())
 }
 
 async fn assert_expired_token_refresh(scenario: OAuthStartupScenario) -> anyhow::Result<()> {
@@ -772,6 +960,82 @@ async fn oauth_startup_child() -> anyhow::Result<()> {
     .await?;
 
     initialize_client(&client).await?;
+    let stored = stored_oauth_credentials(
+        SERVER_NAME,
+        &server_url,
+        OAuthCredentialsStoreMode::File,
+        AuthKeyringBackendKind::default(),
+    )?
+    .expect("refreshed OAuth credentials should remain persisted");
+    assert_eq!(
+        stored.token_response.0.access_token().secret(),
+        REFRESHED_ACCESS_TOKEN
+    );
+    assert_eq!(
+        stored
+            .token_response
+            .0
+            .refresh_token()
+            .map(|token| token.secret().as_str()),
+        Some(REFRESH_TOKEN)
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore = "spawned by refreshes_rejected_persisted_token_after_initialize"]
+async fn oauth_post_initialization_recovery_child() -> anyhow::Result<()> {
+    let server_url = std::env::var(CHILD_SERVER_URL_ENV)?;
+    let mut response = OAuthTokenResponse::new(
+        AccessToken::new(POST_INITIALIZATION_ACCESS_TOKEN.to_string()),
+        BasicTokenType::Bearer,
+        VendorExtraTokenFields::default(),
+    );
+    response.set_refresh_token(Some(RefreshToken::new(REFRESH_TOKEN.to_string())));
+    response.set_expires_in(Some(&Duration::from_secs(7200)));
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_secs(0))
+        .as_millis() as u64;
+    let tokens = StoredOAuthTokens {
+        server_name: SERVER_NAME.to_string(),
+        url: server_url.clone(),
+        client_id: "test-client-id".to_string(),
+        token_response: WrappedOAuthTokenResponse(response),
+        expires_at: Some(now.saturating_add(/*rhs*/ 7_200_000)),
+    };
+    save_oauth_tokens(
+        SERVER_NAME,
+        &tokens,
+        OAuthCredentialsStoreMode::File,
+        AuthKeyringBackendKind::default(),
+    )?;
+
+    let client = RmcpClient::new_streamable_http_client(
+        SERVER_NAME,
+        &server_url,
+        /*bearer_token*/ None,
+        Some(HashMap::from([(
+            "User-Agent".to_string(),
+            RESOURCE_USER_AGENT.to_string(),
+        )])),
+        Some(HashMap::from([(
+            "X-Api-Key".to_string(),
+            CHILD_RESOURCE_API_KEY_ENV.to_string(),
+        )])),
+        OAuthCredentialsStoreMode::File,
+        AuthKeyringBackendKind::default(),
+        Environment::default_for_tests().get_http_client(),
+        /*auth_provider*/ None,
+    )
+    .await?;
+
+    initialize_client(&client).await?;
+    let tools = client
+        .list_tools(/*params*/ None, Some(Duration::from_secs(5)))
+        .await?;
+    assert!(tools.tools.is_empty());
+
     let stored = stored_oauth_credentials(
         SERVER_NAME,
         &server_url,

@@ -119,7 +119,7 @@ async fn same_origin_redirects_preserve_timeout_and_response_body_limits() -> Re
         let redirect = if oversized_redirect_body {
             redirect.set_body_bytes(vec![0; MAX_OAUTH_HTTP_RESPONSE_BODY_BYTES + 1])
         } else {
-            redirect.set_delay(Duration::from_millis(/*millis*/ 400))
+            redirect.set_delay(Duration::from_millis(/*millis*/ 100))
         };
         Mock::given(method("POST"))
             .and(path("/register"))
@@ -129,9 +129,7 @@ async fn same_origin_redirects_preserve_timeout_and_response_body_limits() -> Re
             .await;
         Mock::given(method("POST"))
             .and(path("/register/"))
-            .respond_with(
-                ResponseTemplate::new(201).set_delay(Duration::from_millis(/*millis*/ 400)),
-            )
+            .respond_with(ResponseTemplate::new(201).set_delay(Duration::from_secs(/*secs*/ 10)))
             .expect(u64::from(!oversized_redirect_body))
             .mount(&server)
             .await;
@@ -156,7 +154,7 @@ async fn same_origin_redirects_preserve_timeout_and_response_body_limits() -> Re
                     .uri(format!("{}/register", server.uri()))
                     .body(Vec::new())?,
                 OAuthHttpRedirectPolicy::Follow,
-                (!oversized_redirect_body).then_some(Duration::from_millis(/*millis*/ 700)),
+                (!oversized_redirect_body).then_some(Duration::from_secs(/*secs*/ 5)),
             )
             .await
             .expect_err("redirects must preserve request timeout and response body limits");

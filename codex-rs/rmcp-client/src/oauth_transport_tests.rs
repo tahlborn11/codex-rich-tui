@@ -65,6 +65,7 @@ async fn rmcp_owned_response_reports_rejected_token_without_refreshing() -> anyh
     let oauth_http_client = Arc::new(OAuthHttpClientAdapter::new(
         Arc::clone(&http_client),
         http::HeaderMap::new(),
+        &server_url,
     ));
     let mut manager =
         AuthorizationManager::new_with_oauth_http_client(server_url.clone(), oauth_http_client)

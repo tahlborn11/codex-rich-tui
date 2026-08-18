@@ -22,8 +22,9 @@ macOS-specific.
   into an aggregate `Ran N commands` entry.
 - Terminal titles can show live activity, project, thread, branch, model, and other configured
   values.
-- MCP OAuth recovery handles expired or rejected access tokens through a serialized refresh and
-  preserves refreshed credentials in the configured store.
+- MCP OAuth recovery handles expired or rejected access tokens through a serialized refresh,
+  includes the server's discovered RFC 8707 resource audience when refreshing, retries the failed
+  operation once, and preserves refreshed credentials in the configured store.
 
 The fork's `main` branch carries these changes on top of upstream Codex.
 
@@ -190,6 +191,13 @@ use `/mcp` to inspect the active servers. These commands follow the official Ope
 The stable signature is important here: installing an unsigned replacement or signing each build
 with a new identity can cause macOS to prompt for Keychain access again or deny the stored OAuth
 credential.
+
+Long-running sessions also recover when an MCP server rejects an access token after startup. The
+fork serializes refreshes across processes, sends the discovered protected-resource audience to
+the token endpoint, persists the replacement token in the originally selected credential store,
+and retries the failed MCP operation once. A routine access-token rollover should therefore not
+require another `codex-rich mcp login`; a new login is still required when the provider rejects or
+omits the refresh token.
 
 ## Terminal titles in iTerm2
 
