@@ -1940,8 +1940,8 @@ impl App {
                 }
                 let model_changed = self.chat_widget.current_model() != model
                     || self.chat_widget.current_collaboration_mode().model() != model;
+                self.chat_widget.set_model(&model);
                 if model_changed {
-                    self.chat_widget.set_model(&model);
                     self.sync_active_thread_model_setting(app_server, model, /*effort*/ None)
                         .await;
                     self.sync_active_thread_service_tier_to_cached_session()
@@ -1963,6 +1963,12 @@ impl App {
                 if thread_id == self.chat_widget.thread_id() || self.voice_owner_thread_id().is_some() {
                     self.control_voice(control);
                 }
+            }
+            AppEvent::SelectLocalAuto => self.chat_widget.set_local_auto_selected(),
+            AppEvent::UpdatePersonality(personality) => {
+                self.on_update_personality(personality);
+                self.sync_active_thread_personality_setting(app_server, personality)
+                    .await;
             }
             AppEvent::RealtimeWebrtcOfferCreated {
                 thread_id,

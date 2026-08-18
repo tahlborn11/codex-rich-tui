@@ -2,6 +2,7 @@
 
 use super::*;
 use codex_app_server_protocol::ImageReference;
+use crate::app_command::RootModelRouting;
 
 impl ChatWidget {
     pub(crate) fn set_task_mentions_enabled(&mut self, enabled: bool) {
@@ -453,6 +454,14 @@ impl ChatWidget {
             /*final_output_json_schema*/ None,
             collaboration_mode,
             /*personality*/ None,
+            if self.local_auto_selected() {
+                RootModelRouting::LocalAuto {
+                    force_sol: self.active_mode_kind() == ModeKind::Plan,
+                    user_prompt: text.clone(),
+                }
+            } else {
+                RootModelRouting::Manual
+            },
         );
         let submitted_message = UserMessage {
             text,

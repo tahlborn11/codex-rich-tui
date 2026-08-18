@@ -130,6 +130,7 @@ pub(crate) mod custom_terminal;
 mod daybreak;
 mod experimental_features;
 mod markdown_copy;
+mod local_auto_router;
 mod permission_discovery;
 mod pets;
 mod worktree_browser;
