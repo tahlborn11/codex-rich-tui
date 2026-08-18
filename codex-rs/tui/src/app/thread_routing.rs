@@ -6,12 +6,17 @@
 
 use super::session_lifecycle::ThreadAttachPresentation;
 use super::*;
+use crate::app_command::RootModelRouting;
 use crate::app_event::ThreadTitleDestination;
 use crate::chatwidget::ThreadInputStateRestoreMode;
+use crate::local_auto_router;
+use crate::session_resume::read_session_model;
 use codex_app_server_protocol::ThreadStartedNotification;
 use codex_app_server_protocol::TurnInterruptParams;
 use codex_app_server_protocol::TurnInterruptResponse;
 use codex_app_server_protocol::WarningNotification;
+use codex_protocol::config_types::CollaborationMode;
+use codex_protocol::openai_models::ReasoningEffort as ReasoningEffortConfig;
 
 // Leave time for side-thread cleanup and unsubscribe inside the two-second exit budget.
 const REALTIME_STOP_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 1);
@@ -733,6 +738,249 @@ impl App {
                         }
                     }
                 });
+                Ok(true)
+            }
+            AppCommand::UserTurn {
+                client_user_message_id,
+                items,
+                cwd,
+                approval_policy,
+                approvals_reviewer,
+                active_permission_profile: _,
+                model,
+                effort,
+                summary,
+                service_tier,
+                final_output_json_schema,
+                collaboration_mode,
+                routing,
+            } => {
+                let mut should_start_turn = true;
+                if let Some(turn_id) = self.active_turn_id_for_thread(thread_id).await {
+                    let mut steer_turn_id = turn_id;
+                    let mut retried_after_turn_mismatch = false;
+                    loop {
+                        match app_server
+                            .turn_steer(
+                                thread_id,
+                                steer_turn_id.clone(),
+                                client_user_message_id.clone(),
+                                items.to_vec(),
+                            )
+                            .await
+                        {
+                            Ok(_) => {
+                                if self.active_thread_id == Some(thread_id)
+                                    && self.chat_widget.thread_id() == Some(thread_id)
+                                {
+                                    crate::startup_recovery::acknowledged(client_user_message_id);
+                                }
+                                return Ok(true);
+                            }
+                            Err(error) => {
+                                if let Some(turn_error) =
+                                    active_turn_not_steerable_turn_error(&error)
+                                {
+                                    if !self.chat_widget.enqueue_rejected_steer() {
+                                        self.chat_widget.add_error_message(turn_error.message);
+                                    }
+                                    return Ok(true);
+                                }
+                                match active_turn_steer_race(&error) {
+                                    Some(ActiveTurnSteerRace::Missing) => {
+                                        if let Some(channel) =
+                                            self.thread_event_channels.get(&thread_id)
+                                        {
+                                            let mut store = channel.store.lock().await;
+                                            store.clear_active_turn_id();
+                                        }
+                                        should_start_turn = true;
+                                        break;
+                                    }
+                                    Some(ActiveTurnSteerRace::ExpectedTurnMismatch {
+                                        actual_turn_id,
+                                    }) if !retried_after_turn_mismatch
+                                        && actual_turn_id != steer_turn_id =>
+                                    {
+                                        // Review flows can swap the active turn before the TUI
+                                        // processes the corresponding notification. Retry once with
+                                        // the server-reported turn id so non-steerable review turns
+                                        // still fall through to the existing queueing behavior.
+                                        if let Some(channel) =
+                                            self.thread_event_channels.get(&thread_id)
+                                        {
+                                            let mut store = channel.store.lock().await;
+                                            store.set_active_turn_id(actual_turn_id.clone());
+                                        }
+                                        steer_turn_id = actual_turn_id;
+                                        retried_after_turn_mismatch = true;
+                                    }
+                                    Some(ActiveTurnSteerRace::ExpectedTurnMismatch {
+                                        actual_turn_id,
+                                    }) => {
+                                        if let Some(channel) =
+                                            self.thread_event_channels.get(&thread_id)
+                                        {
+                                            let mut store = channel.store.lock().await;
+                                            store.set_active_turn_id(actual_turn_id);
+                                        }
+                                        return Err(error.into());
+                                    }
+                                    None => return Err(error.into()),
+                                }
+                            }
+                        }
+                    }
+                }
+                if should_start_turn {
+                    let (routed_model, routed_effort) = match routing {
+                        RootModelRouting::Manual => (model.to_string(), effort.clone()),
+                        RootModelRouting::LocalAuto {
+                            force_sol,
+                            user_prompt,
+                        } => {
+                            let available_models = self
+                                .chat_widget
+                                .model_catalog()
+                                .try_list_models()
+                                .unwrap_or_default()
+                                .into_iter()
+                                .map(|preset| preset.model)
+                                .collect();
+                            let config = self.chat_widget.config_ref();
+                            if let Some(local_auto) = config.tui_local_auto.as_ref() {
+                                let routed = local_auto_router::route(
+                                    local_auto,
+                                    user_prompt,
+                                    available_models,
+                                    model.to_string(),
+                                    effort.clone(),
+                                    *force_sol,
+                                )
+                                .await;
+                                let status = match routed.outcome {
+                                    local_auto_router::RouteOutcome::Classified => {
+                                        format!("Local Auto → {}", routed.label)
+                                    }
+                                    local_auto_router::RouteOutcome::PlanPolicy => format!(
+                                        "Local Auto → {} — Plan mode uses Sol",
+                                        routed.label
+                                    ),
+                                    local_auto_router::RouteOutcome::ClassifierFallback => format!(
+                                        "Local Auto → {} — classifier unavailable or invalid; used safe fallback",
+                                        routed.label
+                                    ),
+                                };
+                                self.chat_widget.add_info_message(status, /*hint*/ None);
+                                (routed.model, routed.effort)
+                            } else {
+                                (model.to_string(), effort.clone())
+                            }
+                        }
+                    };
+                    let routed_collaboration_mode = collaboration_mode_for_routed_turn(
+                        routing,
+                        collaboration_mode.clone(),
+                        &routed_model,
+                        routed_effort.clone(),
+                    );
+                    let enabled = self.chat_widget.daybreak_enabled
+                        && !self.chat_widget.side_conversation_active()
+                        && !self.side_threads.contains_key(&thread_id);
+                    let eligible_account = self.chat_widget.daybreak_account_eligible();
+                    let cyber_access_program = match crate::daybreak::program_for_turn(
+                        &self.chat_widget.model_catalog().models,
+                        &routed_model,
+                        eligible_account,
+                        enabled,
+                    ) {
+                        Ok(program) => program,
+                        Err(message) => {
+                            if !self
+                                .chat_widget
+                                .handle_turn_start_rejection(message.clone())
+                            {
+                                self.chat_widget.add_error_message(message);
+                            }
+                            return Ok(true);
+                        }
+                    };
+                    let config = self.chat_widget.config_ref();
+                    let selected_profile =
+                        self.pending_server_profiles.get(&thread_id).or_else(|| {
+                            self.agents_overview
+                                .requested_permission_profiles
+                                .get(&thread_id)
+                        });
+                    let selected_active = selected_profile
+                        .map(|profile| ActivePermissionProfile::new(profile.profile_id.clone()));
+                    let (turn_approval_policy, turn_approvals_reviewer) =
+                        if let Some(profile) = selected_profile {
+                            (
+                                profile.approval_policy,
+                                profile.approvals_reviewer.map(Into::into),
+                            )
+                        } else if self.app_server_target.thread_params_mode()
+                            == crate::app_server_session::ThreadParamsMode::Remote
+                        {
+                            (
+                                Some(config.permissions.approval_policy.value().into()),
+                                Some(config.approvals_reviewer.into()),
+                            )
+                        } else {
+                            (
+                                Some(*approval_policy),
+                                Some(
+                                    approvals_reviewer
+                                        .unwrap_or(config.approvals_reviewer)
+                                        .into(),
+                                ),
+                            )
+                        };
+                    // Only explicit choices may override the saved server profile.
+                    let explicit_profile = self
+                        .runtime_permission_profile_override
+                        .as_ref()
+                        .filter(|profile| {
+                            profile.turn_override
+                                == RuntimePermissionProfileTurnOverride::LegacySandbox
+                        });
+                    let permissions_override = Self::turn_permissions_override_from_config(
+                        config,
+                        selected_active.as_ref().or_else(|| {
+                            explicit_profile
+                                .and_then(|profile| profile.active_permission_profile.as_ref())
+                        }),
+                        explicit_profile
+                            .and_then(RuntimePermissionProfileOverride::turn_permission_profile),
+                    );
+                    let response = app_server
+                        .turn_start(
+                            thread_id,
+                            client_user_message_id.clone(),
+                            items.to_vec(),
+                            cwd.clone(),
+                            turn_approval_policy,
+                            turn_approvals_reviewer,
+                            permissions_override,
+                            config.permissions.user_visible_workspace_roots(),
+                            routed_model,
+                            routed_effort,
+                            *summary,
+                            service_tier.clone(),
+                            routed_collaboration_mode,
+                            final_output_json_schema.clone(),
+                            cyber_access_program.map(Into::into),
+                        )
+                        .await?;
+                    if self.active_thread_id == Some(thread_id)
+                        && self.chat_widget.thread_id() == Some(thread_id)
+                    {
+                        crate::startup_recovery::acknowledged(client_user_message_id);
+                        self.chat_widget
+                            .record_safety_buffering_turn(response.turn.id, op);
+                    }
+                }
                 Ok(true)
             }
             AppCommand::ListSkills { cwds, force_reload } => {
@@ -2092,11 +2340,63 @@ impl App {
     }
 }
 
+fn collaboration_mode_for_routed_turn(
+    routing: &RootModelRouting,
+    collaboration_mode: Option<CollaborationMode>,
+    model: &str,
+    effort: Option<ReasoningEffortConfig>,
+) -> Option<CollaborationMode> {
+    match routing {
+        RootModelRouting::Manual => collaboration_mode,
+        RootModelRouting::LocalAuto { .. } => collaboration_mode.map(|mode| {
+            mode.with_updates(
+                Some(model.to_string()),
+                Some(effort),
+                /*developer_instructions*/ None,
+            )
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use codex_protocol::config_types::ModeKind;
+    use codex_protocol::config_types::Settings;
     use codex_protocol::models::ActivePermissionProfile;
     use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
+
+    #[test]
+    fn local_auto_updates_collaboration_mode_model_and_effort() {
+        let mode = CollaborationMode {
+            mode: ModeKind::Plan,
+            settings: Settings {
+                model: "gpt-old".to_string(),
+                reasoning_effort: Some(ReasoningEffortConfig::Low),
+                developer_instructions: Some("keep this".to_string()),
+            },
+        };
+        let routed = collaboration_mode_for_routed_turn(
+            &RootModelRouting::LocalAuto {
+                force_sol: false,
+                user_prompt: "original prompt".to_string(),
+            },
+            Some(mode),
+            "gpt-5.6-terra",
+            Some(ReasoningEffortConfig::Medium),
+        )
+        .expect("mode");
+
+        assert_eq!(routed.model(), "gpt-5.6-terra");
+        assert_eq!(
+            routed.reasoning_effort(),
+            Some(ReasoningEffortConfig::Medium)
+        );
+        assert_eq!(
+            routed.settings.developer_instructions.as_deref(),
+            Some("keep this")
+        );
+    }
 
     async fn config_with_workspace_profile() -> Config {
         let temp_dir = tempfile::tempdir().expect("tempdir");
