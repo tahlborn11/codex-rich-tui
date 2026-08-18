@@ -185,9 +185,7 @@ fn activity_marker(start_time: Option<Instant>, animations_enabled: bool) -> Spa
 
 impl HistoryCell for ExecCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if self.calls.len() > 1 && (!self.is_exploring_cell() || !self.is_active()) {
-            self.compact_group_display_lines(width)
-        } else if self.is_exploring_cell() {
+        if self.is_exploring_cell() && (self.calls.len() == 1 || self.is_active()) {
             self.exploring_display_lines(width)
         } else {
             self.command_display_lines(width)
@@ -246,42 +244,6 @@ impl HistoryCell for ExecCell {
 }
 
 impl ExecCell {
-    fn compact_group_display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let completed_commands = self
-            .calls
-            .iter()
-            .take_while(|call| {
-                matches!(
-                    call.source,
-                    ExecCommandSource::Agent | ExecCommandSource::UnifiedExecStartup
-                ) && call.duration.is_some()
-                    && call
-                        .output
-                        .as_ref()
-                        .is_some_and(|output| output.exit_code == 0)
-            })
-            .count();
-        let mut lines = Vec::new();
-        if completed_commands > 0 {
-            let noun = if completed_commands == 1 {
-                "command"
-            } else {
-                "commands"
-            };
-            lines.push(Line::from(vec![
-                "•".green().bold(),
-                " ".into(),
-                format!("Ran {completed_commands} {noun}").bold(),
-                " · ".dim(),
-                TRANSCRIPT_HINT.dim(),
-            ]));
-        }
-        for call in &self.calls[completed_commands..] {
-            lines.extend(self.command_call_display_lines(width, call));
-        }
-        lines
-    }
-
     fn output_ellipsis_text(omitted: usize) -> String {
         format!("… +{omitted} lines ({TRANSCRIPT_HINT})")
     }
@@ -388,10 +350,10 @@ impl ExecCell {
     }
 
     fn command_display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let [call] = &self.calls.as_slice() else {
-            panic!("Expected exactly one call in a command display cell");
-        };
-        self.command_call_display_lines(width, call)
+        self.calls
+            .iter()
+            .flat_map(|call| self.command_call_display_lines(width, call))
+            .collect()
     }
 
     fn command_call_display_lines(&self, width: u16, call: &ExecCall) -> Vec<Line<'static>> {
