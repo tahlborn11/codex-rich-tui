@@ -1,5 +1,12 @@
 ---
-source: tui/src/chatwidget/tests.rs
+source: tui/src/chatwidget/tests/exec_flow.rs
 expression: active_blob(&chat)
 ---
-• Ran 4 commands · ctrl + t to view transcript
+• Ran ls -la
+  └ (no output)
+• Ran cat foo.txt
+  └ hello from foo
+• Ran sed -n 100,200p foo.txt
+  └ chunk
+• Ran cat bar.txt
+  └ hello from bar

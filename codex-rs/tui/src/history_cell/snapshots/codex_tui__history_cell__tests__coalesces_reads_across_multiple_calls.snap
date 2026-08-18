@@ -1,5 +1,10 @@
 ---
-source: tui/src/history_cell.rs
+source: tui/src/history_cell/tests.rs
 expression: rendered
 ---
-• Ran 3 commands · ctrl + t to view transcript
+• Ran echo
+  └ (no output)
+• Ran echo
+  └ (no output)
+• Ran echo
+  └ (no output)
