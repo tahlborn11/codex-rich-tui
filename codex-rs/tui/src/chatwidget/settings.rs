@@ -261,6 +261,7 @@ impl ChatWidget {
 
     /// Set the model in the widget's config copy and stored collaboration mode.
     pub(crate) fn set_model(&mut self, model: &str) {
+        self.local_auto_selected = false;
         self.current_collaboration_mode = self.current_collaboration_mode.with_updates(
             Some(model.to_string()),
             /*effort*/ None,
@@ -273,6 +274,15 @@ impl ChatWidget {
         }
         self.refresh_effective_service_tier();
         self.refresh_model_dependent_surfaces();
+    }
+
+    pub(crate) fn set_local_auto_selected(&mut self) {
+        self.local_auto_selected = true;
+        self.refresh_status_surfaces();
+    }
+
+    pub(crate) fn local_auto_selected(&self) -> bool {
+        self.local_auto_selected
     }
 
     pub(crate) fn current_model(&self) -> &str {

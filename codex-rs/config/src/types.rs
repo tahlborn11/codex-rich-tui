@@ -690,6 +690,42 @@ pub struct ModelAvailabilityNuxConfig {
     pub shown_count: HashMap<String, u32>,
 }
 
+/// Settings for the opt-in, local model router shown as `Local Auto` in the TUI.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct TuiLocalAutoConfig {
+    /// Ollama model used to classify the next user turn. The model is never sent to OpenAI.
+    pub classifier_model: String,
+    /// Ollama generate endpoint. Defaults to the local Ollama endpoint.
+    #[serde(default = "default_local_auto_endpoint")]
+    pub endpoint: String,
+    /// Maximum time to wait for a classification response, in milliseconds.
+    #[serde(default = "default_local_auto_timeout_ms")]
+    pub timeout_ms: u64,
+    /// Scores below this value select the low-cost model.
+    #[serde(default = "default_local_auto_low_threshold")]
+    pub low_threshold: f64,
+    /// Scores below this value (and above `low_threshold`) select the medium model.
+    #[serde(default = "default_local_auto_medium_threshold")]
+    pub medium_threshold: f64,
+}
+
+fn default_local_auto_endpoint() -> String {
+    "http://localhost:11434/api/generate".to_string()
+}
+
+const fn default_local_auto_timeout_ms() -> u64 {
+    500
+}
+
+const fn default_local_auto_low_threshold() -> f64 {
+    0.4
+}
+
+const fn default_local_auto_medium_threshold() -> f64 {
+    0.7
+}
+
 /// Fallback resize-reflow row cap when Codex cannot identify a terminal-specific scrollback size.
 pub const DEFAULT_TERMINAL_RESIZE_REFLOW_FALLBACK_MAX_ROWS: usize = 1_000;
 
@@ -697,6 +733,9 @@ pub const DEFAULT_TERMINAL_RESIZE_REFLOW_FALLBACK_MAX_ROWS: usize = 1_000;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct Tui {
+    /// Enables the local Ollama-backed `Local Auto` model picker option.
+    #[serde(default)]
+    pub local_auto: Option<TuiLocalAutoConfig>,
     #[serde(default, flatten)]
     pub notification_settings: TuiNotificationSettings,
 

@@ -94,7 +94,7 @@ impl ChatWidget {
             .into_iter()
             .partition(|preset| Self::is_auto_model(&preset.model));
 
-        if auto_presets.is_empty() {
+        if auto_presets.is_empty() && self.config.tui_local_auto.is_none() {
             self.open_all_models_popup_with_view_id(other_presets, MODEL_SELECTION_VIEW_ID);
             return;
         }
@@ -143,6 +143,22 @@ impl ChatWidget {
                 }
             })
             .collect();
+
+        if self.config.tui_local_auto.is_some() {
+            items.insert(
+                0,
+                SelectionItem {
+                    name: "Local Auto".to_string(),
+                    description: Some(
+                        "Route each new turn with your local Ollama classifier".to_string(),
+                    ),
+                    is_current: self.local_auto_selected(),
+                    actions: vec![Box::new(|tx| tx.send(AppEvent::SelectLocalAuto))],
+                    dismiss_on_select: true,
+                    ..Default::default()
+                },
+            );
+        }
 
         if !other_presets.is_empty() {
             let actions: Vec<SelectionAction> = vec![Box::new(|tx| {

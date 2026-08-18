@@ -3947,6 +3947,15 @@
           },
           "description": "Keybinding overrides for the TUI.\n\nThis supports rebinding selected actions globally and by context. Context bindings take precedence over `global` bindings."
         },
+        "local_auto": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/TuiLocalAutoConfig"
+            }
+          ],
+          "default": null,
+          "description": "Enables the local Ollama-backed `Local Auto` model picker option."
+        },
         "model_availability_nux": {
           "allOf": [
             {
@@ -4889,6 +4898,44 @@
           "description": "Move list selection up by one page."
         }
       },
+      "type": "object"
+    },
+    "TuiLocalAutoConfig": {
+      "additionalProperties": false,
+      "description": "Settings for the opt-in, local model router shown as `Local Auto` in the TUI.",
+      "properties": {
+        "classifier_model": {
+          "description": "Ollama model used to classify the next user turn. The model is never sent to OpenAI.",
+          "type": "string"
+        },
+        "endpoint": {
+          "default": "http://localhost:11434/api/generate",
+          "description": "Ollama generate endpoint. Defaults to the local Ollama endpoint.",
+          "type": "string"
+        },
+        "low_threshold": {
+          "default": 0.4,
+          "description": "Scores below this value select the low-cost model.",
+          "format": "double",
+          "type": "number"
+        },
+        "medium_threshold": {
+          "default": 0.7,
+          "description": "Scores below this value (and above `low_threshold`) select the medium model.",
+          "format": "double",
+          "type": "number"
+        },
+        "timeout_ms": {
+          "default": 500,
+          "description": "Maximum time to wait for a classification response, in milliseconds.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "classifier_model"
+      ],
       "type": "object"
     },
     "TuiPagerKeymap": {
