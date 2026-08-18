@@ -185,7 +185,7 @@ fn activity_marker(start_time: Option<Instant>, animations_enabled: bool) -> Spa
 
 impl HistoryCell for ExecCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if self.is_exploring_cell() {
+        if self.is_exploring_cell() && (self.calls.len() == 1 || self.is_active()) {
             self.exploring_display_lines(width)
         } else {
             self.command_display_lines(width)
@@ -350,9 +350,13 @@ impl ExecCell {
     }
 
     fn command_display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let [call] = &self.calls.as_slice() else {
-            panic!("Expected exactly one call in a command display cell");
-        };
+        self.calls
+            .iter()
+            .flat_map(|call| self.command_call_display_lines(width, call))
+            .collect()
+    }
+
+    fn command_call_display_lines(&self, width: u16, call: &ExecCall) -> Vec<Line<'static>> {
         let layout = EXEC_DISPLAY_LAYOUT;
         let success = call
             .duration
