@@ -135,6 +135,8 @@ pub(crate) struct ThreadInputState {
     pub(super) submit_pending_steers_after_interrupt: bool,
     pub(super) current_collaboration_mode: CollaborationMode,
     pub(super) active_collaboration_mask: Option<CollaborationModeMask>,
+    /// Thread-scoped Local Auto selection restored when switching threads.
+    pub(super) local_auto_selected: bool,
     pub(super) task_running: bool,
     pub(super) agent_turn_running: bool,
 }
