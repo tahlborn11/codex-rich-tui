@@ -6,11 +6,15 @@
 
 use super::session_lifecycle::ThreadAttachPresentation;
 use super::*;
+use crate::app_command::RootModelRouting;
 use crate::chatwidget::ThreadInputStateRestoreMode;
+use crate::local_auto_router;
 use crate::session_resume::read_session_model;
 use codex_app_server_protocol::TurnInterruptParams;
 use codex_app_server_protocol::TurnInterruptResponse;
 use codex_app_server_protocol::WarningNotification;
+use codex_protocol::config_types::CollaborationMode;
+use codex_protocol::openai_models::ReasoningEffort as ReasoningEffortConfig;
 
 impl App {
     pub(super) async fn shutdown_current_thread(&mut self, app_server: &mut AppServerSession) {
@@ -662,6 +666,7 @@ impl App {
                 final_output_json_schema,
                 collaboration_mode,
                 personality,
+                routing,
             } => {
                 let mut should_start_turn = true;
                 if let Some(turn_id) = self.active_turn_id_for_thread(thread_id).await {
@@ -729,6 +734,57 @@ impl App {
                     }
                 }
                 if should_start_turn {
+                    let (routed_model, routed_effort) = match routing {
+                        RootModelRouting::Manual => (model.to_string(), effort.clone()),
+                        RootModelRouting::LocalAuto {
+                            force_sol,
+                            user_prompt,
+                        } => {
+                            let available_models = self
+                                .chat_widget
+                                .model_catalog()
+                                .try_list_models()
+                                .unwrap_or_default()
+                                .into_iter()
+                                .map(|preset| preset.model)
+                                .collect();
+                            let config = self.chat_widget.config_ref();
+                            if let Some(local_auto) = config.tui_local_auto.as_ref() {
+                                let routed = local_auto_router::route(
+                                    local_auto,
+                                    user_prompt,
+                                    available_models,
+                                    model.to_string(),
+                                    effort.clone(),
+                                    *force_sol,
+                                )
+                                .await;
+                                let status = match routed.outcome {
+                                    local_auto_router::RouteOutcome::Classified => {
+                                        format!("Local Auto → {}", routed.label)
+                                    }
+                                    local_auto_router::RouteOutcome::PlanPolicy => format!(
+                                        "Local Auto → {} — Plan mode uses Sol",
+                                        routed.label
+                                    ),
+                                    local_auto_router::RouteOutcome::ClassifierFallback => format!(
+                                        "Local Auto → {} — classifier unavailable or invalid; used safe fallback",
+                                        routed.label
+                                    ),
+                                };
+                                self.chat_widget.add_info_message(status, /*hint*/ None);
+                                (routed.model, routed.effort)
+                            } else {
+                                (model.to_string(), effort.clone())
+                            }
+                        }
+                    };
+                    let routed_collaboration_mode = collaboration_mode_for_routed_turn(
+                        routing,
+                        collaboration_mode.clone(),
+                        &routed_model,
+                        routed_effort.clone(),
+                    );
                     let config = self.chat_widget.config_ref();
                     let approvals_reviewer =
                         approvals_reviewer.unwrap_or(config.approvals_reviewer);
@@ -748,11 +804,11 @@ impl App {
                             approvals_reviewer,
                             permissions_override,
                             config.permissions.user_visible_workspace_roots(),
-                            model.to_string(),
-                            effort.clone(),
+                            routed_model,
+                            routed_effort,
                             *summary,
                             service_tier.clone(),
-                            collaboration_mode.clone(),
+                            routed_collaboration_mode,
                             *personality,
                             final_output_json_schema.clone(),
                         )
@@ -1746,11 +1802,63 @@ impl App {
     }
 }
 
+fn collaboration_mode_for_routed_turn(
+    routing: &RootModelRouting,
+    collaboration_mode: Option<CollaborationMode>,
+    model: &str,
+    effort: Option<ReasoningEffortConfig>,
+) -> Option<CollaborationMode> {
+    match routing {
+        RootModelRouting::Manual => collaboration_mode,
+        RootModelRouting::LocalAuto { .. } => collaboration_mode.map(|mode| {
+            mode.with_updates(
+                Some(model.to_string()),
+                Some(effort),
+                /*developer_instructions*/ None,
+            )
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use codex_protocol::config_types::ModeKind;
+    use codex_protocol::config_types::Settings;
     use codex_protocol::models::ActivePermissionProfile;
     use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
+
+    #[test]
+    fn local_auto_updates_collaboration_mode_model_and_effort() {
+        let mode = CollaborationMode {
+            mode: ModeKind::Plan,
+            settings: Settings {
+                model: "gpt-old".to_string(),
+                reasoning_effort: Some(ReasoningEffortConfig::Low),
+                developer_instructions: Some("keep this".to_string()),
+            },
+        };
+        let routed = collaboration_mode_for_routed_turn(
+            &RootModelRouting::LocalAuto {
+                force_sol: false,
+                user_prompt: "original prompt".to_string(),
+            },
+            Some(mode),
+            "gpt-5.6-terra",
+            Some(ReasoningEffortConfig::Medium),
+        )
+        .expect("mode");
+
+        assert_eq!(routed.model(), "gpt-5.6-terra");
+        assert_eq!(
+            routed.reasoning_effort(),
+            Some(ReasoningEffortConfig::Medium)
+        );
+        assert_eq!(
+            routed.settings.developer_instructions.as_deref(),
+            Some("keep this")
+        );
+    }
 
     async fn config_with_workspace_profile() -> Config {
         let temp_dir = tempfile::tempdir().expect("tempdir");

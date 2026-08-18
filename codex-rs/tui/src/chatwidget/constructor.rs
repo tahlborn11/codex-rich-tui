@@ -123,6 +123,7 @@ impl ChatWidget {
             has_chatgpt_account,
             has_codex_backend_auth,
             model_catalog,
+            local_auto_selected: false,
             session_telemetry,
             session_header: SessionHeader::new(header_model),
             initial_user_message,

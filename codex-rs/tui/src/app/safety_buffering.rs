@@ -2,6 +2,7 @@
 
 use super::session_lifecycle::ThreadAttachPresentation;
 use super::*;
+use crate::app_command::RootModelRouting;
 use crate::app_server_session::ForkGoalContinuation;
 use crate::app_server_session::HISTORY_ITEM_PAGE_LIMIT;
 use crate::chatwidget::ThreadInputState;
@@ -55,6 +56,7 @@ impl App {
             model: turn_model,
             effort,
             collaboration_mode,
+            routing,
             ..
         } = &mut turn
         else {
@@ -65,6 +67,7 @@ impl App {
         };
         *turn_model = model.clone();
         *effort = Some(ReasoningEffortConfig::Low);
+        *routing = RootModelRouting::Manual;
         *collaboration_mode = collaboration_mode.as_ref().map(|mode| {
             mode.with_updates(
                 Some(model),
