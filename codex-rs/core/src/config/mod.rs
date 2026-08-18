@@ -53,6 +53,7 @@ use codex_config::types::ToolSuggestConfig;
 use codex_config::types::ToolSuggestDisabledTool;
 use codex_config::types::ToolSuggestDiscoverable;
 use codex_config::types::TuiKeymap;
+use codex_config::types::TuiLocalAutoConfig;
 use codex_config::types::TuiNotificationSettings;
 use codex_config::types::TuiPetAnchor;
 use codex_config::types::UriBasedFileOpener;
@@ -744,6 +745,9 @@ pub struct Config {
 
     /// TUI notification settings, including enabled events, delivery method, and focus condition.
     pub tui_notifications: TuiNotificationSettings,
+
+    /// Optional local TUI root-model router configuration.
+    pub tui_local_auto: Option<TuiLocalAutoConfig>,
 
     /// Enable ASCII animations and shimmer effects in the TUI.
     pub animations: bool,
@@ -4387,6 +4391,7 @@ impl Config {
                 .as_ref()
                 .map(|t| t.notification_settings.clone())
                 .unwrap_or_default(),
+            tui_local_auto: cfg.tui.as_ref().and_then(|t| t.local_auto.clone()),
             animations: cfg.tui.as_ref().map(|t| t.animations).unwrap_or(true),
             tui_effects: cfg.tui.as_ref().map(|t| t.effects).unwrap_or_default(),
             tui_rendering: cfg.tui.as_ref().map(|t| t.rendering).unwrap_or_default(),

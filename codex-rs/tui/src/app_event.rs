@@ -1135,6 +1135,12 @@ pub(crate) enum AppEvent {
         action: AstraModelPickerAction,
     },
 
+    /// Select the opt-in local router without changing the concrete configured model.
+    SelectLocalAuto,
+
+    /// Update the current personality in the running app and widget.
+    UpdatePersonality(Personality),
+
     /// Result of creating a TUI-owned WebRTC offer for an active thread.
     RealtimeWebrtcOfferCreated {
         thread_id: ThreadId,

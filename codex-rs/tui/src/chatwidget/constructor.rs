@@ -135,6 +135,7 @@ impl ChatWidget {
             worktree_popup_request_id: None,
             permission_profiles_menu_opened: false,
             model_popup_model_ids: Vec::new(),
+            local_auto_selected: false,
             session_telemetry,
             session_header: SessionHeader::new(header_model),
             initial_user_message,
