@@ -48,8 +48,13 @@ fn score_boundaries_select_expected_models() {
         TERRA
     );
     assert_eq!(
-        route_score(0.7, &config(), &all_targets(), "other".to_string(), None).model,
-        SOL
+        route_score(0.7, &config(), &all_targets(), "other".to_string(), None),
+        RoutedModel {
+            model: SOL.to_string(),
+            effort: Some(ReasoningEffort::Medium),
+            label: "Sol (medium)",
+            outcome: RouteOutcome::Classified,
+        }
     );
 }
 
@@ -58,8 +63,13 @@ fn invalid_score_or_threshold_falls_back_to_sol() {
     let mut invalid = config();
     invalid.low_threshold = 0.8;
     assert_eq!(
-        route_score(0.1, &invalid, &all_targets(), "other".to_string(), None).model,
-        SOL
+        route_score(0.1, &invalid, &all_targets(), "other".to_string(), None),
+        RoutedModel {
+            model: SOL.to_string(),
+            effort: Some(ReasoningEffort::Medium),
+            label: "Sol (medium)",
+            outcome: RouteOutcome::ClassifierFallback,
+        }
     );
     assert_eq!(
         route_score(
