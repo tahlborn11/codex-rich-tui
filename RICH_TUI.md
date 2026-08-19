@@ -24,7 +24,9 @@ macOS-specific.
   values.
 - MCP OAuth recovery handles expired or rejected access tokens through a serialized refresh,
   includes the server's discovered RFC 8707 resource audience when refreshing, retries the failed
-  operation once, and preserves refreshed credentials in the configured store.
+  operation once, and preserves refreshed credentials in the configured store. Packaged
+  `codex-rich` builds use an independent Keychain service so rotating refresh tokens cannot race
+  with the Codex desktop app.
 
 The fork's `main` branch carries these changes on top of upstream Codex.
 
@@ -183,6 +185,17 @@ Inspect configured servers and authenticate OAuth servers with the forked execut
 codex-rich mcp list
 codex-rich mcp login <server-name>
 ```
+
+Packaged `codex-rich` builds store direct Keychain-backed MCP credentials under
+`Codex Rich MCP Credentials`, separately from the `Codex MCP Credentials` service used by other
+Codex installations. When Codex's encrypted-secrets Keychain backend is selected, the fork also
+uses a separate `${CODEX_HOME}/codex-rich` credential root (normally
+`~/.codex/codex-rich`). The same root isolates the `auto` and `file` fallback stores. This
+separation is necessary for providers that rotate refresh tokens: two independent Codex processes
+must not consume the same one-time refresh token. After first installing a build with this
+isolation, authenticate each OAuth server once with `codex-rich mcp login <server-name>` even if it
+was already authorized in the desktop app. The desktop app's existing credentials are left
+unchanged.
 
 After login, start a new Codex Rich session so the authenticated MCP tools are loaded. In the TUI,
 use `/mcp` to inspect the active servers. These commands follow the official OpenAI
