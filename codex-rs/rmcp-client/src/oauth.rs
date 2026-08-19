@@ -83,7 +83,11 @@ pub(crate) use self::resolved_store::ResolvedOAuthTokens;
 pub(crate) use self::resolved_store::resolve_oauth_tokens_from_store_policy;
 use self::resolved_store::try_resolve_oauth_tokens_from_store_policy;
 
-const KEYRING_SERVICE: &str = "Codex MCP Credentials";
+const KEYRING_SERVICE: &str = match option_env!("CODEX_RICH_VERSION") {
+    Some(_) => "Codex Rich MCP Credentials",
+    None => "Codex MCP Credentials",
+};
+const RICH_OAUTH_HOME_DIR: &str = "codex-rich";
 const MCP_OAUTH_SECRET_PREFIX: &str = "MCP_OAUTH";
 const REFRESH_SKEW_MILLIS: u64 = 30_000;
 
@@ -404,9 +408,9 @@ fn load_oauth_tokens_from_secrets_keyring_with_lock_held<K: KeyringStore + Clone
     server_name: &str,
     url: &str,
 ) -> std::result::Result<Option<StoredOAuthTokens>, OAuthKeyringLoadError> {
-    let codex_home = find_codex_home().map_err(anyhow::Error::from)?;
+    let codex_home = mcp_oauth_storage_home()?;
     let manager = SecretsManager::new_with_keyring_store_and_namespace(
-        codex_home.to_path_buf(),
+        codex_home,
         SecretsBackendKind::Local,
         Arc::new(keyring_store.clone()),
         LocalSecretsNamespace::McpOAuth,
@@ -523,9 +527,9 @@ fn save_oauth_tokens_to_secrets_keyring_with_lock_held<K: KeyringStore + Clone +
     tokens: &StoredOAuthTokens,
     serialized: &str,
 ) -> Result<()> {
-    let codex_home = find_codex_home()?;
+    let codex_home = mcp_oauth_storage_home()?;
     let manager = SecretsManager::new_with_keyring_store_and_namespace(
-        codex_home.to_path_buf(),
+        codex_home,
         SecretsBackendKind::Local,
         Arc::new(keyring_store.clone()),
         LocalSecretsNamespace::McpOAuth,
@@ -663,9 +667,9 @@ fn delete_oauth_tokens_from_secrets_keyring<K: KeyringStore + Clone + 'static>(
     url: &str,
 ) -> Result<bool> {
     let _store_lock = OAuthStoreLock::acquire_for_write(OAuthStore::Secrets)?;
-    let codex_home = find_codex_home()?;
+    let codex_home = mcp_oauth_storage_home()?;
     let manager = SecretsManager::new_with_keyring_store_and_namespace(
-        codex_home.to_path_buf(),
+        codex_home,
         SecretsBackendKind::Local,
         Arc::new(keyring_store.clone()),
         LocalSecretsNamespace::McpOAuth,
@@ -957,8 +961,16 @@ fn compute_secret_name(server_name: &str, server_url: &str) -> Result<SecretName
     SecretName::new(&format!("{MCP_OAUTH_SECRET_PREFIX}_{}", &hex[..32]))
 }
 
+fn mcp_oauth_storage_home() -> Result<PathBuf> {
+    let codex_home = find_codex_home()?;
+    Ok(match option_env!("CODEX_RICH_VERSION") {
+        Some(_) => codex_home.join(RICH_OAUTH_HOME_DIR).to_path_buf(),
+        None => codex_home.to_path_buf(),
+    })
+}
+
 fn fallback_file_path() -> Result<PathBuf> {
-    Ok(find_codex_home()?.join(FALLBACK_FILENAME).to_path_buf())
+    Ok(mcp_oauth_storage_home()?.join(FALLBACK_FILENAME))
 }
 
 fn read_fallback_file_unlocked() -> Result<Option<FallbackFile>> {
@@ -1343,7 +1355,7 @@ mod tests {
 
     #[test]
     fn save_oauth_tokens_with_secrets_backend_writes_encrypted_storage() -> Result<()> {
-        let env = TempCodexHome::new();
+        let _env = TempCodexHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let key = super::compute_store_key(&tokens.server_name, &tokens.url)?;
@@ -1358,8 +1370,9 @@ mod tests {
             &tokens,
         )?;
 
+        let storage_home = super::mcp_oauth_storage_home()?;
         let manager = SecretsManager::new_with_keyring_store_and_namespace(
-            env.path().to_path_buf(),
+            storage_home.clone(),
             SecretsBackendKind::Local,
             Arc::new(store.clone()),
             LocalSecretsNamespace::McpOAuth,
@@ -1370,8 +1383,8 @@ mod tests {
             .expect("tokens should be saved to encrypted storage");
         assert_eq!(serde_json::from_str::<StoredOAuthTokens>(&stored)?, tokens);
         assert_eq!(store.saved_value(&key), Some(serialized));
-        assert!(env.path().join("secrets").join("mcp_oauth.age").exists());
-        assert!(!env.path().join("secrets").join("local.age").exists());
+        assert!(storage_home.join("secrets").join("mcp_oauth.age").exists());
+        assert!(!storage_home.join("secrets").join("local.age").exists());
         assert!(!super::fallback_file_path()?.exists());
         Ok(())
     }
@@ -1424,10 +1437,10 @@ mod tests {
     #[test]
     fn save_oauth_tokens_with_secrets_backend_falls_back_to_file_when_keyring_fails() -> Result<()>
     {
-        let env = TempCodexHome::new();
+        let _env = TempCodexHome::new();
         let store = MockKeyringStore::default();
         store.set_error(
-            &compute_keyring_account(env.path()),
+            &compute_keyring_account(&super::mcp_oauth_storage_home()?),
             KeyringError::Invalid("error".into(), "save".into()),
         );
         let tokens = sample_tokens();
@@ -1447,7 +1460,7 @@ mod tests {
 
     #[test]
     fn delete_oauth_tokens_with_secrets_backend_removes_secrets_and_file() -> Result<()> {
-        let env = TempCodexHome::new();
+        let _env = TempCodexHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let serialized = serde_json::to_string(&tokens)?;
@@ -1470,8 +1483,9 @@ mod tests {
             &tokens.url,
         )?;
 
+        let storage_home = super::mcp_oauth_storage_home()?;
         let manager = SecretsManager::new_with_keyring_store_and_namespace(
-            env.path().to_path_buf(),
+            storage_home,
             SecretsBackendKind::Local,
             Arc::new(store.clone()),
             LocalSecretsNamespace::McpOAuth,
