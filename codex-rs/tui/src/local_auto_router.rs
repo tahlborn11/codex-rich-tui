@@ -180,8 +180,8 @@ fn route_score(
     } else {
         target_or_fallback(
             SOL,
-            ReasoningEffort::High,
-            "Sol (high)",
+            ReasoningEffort::Medium,
+            "Sol (medium)",
             available_models,
             fallback_model,
             fallback_effort,
@@ -196,8 +196,8 @@ fn fallback_sol(
 ) -> RoutedModel {
     let mut routed = target_or_fallback(
         SOL,
-        ReasoningEffort::High,
-        "Sol (high)",
+        ReasoningEffort::Medium,
+        "Sol (medium)",
         available_models,
         fallback_model,
         fallback_effort,
