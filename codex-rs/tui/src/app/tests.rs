@@ -5941,6 +5941,34 @@ async fn ctrl_l_clears_owned_history_and_preserves_the_draft() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn auto_default_and_persisted_manual_selection_are_restored_per_chat() {
+    let mut app = make_test_app().await;
+    app.config.tui_auto = Some(codex_config::types::TuiAutoConfig {
+        classifier_model: "local-router".to_string(),
+        default_selected: true,
+        endpoint: "http://localhost:11434/api/generate".to_string(),
+        timeout_ms: 500,
+        low_threshold: 0.4,
+        medium_threshold: 0.7,
+    });
+    let thread_id = ThreadId::new();
+
+    app.restore_auto_selection_for_thread(thread_id).await;
+    assert!(app.chat_widget.auto_selected());
+
+    crate::auto_selection::persist(
+        app.config.codex_home.as_path(),
+        thread_id,
+        crate::auto_selection::AutoSelection::Manual,
+    )
+    .await
+    .expect("persist manual selection");
+    app.restore_auto_selection_for_thread(thread_id).await;
+
+    assert!(!app.chat_widget.auto_selected());
+}
+
 async fn make_test_app() -> Box<App> {
     let (mut chat_widget, app_event_tx, _rx, _op_rx) = make_chatwidget_manual_with_sender().await;
     let test_codex_home = chat_widget.test_codex_home.take();
