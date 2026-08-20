@@ -804,6 +804,7 @@ impl App {
                 );
             }
         }
+        self.restore_auto_selection_for_thread(thread_id).await;
         if is_replay_only
             && self
                 .thread_event_channels
