@@ -672,6 +672,7 @@ impl App {
         self.retain_realtime_replay_state_before_replace();
         self.stop_realtime_conversation(app_server).await;
         self.render_thread_snapshot(tui, app_server, thread_id, snapshot, !is_replay_only)?;
+        self.restore_auto_selection_for_thread(thread_id).await;
         if is_replay_only
             && self
                 .thread_event_channels
