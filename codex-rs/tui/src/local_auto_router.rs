@@ -1,9 +1,9 @@
-//! Bounded, local-only routing for the opt-in TUI `Local Auto` selection.
+//! Bounded, local-only routing and warmup for the opt-in TUI `Auto` selection.
 
 use std::collections::HashSet;
 use std::time::Duration;
 
-use codex_config::types::TuiLocalAutoConfig;
+use codex_config::types::TuiAutoConfig;
 use codex_http_client::HttpClientBuilder;
 use codex_protocol::openai_models::ReasoningEffort;
 use serde::Deserialize;
@@ -13,6 +13,8 @@ use tokio_stream::StreamExt;
 const MAX_PROMPT_BYTES: usize = 8 * 1024;
 const MAX_RESPONSE_BYTES: usize = 16 * 1024;
 const MAX_TIMEOUT_MS: u64 = 2_000;
+const WARMUP_TIMEOUT: Duration = Duration::from_secs(60);
+const WARMUP_KEEP_ALIVE: &str = "5m";
 const LUNA: &str = "gpt-5.6-luna";
 const TERRA: &str = "gpt-5.6-terra";
 const SOL: &str = "gpt-5.6-sol";
@@ -47,6 +49,13 @@ struct OllamaOptions {
     num_predict: u32,
 }
 
+#[derive(Serialize)]
+struct OllamaWarmupRequest<'a> {
+    model: &'a str,
+    stream: bool,
+    keep_alive: &'static str,
+}
+
 #[derive(Deserialize)]
 struct OllamaResponse {
     response: String,
@@ -58,7 +67,7 @@ struct Classification {
 }
 
 pub(crate) async fn route(
-    config: &TuiLocalAutoConfig,
+    config: &TuiAutoConfig,
     user_prompt: &str,
     available_models: HashSet<String>,
     fallback_model: String,
@@ -104,7 +113,7 @@ pub(crate) async fn route(
             while let Some(chunk) = stream.next().await {
                 let chunk = chunk?;
                 if body.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
-                    return Err(anyhow::anyhow!("classifier response exceeds limit"));
+                    anyhow::bail!("classifier response exceeds limit");
                 }
                 body.extend_from_slice(&chunk);
             }
@@ -130,6 +139,36 @@ pub(crate) async fn route(
     )
 }
 
+pub(crate) async fn warm(config: &TuiAutoConfig) -> anyhow::Result<()> {
+    if !is_local_endpoint(&config.endpoint) {
+        anyhow::bail!("Auto classifier endpoint must be a loopback HTTP URL");
+    }
+    let client = HttpClientBuilder::new()
+        .without_redirects()
+        .build_direct()?;
+    let request = OllamaWarmupRequest {
+        model: &config.classifier_model,
+        stream: false,
+        keep_alive: WARMUP_KEEP_ALIVE,
+    };
+    tokio::time::timeout(WARMUP_TIMEOUT, async {
+        let response = client.post(&config.endpoint).json(&request).send().await?;
+        let mut stream = response.error_for_status()?.bytes_stream();
+        let mut response_bytes = 0_usize;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            response_bytes = response_bytes.saturating_add(chunk.len());
+            if response_bytes > MAX_RESPONSE_BYTES {
+                anyhow::bail!("classifier warmup response exceeds limit");
+            }
+        }
+        Ok::<_, anyhow::Error>(())
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("Auto classifier warmup timed out"))??;
+    Ok(())
+}
+
 fn is_local_endpoint(endpoint: &str) -> bool {
     let Ok(url) = url::Url::parse(endpoint) else {
         return false;
@@ -151,7 +190,7 @@ fn is_local_endpoint(endpoint: &str) -> bool {
 
 fn route_score(
     score: f64,
-    config: &TuiLocalAutoConfig,
+    config: &TuiAutoConfig,
     available_models: &HashSet<String>,
     fallback_model: String,
     fallback_effort: Option<ReasoningEffort>,
@@ -206,7 +245,7 @@ fn fallback_sol(
     routed
 }
 
-fn valid_thresholds(config: &TuiLocalAutoConfig) -> bool {
+fn valid_thresholds(config: &TuiAutoConfig) -> bool {
     config.low_threshold.is_finite()
         && config.medium_threshold.is_finite()
         && (0.0..=1.0).contains(&config.low_threshold)
