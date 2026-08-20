@@ -6,7 +6,7 @@ expression: popup
   Select Model
   Pick a quick auto mode or browse all models.
 
-  1. Local Auto            Route each new turn with your local Ollama
+  1. Auto                  Route each new turn with your local Ollama
                            classifier
 › 2. All models (current)  Choose a specific model and reasoning level
                            (current: gpt-5.2)

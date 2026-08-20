@@ -148,8 +148,8 @@ pub(crate) struct ThreadInputState {
     pub(super) current_collaboration_mode: CollaborationMode,
     pub(super) active_collaboration_mask: Option<CollaborationModeMask>,
     pub(super) plan_mode_reasoning_effort: Option<ReasoningEffortConfig>,
-    /// Thread-scoped Local Auto selection restored when switching threads.
-    pub(super) local_auto_selected: bool,
+    /// Thread-scoped Auto selection restored when switching threads.
+    pub(super) auto_selected: bool,
     pub(super) task_running: bool,
     pub(super) agent_turn_running: bool,
 }
