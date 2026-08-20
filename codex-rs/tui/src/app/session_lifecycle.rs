@@ -568,6 +568,7 @@ impl App {
             .set_task_mentions_enabled(app_server.task_tools_available(thread_id));
         self.chat_widget
             .note_rendered_width(tui.terminal.last_known_screen_size.width);
+        self.restore_auto_selection_for_thread(thread_id).await;
         if blocks_direct_input {
             self.chat_widget.set_parent_owned_thread();
         }

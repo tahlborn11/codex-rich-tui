@@ -3517,10 +3517,11 @@ async fn model_picker_refresh_dismisses_empty_choices() {
 }
 
 #[tokio::test]
-async fn local_auto_model_selection_popup_snapshot() {
+async fn auto_model_selection_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.2")).await;
-    chat.config.tui_local_auto = Some(codex_config::types::TuiLocalAutoConfig {
+    chat.config.tui_auto = Some(codex_config::types::TuiAutoConfig {
         classifier_model: "local-router".to_string(),
+        default_selected: false,
         endpoint: "http://localhost:11434/api/generate".to_string(),
         timeout_ms: 500,
         low_threshold: 0.4,
@@ -3534,14 +3535,14 @@ async fn local_auto_model_selection_popup_snapshot() {
 }
 
 #[tokio::test]
-async fn manual_model_selection_clears_local_auto_state() {
+async fn manual_model_selection_clears_auto_state() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.2")).await;
-    chat.set_local_auto_selected();
-    assert!(chat.local_auto_selected());
+    chat.set_auto_selected(true);
+    assert!(chat.auto_selected());
 
     chat.set_model("gpt-5.4");
 
-    assert!(!chat.local_auto_selected());
+    assert!(!chat.auto_selected());
 }
 
 #[tokio::test]

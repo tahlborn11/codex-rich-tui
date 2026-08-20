@@ -473,7 +473,7 @@ impl ChatWidget {
                 .submit_pending_steers_after_interrupt,
             current_collaboration_mode: self.current_collaboration_mode.clone(),
             active_collaboration_mask: self.active_collaboration_mask.clone(),
-            local_auto_selected: self.local_auto_selected,
+            auto_selected: self.auto_selected,
             task_running: self.bottom_pane.is_task_running(),
             agent_turn_running: self.turn_lifecycle.agent_turn_running,
         })
@@ -490,7 +490,7 @@ impl ChatWidget {
         if let Some(input_state) = input_state {
             self.current_collaboration_mode = input_state.current_collaboration_mode;
             self.active_collaboration_mask = input_state.active_collaboration_mask;
-            self.local_auto_selected = input_state.local_auto_selected;
+            self.set_auto_selected(input_state.auto_selected);
             self.safety_buffering_prompt = input_state.safety_buffering_prompt;
             self.turn_lifecycle.restore_running(
                 preserve_in_flight_turn && input_state.agent_turn_running,

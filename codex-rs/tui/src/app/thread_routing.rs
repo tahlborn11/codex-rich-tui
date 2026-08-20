@@ -739,7 +739,7 @@ impl App {
                 if should_start_turn {
                     let (routed_model, routed_effort) = match routing {
                         RootModelRouting::Manual => (model.to_string(), effort.clone()),
-                        RootModelRouting::LocalAuto {
+                        RootModelRouting::Auto {
                             force_sol,
                             user_prompt,
                         } => {
@@ -752,7 +752,7 @@ impl App {
                                 .map(|preset| preset.model)
                                 .collect();
                             let config = self.chat_widget.config_ref();
-                            if let Some(local_auto) = config.tui_local_auto.as_ref() {
+                            if let Some(local_auto) = config.tui_auto.as_ref() {
                                 let routed = local_auto_router::route(
                                     local_auto,
                                     user_prompt,
@@ -764,14 +764,13 @@ impl App {
                                 .await;
                                 let status = match routed.outcome {
                                     local_auto_router::RouteOutcome::Classified => {
-                                        format!("Local Auto → {}", routed.label)
+                                        format!("Auto → {}", routed.label)
                                     }
-                                    local_auto_router::RouteOutcome::PlanPolicy => format!(
-                                        "Local Auto → {} — Plan mode uses Sol",
-                                        routed.label
-                                    ),
+                                    local_auto_router::RouteOutcome::PlanPolicy => {
+                                        format!("Auto → {} — Plan mode uses Sol", routed.label)
+                                    }
                                     local_auto_router::RouteOutcome::ClassifierFallback => format!(
-                                        "Local Auto → {} — classifier unavailable or invalid; used safe fallback",
+                                        "Auto → {} — classifier unavailable or invalid; used safe fallback",
                                         routed.label
                                     ),
                                 };
@@ -1359,6 +1358,7 @@ impl App {
         if self.primary_thread_id != Some(thread_id) {
             self.recap.reset_for_new_thread(Instant::now());
         }
+        self.restore_auto_selection_for_thread(thread_id).await;
         self.primary_thread_id = Some(thread_id);
         self.primary_session_configured = Some(session.clone());
         self.upsert_agent_picker_thread(
@@ -1960,7 +1960,7 @@ fn collaboration_mode_for_routed_turn(
 ) -> Option<CollaborationMode> {
     match routing {
         RootModelRouting::Manual => collaboration_mode,
-        RootModelRouting::LocalAuto { .. } => collaboration_mode.map(|mode| {
+        RootModelRouting::Auto { .. } => collaboration_mode.map(|mode| {
             mode.with_updates(
                 Some(model.to_string()),
                 Some(effort),
@@ -1979,7 +1979,7 @@ mod tests {
     use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 
     #[test]
-    fn local_auto_updates_collaboration_mode_model_and_effort() {
+    fn auto_updates_collaboration_mode_model_and_effort() {
         let mode = CollaborationMode {
             mode: ModeKind::Plan,
             settings: Settings {
@@ -1989,7 +1989,7 @@ mod tests {
             },
         };
         let routed = collaboration_mode_for_routed_turn(
-            &RootModelRouting::LocalAuto {
+            &RootModelRouting::Auto {
                 force_sol: false,
                 user_prompt: "original prompt".to_string(),
             },
