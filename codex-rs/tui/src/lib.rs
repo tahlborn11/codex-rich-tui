@@ -152,6 +152,7 @@ pub use custom_terminal::Terminal;
 mod assistant_directives;
 mod attachment_files;
 mod auto_review_denials;
+mod auto_selection;
 mod cwd_prompt;
 mod debug_config;
 mod diff_model;
