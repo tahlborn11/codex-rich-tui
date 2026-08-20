@@ -25,7 +25,7 @@ use serde_json::Value;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) enum RootModelRouting {
     Manual,
-    LocalAuto {
+    Auto {
         force_sol: bool,
         user_prompt: String,
     },

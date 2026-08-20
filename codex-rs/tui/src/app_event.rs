@@ -921,7 +921,7 @@ pub(crate) enum AppEvent {
     UpdateModel(String),
 
     /// Select the opt-in local router without changing the concrete configured model.
-    SelectLocalAuto,
+    SelectAuto,
 
     /// Update the current personality in the running app and widget.
     UpdatePersonality(Personality),

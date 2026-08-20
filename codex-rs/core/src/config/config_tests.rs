@@ -1185,7 +1185,7 @@ fn config_toml_deserializes_model_availability_nux() {
     assert_eq!(
         cfg.tui.expect("tui config should deserialize"),
         Tui {
-            local_auto: None,
+            auto: None,
             notification_settings: TuiNotificationSettings::default(),
             animations: true,
             show_tooltips: true,
@@ -4265,7 +4265,7 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
     assert_eq!(
         tui,
         Tui {
-            local_auto: None,
+            auto: None,
             notification_settings: TuiNotificationSettings::default(),
             animations: true,
             show_tooltips: true,
@@ -4288,14 +4288,16 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
 }
 
 #[tokio::test]
-async fn config_toml_deserializes_local_auto_defaults_and_runtime_config() {
+async fn config_toml_deserializes_auto_defaults_and_runtime_config() {
     let toml = r#"
-[tui.local_auto]
+[tui.auto]
 classifier_model = "qwen2.5-coder:3b"
+default_selected = true
 "#;
-    let base: ConfigToml = toml::from_str(toml).expect("Local Auto config should deserialize");
-    let expected = TuiLocalAutoConfig {
+    let base: ConfigToml = toml::from_str(toml).expect("Auto config should deserialize");
+    let expected = TuiAutoConfig {
         classifier_model: "qwen2.5-coder:3b".to_string(),
+        default_selected: true,
         endpoint: "http://localhost:11434/api/generate".to_string(),
         timeout_ms: 500,
         low_threshold: 0.4,
@@ -4303,7 +4305,7 @@ classifier_model = "qwen2.5-coder:3b"
     };
 
     assert_eq!(
-        base.tui.as_ref().and_then(|tui| tui.local_auto.as_ref()),
+        base.tui.as_ref().and_then(|tui| tui.auto.as_ref()),
         Some(&expected)
     );
 
@@ -4313,9 +4315,32 @@ classifier_model = "qwen2.5-coder:3b"
         tempdir().expect("tempdir").abs(),
     )
     .await
-    .expect("Local Auto runtime config should load");
+    .expect("Auto runtime config should load");
 
-    assert_eq!(runtime.tui_local_auto, Some(expected));
+    assert_eq!(runtime.tui_auto, Some(expected));
+}
+
+#[test]
+fn config_toml_accepts_legacy_local_auto_key() {
+    let base: ConfigToml = toml::from_str(
+        r#"
+[tui.local_auto]
+classifier_model = "legacy-router"
+"#,
+    )
+    .expect("legacy Local Auto config should deserialize");
+
+    assert_eq!(
+        base.tui.and_then(|tui| tui.auto),
+        Some(TuiAutoConfig {
+            classifier_model: "legacy-router".to_string(),
+            default_selected: false,
+            endpoint: "http://localhost:11434/api/generate".to_string(),
+            timeout_ms: 500,
+            low_threshold: 0.4,
+            medium_threshold: 0.7,
+        })
+    );
 }
 
 #[tokio::test]

@@ -36,6 +36,10 @@ impl ChatWidget {
         let mut config = config;
         config.model = model.clone();
         let prevent_idle_sleep = config.features.enabled(Feature::PreventIdleSleep);
+        let auto_selected = config
+            .tui_auto
+            .as_ref()
+            .is_some_and(|auto| auto.default_selected);
         let placeholder = PLACEHOLDER.to_string();
         let side_placeholder = SIDE_PLACEHOLDER.to_string();
 
@@ -123,7 +127,7 @@ impl ChatWidget {
             has_chatgpt_account,
             has_codex_backend_auth,
             model_catalog,
-            local_auto_selected: false,
+            auto_selected,
             session_telemetry,
             session_header: SessionHeader::new(header_model),
             initial_user_message,

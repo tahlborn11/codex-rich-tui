@@ -388,7 +388,7 @@ async fn restore_thread_input_state_restores_pending_steers_without_downgrading_
             submit_pending_steers_after_interrupt: false,
             current_collaboration_mode: chat.current_collaboration_mode.clone(),
             active_collaboration_mask: chat.active_collaboration_mask.clone(),
-            local_auto_selected: false,
+            auto_selected: false,
             task_running: false,
             agent_turn_running: false,
         }),

@@ -257,7 +257,7 @@ impl ChatWidget {
 
     /// Set the model in the widget's config copy and stored collaboration mode.
     pub(crate) fn set_model(&mut self, model: &str) {
-        self.local_auto_selected = false;
+        self.auto_selected = false;
         self.current_collaboration_mode = self.current_collaboration_mode.with_updates(
             Some(model.to_string()),
             /*effort*/ None,
@@ -272,13 +272,34 @@ impl ChatWidget {
         self.refresh_model_dependent_surfaces();
     }
 
-    pub(crate) fn set_local_auto_selected(&mut self) {
-        self.local_auto_selected = true;
+    pub(crate) fn set_auto_selected(&mut self, selected: bool) {
+        let should_warm = selected && !self.auto_selected;
+        self.auto_selected = selected;
         self.refresh_status_surfaces();
+        if should_warm {
+            self.warm_auto_classifier();
+        }
     }
 
-    pub(crate) fn local_auto_selected(&self) -> bool {
-        self.local_auto_selected
+    pub(crate) fn auto_selected(&self) -> bool {
+        self.auto_selected
+    }
+
+    pub(crate) fn warm_auto_classifier(&self) {
+        let Some(config) = self.config.tui_auto.clone() else {
+            return;
+        };
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            tracing::warn!("cannot warm Auto classifier outside a Tokio runtime");
+            return;
+        };
+        runtime.spawn(async move {
+            if let Err(err) = crate::local_auto_router::warm(&config).await {
+                tracing::warn!(%err, "failed to warm Auto classifier");
+            } else {
+                tracing::debug!(model = %config.classifier_model, "Auto classifier is warm");
+            }
+        });
     }
 
     pub(crate) fn current_model(&self) -> &str {

@@ -5363,6 +5363,34 @@ async fn clear_ui_header_shows_fast_status_for_fast_capable_models() {
     assert_app_snapshot!("clear_ui_header_fast_status_fast_capable_models", rendered);
 }
 
+#[tokio::test]
+async fn auto_default_and_persisted_manual_selection_are_restored_per_chat() {
+    let mut app = make_test_app().await;
+    app.config.tui_auto = Some(codex_config::types::TuiAutoConfig {
+        classifier_model: "local-router".to_string(),
+        default_selected: true,
+        endpoint: "http://localhost:11434/api/generate".to_string(),
+        timeout_ms: 500,
+        low_threshold: 0.4,
+        medium_threshold: 0.7,
+    });
+    let thread_id = ThreadId::new();
+
+    app.restore_auto_selection_for_thread(thread_id).await;
+    assert!(app.chat_widget.auto_selected());
+
+    crate::auto_selection::persist(
+        app.config.codex_home.as_path(),
+        thread_id,
+        crate::auto_selection::AutoSelection::Manual,
+    )
+    .await
+    .expect("persist manual selection");
+    app.restore_auto_selection_for_thread(thread_id).await;
+
+    assert!(!app.chat_widget.auto_selected());
+}
+
 async fn make_test_app() -> App {
     let (chat_widget, app_event_tx, _rx, _op_rx) = make_chatwidget_manual_with_sender().await;
     let config = chat_widget.config_ref().clone();

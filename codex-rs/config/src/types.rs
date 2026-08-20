@@ -689,12 +689,15 @@ pub struct ModelAvailabilityNuxConfig {
     pub shown_count: HashMap<String, u32>,
 }
 
-/// Settings for the opt-in, local model router shown as `Local Auto` in the TUI.
+/// Settings for the opt-in, local model router shown as `Auto` in the TUI.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
-pub struct TuiLocalAutoConfig {
+pub struct TuiAutoConfig {
     /// Ollama model used to classify the next user turn. The model is never sent to OpenAI.
     pub classifier_model: String,
+    /// Select `Auto` by default for chats without a persisted model selection.
+    #[serde(default)]
+    pub default_selected: bool,
     /// Ollama generate endpoint. Defaults to the local Ollama endpoint.
     #[serde(default = "default_local_auto_endpoint")]
     pub endpoint: String,
@@ -732,9 +735,9 @@ pub const DEFAULT_TERMINAL_RESIZE_REFLOW_FALLBACK_MAX_ROWS: usize = 1_000;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct Tui {
-    /// Enables the local Ollama-backed `Local Auto` model picker option.
-    #[serde(default)]
-    pub local_auto: Option<TuiLocalAutoConfig>,
+    /// Enables the local Ollama-backed `Auto` model picker option.
+    #[serde(default, alias = "local_auto")]
+    pub auto: Option<TuiAutoConfig>,
     #[serde(default, flatten)]
     pub notification_settings: TuiNotificationSettings,
 
