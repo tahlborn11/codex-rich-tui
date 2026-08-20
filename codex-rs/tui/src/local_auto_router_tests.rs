@@ -23,9 +23,10 @@ fn unavailable_target_uses_configured_model() {
     assert_eq!(routed.effort, Some(ReasoningEffort::Medium));
 }
 
-fn config() -> TuiLocalAutoConfig {
-    TuiLocalAutoConfig {
+fn config() -> TuiAutoConfig {
+    TuiAutoConfig {
         classifier_model: "local".to_string(),
+        default_selected: false,
         endpoint: "http://localhost".to_string(),
         timeout_ms: 500,
         low_threshold: 0.4,
@@ -109,4 +110,29 @@ fn only_plain_http_loopback_endpoints_are_allowed() {
 #[test]
 fn timeout_is_hard_capped() {
     assert_eq!(5_000_u64.min(MAX_TIMEOUT_MS), MAX_TIMEOUT_MS);
+}
+
+#[tokio::test]
+async fn warmup_preloads_classifier_without_generating_tokens() {
+    let server = wiremock::MockServer::start().await;
+    wiremock::Mock::given(wiremock::matchers::method("POST"))
+        .and(wiremock::matchers::path("/api/generate"))
+        .and(wiremock::matchers::body_json(serde_json::json!({
+            "model": "local",
+            "stream": false,
+            "keep_alive": "5m",
+        })))
+        .respond_with(
+            wiremock::ResponseTemplate::new(/*status_code*/ 200).set_body_json(serde_json::json!({
+                "response": "",
+                "done": true,
+            })),
+        )
+        .expect(/*n*/ 1)
+        .mount(&server)
+        .await;
+    let mut config = config();
+    config.endpoint = format!("{}/api/generate", server.uri());
+
+    warm(&config).await.expect("warm classifier");
 }

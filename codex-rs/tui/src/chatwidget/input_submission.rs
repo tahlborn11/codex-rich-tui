@@ -453,8 +453,8 @@ impl ChatWidget {
             service_tier,
             /*final_output_json_schema*/ None,
             collaboration_mode,
-            if self.local_auto_selected() {
-                RootModelRouting::LocalAuto {
+            if self.auto_selected() {
+                RootModelRouting::Auto {
                     force_sol: self.active_mode_kind() == ModeKind::Plan,
                     user_prompt: text.clone(),
                 }
