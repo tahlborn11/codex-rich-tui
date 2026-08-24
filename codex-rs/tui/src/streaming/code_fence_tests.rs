@@ -11,8 +11,8 @@ fn detects_only_source_preserving_open_fences() {
         "```\u{b}rust\u{c}\nfn main() {}\n",
         "```unknown-language\ntext\n",
     ] {
-        let fence =
-            OpenCodeFence::detect(source, source.len(), syntax_theme_revision()).expect(source);
+        let fence = OpenCodeFence::detect(source, source.len(), syntax_theme_revision(), Some(80))
+            .expect(source);
         assert!(fence.highlighter.is_none());
     }
     for source in [
@@ -25,12 +25,15 @@ fn detects_only_source_preserving_open_fences() {
         "```rust\npartial",
     ] {
         assert!(
-            OpenCodeFence::detect(source, source.len(), syntax_theme_revision()).is_none(),
+            OpenCodeFence::detect(source, source.len(), syntax_theme_revision(), Some(80))
+                .is_none(),
             "{source:?}"
         );
     }
     let source = format!("```{}\n", "x".repeat(MAX_HIGHLIGHT_LINE_BYTES + 1));
-    assert!(OpenCodeFence::detect(&source, source.len(), syntax_theme_revision()).is_none());
+    assert!(
+        OpenCodeFence::detect(&source, source.len(), syntax_theme_revision(), Some(80)).is_none()
+    );
 }
 
 #[test]
@@ -51,14 +54,18 @@ fn every_possible_closer_returns_to_the_canonical_parser() {
         "~~~~ trailing text\n",
     ] {
         let source = format!("{opening}{line}");
-        assert!(OpenCodeFence::detect(&source, source.len(), syntax_theme_revision()).is_none());
+        assert!(
+            OpenCodeFence::detect(&source, source.len(), syntax_theme_revision(), Some(80))
+                .is_none()
+        );
     }
 }
 
 #[test]
 fn lazy_initialization_rejects_a_changed_theme() {
     let source = "```rust\nfn first() {}\n";
-    let mut fence = OpenCodeFence::detect(source, source.len(), syntax_theme_revision()).unwrap();
+    let mut fence =
+        OpenCodeFence::detect(source, source.len(), syntax_theme_revision(), Some(80)).unwrap();
     fence.theme_revision = fence.theme_revision.wrapping_sub(1);
     let appended = "fn second() {}\n";
     assert!(
