@@ -243,6 +243,7 @@ async fn new_config(
         bypass_hook_trust: false,
         model,
         daybreak_enabled: false,
+        tui_auto: None,
         service_tier: None,
         review_model: None,
         model_context_window: None,
