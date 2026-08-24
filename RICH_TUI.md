@@ -166,6 +166,83 @@ codex-rich
 
 See the official OpenAI documentation for [Codex authentication](https://developers.openai.com/codex/auth/).
 
+## Auto model routing
+
+Codex Rich can use a small local Ollama model to classify each new user turn and route it to an
+appropriate Codex model. The classifier runs locally; it does not replace the Codex model that
+handles the task.
+
+### 1. Install Ollama and the classifier model
+
+Install Ollama using its official [macOS instructions](https://docs.ollama.com/macos), open the
+application once so its local server is running, and confirm the CLI is available:
+
+```bash
+ollama --version
+ollama ps
+```
+
+Download the recommended small classifier model. Its exact disk and runtime footprint varies by
+platform, but it is intentionally much smaller than the Codex models that handle routed tasks:
+
+```bash
+ollama pull qwen2.5-coder:1.5b
+ollama ls
+```
+
+If the Ollama application is not running, start its server manually with `ollama serve` and leave
+that process running.
+
+### 2. Enable Auto in Codex
+
+Add the following canonical configuration to `~/.codex/config.toml`:
+
+```toml
+[tui.auto]
+classifier_model = "qwen2.5-coder:1.5b"
+timeout_ms = 1500
+default_selected = true
+```
+
+`default_selected = true` selects Auto for chats that do not already have a saved model choice.
+Auto or manual selection is stored separately for each chat and restored when that chat is opened
+again. Selecting a concrete model from `/model` changes that chat back to manual routing.
+
+The legacy `[tui.local_auto]` table remains accepted, but new configuration should use
+`[tui.auto]`. The Ollama endpoint defaults to `http://localhost:11434/api/generate`; only plain
+HTTP loopback endpoints are accepted, and classifier requests bypass configured and system
+proxies.
+
+### 3. Verify Auto and warmup
+
+Start a new session and confirm that the status line shows `Auto`:
+
+```bash
+codex-rich
+```
+
+Use `/model` to switch between Auto and a concrete model. When an Auto chat is opened—or a chat is
+changed to Auto—Codex Rich immediately asks Ollama to load the classifier, before the first user
+message. The model remains loaded for approximately five minutes after the warmup request. Verify
+the running model from another terminal:
+
+```bash
+ollama ps
+```
+
+The default routing policy is:
+
+| Classification                  | Codex route          |
+| ------------------------------- | -------------------- |
+| Low                             | Luna, low effort     |
+| Medium                          | Terra, medium effort |
+| High                            | Sol, medium effort   |
+| Plan mode or classifier failure | Sol, medium effort   |
+
+If the preferred route is unavailable in the current model catalog, Auto falls back to the
+configured Codex model. The classifier receives at most the first 8 KiB of the user prompt and is
+required to return a small strict-JSON response.
+
 ## MCP and Keychain-backed OAuth
 
 For local macOS builds, explicitly select Keychain storage at the top level of
