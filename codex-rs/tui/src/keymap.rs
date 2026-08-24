@@ -594,11 +594,10 @@ impl RuntimeKeymap {
                 &keymap.approval,
                 "alt-a",
                 ConfiguredAliasMatch::ExactOrChordPrefix,
-            )
-                || chords.bindings.iter().any(|binding| {
-                    binding.action.context.overlaps(KeymapContext::Global)
-                        && binding.chord.prefix.parts() == key_hint::alt(KeyCode::Char('a')).parts()
-                }));
+            ) || chords.bindings.iter().any(|binding| {
+                binding.action.context.overlaps(KeymapContext::Global)
+                    && binding.chord.prefix.parts() == key_hint::alt(KeyCode::Char('a')).parts()
+            }));
         let copy_code_default_is_shadowed = keymap.global.copy_code.is_none()
             && (configured_main_surface_alias_is_used(
                 keymap,

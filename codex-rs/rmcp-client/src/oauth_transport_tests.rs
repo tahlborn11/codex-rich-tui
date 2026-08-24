@@ -164,6 +164,7 @@ fn initial_tokens(server_url: &str) -> StoredOAuthTokens {
     StoredOAuthTokens {
         server_name: "oauth-transport-response-test".to_string(),
         url: server_url.to_string(),
+        issuer: None,
         client_id: "test-client-id".to_string(),
         token_response: WrappedOAuthTokenResponse(response),
         expires_at: None,

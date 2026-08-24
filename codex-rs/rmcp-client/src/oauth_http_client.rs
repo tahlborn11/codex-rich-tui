@@ -12,6 +12,7 @@ use http::HeaderMap;
 use http::HeaderValue;
 use http::Method;
 use http::StatusCode;
+use http::header::ACCEPT;
 use http::header::AUTHORIZATION;
 use http::header::CONTENT_ENCODING;
 use http::header::CONTENT_LENGTH;
@@ -152,6 +153,9 @@ impl OAuthHttpClientAdapter {
                 name != USER_AGENT || value != HeaderValue::from_static(MCP_USER_AGENT)
             });
         headers.extend(parts.headers);
+        headers.entry(ACCEPT).or_insert(HeaderValue::from_static(
+            "application/json, text/event-stream",
+        ));
         if !is_resource_origin {
             headers.insert(USER_AGENT, HeaderValue::from_static(MCP_USER_AGENT));
         }

@@ -59,7 +59,6 @@ use rmcp::transport::AuthorizationManager;
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::auth::AuthClient;
 use rmcp::transport::auth::AuthError;
-use rmcp::transport::auth::OAuthState;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use rmcp::transport::streamable_http_client::StreamableHttpError;
 use serde::Deserialize;
@@ -83,7 +82,7 @@ use crate::oauth::OAuthPersistor;
 use crate::oauth::ResolvedOAuthCredentialStore;
 use crate::oauth::ResolvedOAuthTokens;
 use crate::oauth::StoredOAuthTokens;
-use crate::oauth::request_oauth_token_response;
+use crate::oauth::install_request_tokens_in_manager;
 use crate::oauth::resolve_oauth_tokens_from_store_policy;
 use crate::oauth::validate_refresh_token_issuer;
 use crate::oauth_http_client::OAuthHttpClientAdapter;
@@ -1657,38 +1656,19 @@ async fn create_oauth_transport_and_runtime(
         runtime_tokens.token_response.0.set_refresh_token(None);
         runtime_tokens.issuer = None;
     }
-    let mut oauth_state = OAuthState::Unauthorized(manager);
+    install_request_tokens_in_manager(&mut manager, &runtime_tokens).await?;
 
-    oauth_state
-        .set_credentials(
-            &runtime_tokens.client_id,
-            request_oauth_token_response(&runtime_tokens),
-        )
-        .await?;
-
-    let manager = match oauth_state {
-        OAuthState::Authorized(manager) => manager,
-        OAuthState::Unauthorized(manager) => manager,
-        _ => {
-            return Err(anyhow!("unexpected OAuth state during client setup"));
-        }
-    };
-
-    let auth_client = AuthClient::new(
-        StreamableHttpClientAdapter::new(
-            http_client,
-            default_headers,
-            /*auth_provider*/ None,
-            has_configured_headers,
-            redirect_mode,
-            initialize_deadline,
-        )
-        .with_rejected_token_attribution(),
-        manager,
+    let http_client_adapter = StreamableHttpClientAdapter::new(
+        http_client,
+        default_headers,
+        /*auth_provider*/ None,
+        has_configured_headers,
+        redirect_mode,
+        initialize_deadline,
     );
-    let auth_manager = auth_client.auth_manager.clone();
 
     if use_stored_access_token_only {
+        let auth_client = AuthClient::new(http_client_adapter, manager);
         let transport = StreamableHttpClientTransport::with_client(
             auth_client,
             StreamableHttpClientTransportConfig::with_uri(url.to_string()),
@@ -1699,6 +1679,11 @@ async fn create_oauth_transport_and_runtime(
         return Ok(PendingTransport::StreamableHttpWithAccessTokenOnly { transport });
     }
 
+    let auth_client = AuthClient::new(
+        http_client_adapter.with_rejected_token_attribution(),
+        manager,
+    );
+    let auth_manager = auth_client.auth_manager.clone();
     let persistor = OAuthPersistor::new(
         server_name.to_string(),
         url.to_string(),

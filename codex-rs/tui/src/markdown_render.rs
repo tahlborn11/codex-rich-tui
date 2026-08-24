@@ -90,6 +90,12 @@ const TABLE_BODY_SEPARATOR_CHAR: char = '─';
 const CODE_BLOCK_COPY_HINT: &str = "copy · /copy-code";
 const COMPACT_CODE_BLOCK_COPY_HINT: &str = "/copy-code";
 
+pub(crate) fn code_panel_supports_full_width(label: &str, width: usize) -> bool {
+    let left_width = display_width(&format!("╭─ {label} "));
+    let right_width = display_width(&format!(" {CODE_BLOCK_COPY_HINT} ╮"));
+    width >= left_width + right_width
+}
+
 struct MarkdownStyles {
     h1: Style,
     h2: Style,
@@ -2237,10 +2243,8 @@ where
     }
 
     fn code_panel_supports_full_width(&self, label: &str) -> bool {
-        let left_width = display_width(&format!("╭─ {label} "));
-        let right_width = display_width(&format!(" {CODE_BLOCK_COPY_HINT} ╮"));
         self.code_panel_width()
-            .is_some_and(|width| width >= left_width + right_width)
+            .is_some_and(|width| code_panel_supports_full_width(label, width))
     }
 
     fn finish_code_panel_line(&self, line: &mut Line<'static>, panel_span_start: usize) {

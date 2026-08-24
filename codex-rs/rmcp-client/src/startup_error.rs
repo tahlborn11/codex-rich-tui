@@ -49,6 +49,9 @@ fn transport_error_requires_authentication(error: &DynamicTransportError) -> boo
         .is_some_and(|error| match error {
             StreamableHttpError::AuthRequired(_) => true,
             StreamableHttpError::Auth(auth_error) => auth_error_requires_authentication(auth_error),
+            StreamableHttpError::Client(
+                StreamableHttpClientAdapterError::AccessTokenRejected { .. },
+            ) => true,
             _ => false,
         })
 }

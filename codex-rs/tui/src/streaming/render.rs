@@ -166,6 +166,7 @@ impl StreamingRender {
             &pending_source[final_block_start..],
             raw_source.len(),
             theme_revision,
+            width,
         );
 
         let mut newly_stable_rendered_len = None;

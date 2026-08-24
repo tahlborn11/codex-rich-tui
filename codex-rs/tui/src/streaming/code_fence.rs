@@ -1,9 +1,11 @@
 //! A conservative fast path for one open, top-level, language-tagged code fence.
 
+use crate::markdown_render::code_panel_supports_full_width;
 use crate::render::highlight::MAX_HIGHLIGHT_LINE_BYTES;
 use crate::render::highlight::StreamingCodeHighlighter;
 use crate::render::highlight::syntax_theme_revision;
 use crate::terminal_hyperlinks::HyperlinkLine;
+use ratatui::style::Stylize;
 use ratatui::text::Span;
 
 /// An append-only fence whose original source is identical to pulldown-cmark's code text.
@@ -14,6 +16,8 @@ pub(super) struct OpenCodeFence {
     content_start: usize,
     source_len: usize,
     theme_revision: u64,
+    panel_width: Option<usize>,
+    panel_full_width: bool,
     /// Initialized only if another chunk arrives, avoiding duplicate work on one-shot fences.
     highlighter: Option<StreamingCodeHighlighter>,
 }
@@ -27,7 +31,12 @@ impl OpenCodeFence {
     /// Indentation, CR/NUL normalization, and escaped info strings stay on the canonical path.
     /// Any line that could end the fence also stays there, including deliberately conservative
     /// false positives, so this fast path need not duplicate CommonMark's closing-fence grammar.
-    pub(super) fn detect(source: &str, source_len: usize, theme_revision: u64) -> Option<Self> {
+    pub(super) fn detect(
+        source: &str,
+        source_len: usize,
+        theme_revision: u64,
+        panel_width: Option<usize>,
+    ) -> Option<Self> {
         let marker = *source.as_bytes().first()?;
         if marker != b'`' && marker != b'~' {
             return None;
@@ -49,12 +58,17 @@ impl OpenCodeFence {
             .split([',', ' ', '\t'])
             .next()
             .filter(|language| !language.is_empty())?;
+        if matches!(language, "md" | "markdown") {
+            return None;
+        }
         // Retain at most one bounded language token, never the streamed code itself.
         if language.len() > MAX_HIGHLIGHT_LINE_BYTES
             || has_possible_closing_line(code, marker, marker_len)
         {
             return None;
         }
+        let panel_full_width =
+            panel_width.is_some_and(|width| code_panel_supports_full_width(language, width));
         Some(Self {
             marker,
             marker_len,
@@ -62,6 +76,8 @@ impl OpenCodeFence {
             content_start: source_len.checked_sub(code.len())?,
             source_len,
             theme_revision,
+            panel_width,
+            panel_full_width,
             highlighter: None,
         })
     }
@@ -97,8 +113,15 @@ impl OpenCodeFence {
         let lines = lines
             .into_iter()
             .map(|mut line| {
-                // The canonical writer installs an empty indent span for top-level fences.
-                line.spans.insert(/*index*/ 0, Span::default());
+                line.spans.insert(/*index*/ 0, "│ ".dim());
+                if self.panel_full_width
+                    && let Some(width) = self.panel_width
+                    && line.width() < width
+                {
+                    let padding = width.saturating_sub(line.width() + 1);
+                    line.push_span(Span::raw(" ".repeat(padding)));
+                    line.push_span("│".dim());
+                }
                 HyperlinkLine::new(line)
             })
             .collect();
