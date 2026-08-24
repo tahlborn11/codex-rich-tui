@@ -258,6 +258,7 @@ async fn refreshes_rejected_persisted_token_after_initialize() -> anyhow::Result
         ])
         .env("CODEX_HOME", codex_home.path())
         .env(CHILD_SERVER_URL_ENV, server_url)
+        .env(CHILD_STORED_ISSUER_ENV, server.uri())
         .env(CHILD_RESOURCE_API_KEY_ENV, RESOURCE_API_KEY)
         .status()
         .await?;
@@ -1000,6 +1001,7 @@ async fn oauth_post_initialization_recovery_child() -> anyhow::Result<()> {
     let tokens = StoredOAuthTokens {
         server_name: SERVER_NAME.to_string(),
         url: server_url.clone(),
+        issuer: Some(std::env::var(CHILD_STORED_ISSUER_ENV)?),
         client_id: "test-client-id".to_string(),
         token_response: WrappedOAuthTokenResponse(response),
         expires_at: Some(now.saturating_add(/*rhs*/ 7_200_000)),

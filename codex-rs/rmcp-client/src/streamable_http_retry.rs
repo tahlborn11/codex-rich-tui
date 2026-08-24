@@ -43,7 +43,6 @@ impl RmcpClient {
         let mut retry_deadline = timeout.map(|duration| Instant::now() + duration);
         let mut pending_transport = Some(initial_transport);
         let mut oauth_recovered = false;
-
         for (attempt, retry_delay_ms) in STREAMABLE_HTTP_RETRY_DELAYS_MS
             .iter()
             .copied()
@@ -138,6 +137,33 @@ impl RmcpClient {
         unreachable!("initialize retry loop should return on success or final error")
     }
 
+    fn rejected_access_token_from_initialize_error(error: &anyhow::Error) -> Option<AccessToken> {
+        error.chain().find_map(|source| {
+            source
+                .downcast_ref::<HandshakeError>()
+                .and_then(|error| {
+                    Self::rejected_access_token_from_client_initialize_error(&error.source)
+                })
+                .or_else(|| {
+                    source
+                        .downcast_ref::<rmcp::service::ClientInitializeError>()
+                        .and_then(Self::rejected_access_token_from_client_initialize_error)
+                })
+        })
+    }
+
+    fn rejected_access_token_from_client_initialize_error(
+        error: &rmcp::service::ClientInitializeError,
+    ) -> Option<AccessToken> {
+        match error {
+            rmcp::service::ClientInitializeError::TransportError { error, .. } => error
+                .error
+                .downcast_ref::<StreamableHttpError<StreamableHttpClientAdapterError>>()
+                .and_then(Self::rejected_access_token),
+            _ => None,
+        }
+    }
+
     fn is_retryable_initialize_error(error: &anyhow::Error) -> bool {
         error.chain().any(|source| {
             source
@@ -177,33 +203,6 @@ impl RmcpClient {
                     })
             }
             _ => false,
-        }
-    }
-
-    fn rejected_access_token_from_initialize_error(error: &anyhow::Error) -> Option<AccessToken> {
-        error.chain().find_map(|source| {
-            source
-                .downcast_ref::<HandshakeError>()
-                .and_then(|error| {
-                    Self::rejected_access_token_from_client_initialize_error(&error.source)
-                })
-                .or_else(|| {
-                    source
-                        .downcast_ref::<rmcp::service::ClientInitializeError>()
-                        .and_then(Self::rejected_access_token_from_client_initialize_error)
-                })
-        })
-    }
-
-    fn rejected_access_token_from_client_initialize_error(
-        error: &rmcp::service::ClientInitializeError,
-    ) -> Option<AccessToken> {
-        match error {
-            rmcp::service::ClientInitializeError::TransportError { error, .. } => error
-                .error
-                .downcast_ref::<StreamableHttpError<StreamableHttpClientAdapterError>>()
-                .and_then(Self::rejected_access_token),
-            _ => None,
         }
     }
 

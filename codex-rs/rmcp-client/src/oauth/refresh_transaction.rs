@@ -260,13 +260,21 @@ impl OAuthPersistor {
         // The provider uses a separate HTTP client and cannot re-enter `AuthClient`. Retain this
         // async guard so requests cannot observe credentials while they are staged and committed.
         let mut guard = manager.lock().await;
-        let metadata = guard
-            .resolve_metadata()
-            .await
-            .context("failed to resolve OAuth metadata before using stored refresh credentials")?
-            .metadata;
-        validate_refresh_token_issuer(&metadata, &latest)?;
-        guard.set_metadata(metadata);
+        if matches!(reason, RefreshReason::Expiry) {
+            let metadata = guard
+                .resolve_metadata()
+                .await
+                .context(
+                    "failed to resolve OAuth metadata before using stored refresh credentials",
+                )?
+                .metadata;
+            validate_refresh_token_issuer(&metadata, &latest)?;
+            guard.set_metadata(metadata);
+        }
+        // Unauthorized recovery uses the metadata snapshot validated and pinned when the
+        // transport was created. Installing the full refresh credentials below makes RMCP bind
+        // their stored issuer to that snapshot without rediscovering attacker-swappable metadata
+        // in response to a rejected access token.
         if let Err(error) =
             install_tokens_in_manager_guard(&mut guard, &latest, CredentialExposure::Refresh).await
         {
@@ -389,6 +397,16 @@ impl RefreshReason {
 enum CredentialExposure {
     Request,
     Refresh,
+}
+
+/// Installs an access-token-only view without resolving metadata again, so callers can pin the
+/// issuer-validated metadata snapshot and RMCP cannot refresh outside Codex's transaction.
+pub(crate) async fn install_request_tokens_in_manager(
+    authorization_manager: &mut AuthorizationManager,
+    tokens: &StoredOAuthTokens,
+) -> Result<()> {
+    install_tokens_in_manager_guard(authorization_manager, tokens, CredentialExposure::Request)
+        .await
 }
 
 async fn install_tokens_in_manager_guard(

@@ -76,7 +76,8 @@ pub(crate) use self::ema_identity::stored_oidc_identity;
 pub(crate) use self::issuer_binding::validate_authorization_server_endpoints;
 pub(crate) use self::issuer_binding::validate_refresh_token_issuer;
 pub(crate) use self::refresh_lock::RefreshCredentialLock;
-pub(crate) use self::refresh_transaction::install_tokens_in_manager;
+pub(crate) use self::refresh_transaction::install_request_tokens_in_manager;
+#[cfg(test)]
 pub(crate) use self::refresh_transaction::request_oauth_token_response;
 pub(crate) use self::resolved_store::ResolvedOAuthCredentialStore;
 pub(crate) use self::resolved_store::ResolvedOAuthTokens;
