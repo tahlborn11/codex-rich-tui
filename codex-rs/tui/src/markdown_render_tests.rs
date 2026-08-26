@@ -1142,6 +1142,28 @@ fn fenced_code_panel_uses_full_available_width() {
 }
 
 #[test]
+fn fenced_code_panel_wraps_long_rows_inside_the_background_and_rails() {
+    let text = render_markdown_text_with_width(
+        "```rust\nlet message = \"a line that is wider than the panel\";\n```\n",
+        Some(28),
+    );
+    let lines = plain_lines(&text);
+
+    assert_eq!(
+        lines,
+        vec![
+            "╭─ rust  copy · /copy-code ╮",
+            "│ let message = \"a line th │",
+            "│ at is wider than the pan │",
+            "│ el\";                     │",
+            "╰──────────────────────────╯",
+        ]
+    );
+    assert!(lines.iter().all(|line| display_width(line) == 28));
+    assert_debug_snapshot!("fenced_code_panel_narrow_wrapping", text.lines);
+}
+
+#[test]
 fn code_block_unknown_lang_plain() {
     let text = render_markdown_text("```xyzlang\nhello world\n```\n");
     let content: Vec<String> = text
