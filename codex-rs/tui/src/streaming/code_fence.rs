@@ -1,11 +1,11 @@
 //! A conservative fast path for one open, top-level, language-tagged code fence.
 
 use crate::markdown_render::code_panel_supports_full_width;
+use crate::markdown_render::hard_wrap_code_line;
 use crate::render::highlight::MAX_HIGHLIGHT_LINE_BYTES;
 use crate::render::highlight::StreamingCodeHighlighter;
 use crate::render::highlight::syntax_theme_revision;
 use crate::terminal_hyperlinks::HyperlinkLine;
-use ratatui::style::Stylize;
 use ratatui::text::Span;
 
 /// An append-only fence whose original source is identical to pulldown-cmark's code text.
@@ -110,17 +110,40 @@ impl OpenCodeFence {
         let (highlighter, lines) = highlighter.append(committed_source)?;
         self.highlighter = Some(highlighter);
         self.source_len = raw_source.len();
+        let panel_style = crate::style::user_message_style();
         let lines = lines
             .into_iter()
+            .flat_map(|line| {
+                let inner_width = self
+                    .panel_width
+                    .map(|width| {
+                        width.saturating_sub(
+                            /*left rail*/
+                            2 + if self.panel_full_width {
+                                /*padding + right rail*/
+                                2
+                            } else {
+                                0
+                            },
+                        )
+                    })
+                    .unwrap_or(usize::MAX)
+                    .max(1);
+                hard_wrap_code_line(&line, inner_width)
+            })
             .map(|mut line| {
-                line.spans.insert(/*index*/ 0, "│ ".dim());
+                line.spans
+                    .insert(/*index*/ 0, Span::styled("│ ", panel_style.dim()));
                 if self.panel_full_width
                     && let Some(width) = self.panel_width
                     && line.width() < width
                 {
                     let padding = width.saturating_sub(line.width() + 1);
-                    line.push_span(Span::raw(" ".repeat(padding)));
-                    line.push_span("│".dim());
+                    line.push_span(Span::styled(" ".repeat(padding), panel_style));
+                    line.push_span(Span::styled("│", panel_style.dim()));
+                }
+                for span in &mut line.spans {
+                    span.style = span.style.patch(panel_style);
                 }
                 HyperlinkLine::new(line)
             })
