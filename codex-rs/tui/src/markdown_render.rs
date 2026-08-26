@@ -77,9 +77,11 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 use url::Url;
 
+mod code_panel;
 mod streaming;
 mod table_key_value;
 
+pub(crate) use code_panel::hard_wrap_code_line;
 pub(crate) use streaming::StreamingMarkdownRender;
 pub(crate) use streaming::render_streaming_markdown_lines_with_width_and_cwd;
 
@@ -2095,8 +2097,41 @@ where
     fn flush_current_line(&mut self) {
         if let Some(mut line) = self.current_line_content.take() {
             let style = self.current_line_style;
-            // NB we don't wrap code in code blocks, in order to preserve whitespace for copy/paste.
-            if !self.current_line_in_code_block
+            if self.current_code_panel_line == CodePanelLine::Body
+                && let Some(width) = self.wrap_width
+            {
+                let first_indent = self.current_initial_indent.clone();
+                let subsequent_indent = self.current_subsequent_indent.clone();
+                let right_rail_width = if self.code_panel_full_width {
+                    /*padding + rail*/
+                    2
+                } else {
+                    0
+                };
+                let content_width = width
+                    .saturating_sub(Self::spans_display_width(&first_indent))
+                    .saturating_sub(right_rail_width)
+                    .max(1);
+                let wrapped = hard_wrap_code_line(&line.line, content_width);
+                let wrapped = remap_wrapped_line(&line, wrapped);
+                for (index, mut wrapped_line) in wrapped.into_iter().enumerate() {
+                    let mut spans = if index == 0 {
+                        first_indent.clone()
+                    } else {
+                        subsequent_indent.clone()
+                    };
+                    let panel_span_start = spans.len().saturating_sub(1);
+                    let shift = Self::spans_display_width(&spans);
+                    spans.append(&mut wrapped_line.line.spans);
+                    for hyperlink in &mut wrapped_line.hyperlinks {
+                        hyperlink.columns =
+                            hyperlink.columns.start + shift..hyperlink.columns.end + shift;
+                    }
+                    wrapped_line.line = Line::from_iter(spans);
+                    self.finish_code_panel_line(&mut wrapped_line.line, panel_span_start);
+                    self.push_output_line(wrapped_line.style(style));
+                }
+            } else if !self.current_line_in_code_block
                 && self.current_code_panel_line == CodePanelLine::Hidden
                 && let Some(width) = self.wrap_width
             {
@@ -2713,7 +2748,7 @@ mod tests {
     }
 
     #[test]
-    fn does_not_wrap_code_blocks() {
+    fn wraps_code_blocks_without_losing_panel_chrome() {
         let markdown = "````\nfn main() { println!(\"hi from a long line\"); }\n````";
         let rendered = render_markdown_text_with_width(markdown, Some(10));
         let lines = lines_to_strings(&rendered);
@@ -2721,7 +2756,12 @@ mod tests {
             lines,
             vec![
                 "╭─ code · /copy-code".to_string(),
-                "│ fn main() { println!(\"hi from a long line\"); }".to_string(),
+                "│ fn main(".to_string(),
+                "│ ) { prin".to_string(),
+                "│ tln!(\"hi".to_string(),
+                "│  from a ".to_string(),
+                "│ long lin".to_string(),
+                "│ e\"); }".to_string(),
                 "╰─".to_string(),
             ]
         );
