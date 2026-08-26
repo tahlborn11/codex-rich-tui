@@ -1,0 +1,37 @@
+---
+source: tui/src/markdown_render_tests.rs
+expression: text.lines
+---
+[
+    Line::from_iter([
+        Span::from("╭─ ").dim(),
+        Span::from("rust").bold(),
+        Span::from(" ").dim(),
+        Span::default().dim(),
+        Span::from(" copy · /copy-code ╮").dim(),
+    ]),
+    Line::from_iter([
+        Span::from("│ ").dim(),
+        Span::from("let").fg(Color::Rgb(203, 166, 247)),
+        Span::from(" message ").fg(Color::Rgb(205, 214, 244)),
+        Span::from("=").fg(Color::Rgb(148, 226, 213)),
+        Span::from(" ").fg(Color::Rgb(205, 214, 244)),
+        Span::from("\"a line th").fg(Color::Rgb(166, 227, 161)),
+        Span::from(" "),
+        Span::from("│").dim(),
+    ]),
+    Line::from_iter([
+        Span::from("│ ").dim(),
+        Span::from("at is wider than the pan").fg(Color::Rgb(166, 227, 161)),
+        Span::from(" "),
+        Span::from("│").dim(),
+    ]),
+    Line::from_iter([
+        Span::from("│ ").dim(),
+        Span::from("el\"").fg(Color::Rgb(166, 227, 161)),
+        Span::from(";").fg(Color::Rgb(147, 153, 178)),
+        Span::from("                     "),
+        Span::from("│").dim(),
+    ]),
+    Line::from(Span::from("╰──────────────────────────╯").dim()),
+]
