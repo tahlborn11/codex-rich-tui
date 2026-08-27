@@ -2463,6 +2463,48 @@ async fn slash_copy_code_copies_the_last_fenced_block() {
 }
 
 #[tokio::test]
+async fn slash_copy_code_copies_a_single_block_without_opening_picker() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.transcript.last_agent_markdown =
+        Some("Before\n\n```powershell\nWrite-Output value\n```".to_string());
+    chat.transcript.last_agent_source =
+        Some("Before\r\n\r\n```powershell\r\nWrite-Output value  \r\n```\r\n".to_string());
+
+    chat.copy_code_block_or_show_picker_with(|code| {
+        assert_eq!(code, "Write-Output value  \r\n");
+        Ok(Some(crate::clipboard_copy::ClipboardLease::test()))
+    });
+
+    assert!(chat.clipboard_lease.is_some());
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
+    let rendered = lines_to_single_string(&drain_insert_history(&mut rx)[0]);
+    assert!(rendered.contains("Copied powershell code to clipboard"));
+}
+
+#[tokio::test]
+async fn slash_copy_code_picker_selects_exact_block_and_can_be_cancelled() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.transcript.last_agent_markdown = Some(
+        "```rust\nfn first() {}\n```\n\n```text\nsecond block\n```\n\n```sh\n \n```".to_string(),
+    );
+
+    chat.dispatch_command(SlashCommand::CopyCode);
+    let popup = render_bottom_popup(&chat, /*width*/ 80);
+    assert_chatwidget_snapshot!("copy_code_selection_popup", popup);
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE));
+    assert_eq!(
+        next_copy_selection(&mut rx),
+        ("second block\n".to_string(), "text code".to_string())
+    );
+
+    chat.dispatch_command(SlashCommand::CopyCode);
+    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
+    assert_matches!(rx.try_recv(), Ok(AppEvent::SettingsSelectionClosed));
+    assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
+}
+
+#[tokio::test]
 async fn slash_copy_code_reports_when_no_fenced_block_exists() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.transcript.last_agent_markdown = Some("No code here".to_string());

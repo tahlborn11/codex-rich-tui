@@ -418,7 +418,7 @@ impl ChatWidget {
                 self.show_transcript_export_popup();
             }
             SlashCommand::CopyCode => {
-                self.copy_last_agent_code_block();
+                self.copy_code_block_or_show_picker();
             }
             SlashCommand::Raw => {
                 let enabled = self.toggle_raw_output_mode_and_notify();
