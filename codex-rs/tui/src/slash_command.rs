@@ -107,7 +107,7 @@ impl SlashCommand {
             SlashCommand::Quit | SlashCommand::Exit => "exit Codex",
             SlashCommand::Copy => "copy the last response or part of it",
             SlashCommand::Export => "export the conversation as markdown",
-            SlashCommand::CopyCode => "copy the last fenced code block",
+            SlashCommand::CopyCode => "choose a fenced code block to copy",
             SlashCommand::Raw => "toggle raw scrollback mode for copy-friendly terminal selection",
             SlashCommand::Tui => "choose the TUI mode for the next launch",
             SlashCommand::Diff => "show git diff (including untracked files)",

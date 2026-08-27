@@ -1,0 +1,10 @@
+---
+source: tui/src/chatwidget/tests/slash_commands.rs
+expression: popup
+---
+  Copy code block
+
+› 1. rust code  fn first() {}
+  2. text code  second block
+
+  Press enter to confirm or esc to go back
