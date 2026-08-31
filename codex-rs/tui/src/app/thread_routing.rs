@@ -10,7 +10,6 @@ use crate::app_command::RootModelRouting;
 use crate::app_event::ThreadTitleDestination;
 use crate::chatwidget::ThreadInputStateRestoreMode;
 use crate::local_auto_router;
-use crate::session_resume::read_session_model;
 use codex_app_server_protocol::ThreadStartedNotification;
 use codex_app_server_protocol::TurnInterruptParams;
 use codex_app_server_protocol::TurnInterruptResponse;
