@@ -64,6 +64,7 @@ impl LocalSettings {
             ),
             tui: Tui {
                 default_hosts: Default::default(),
+                auto: config.tui_auto.clone(),
                 notification_settings: config.tui_notifications.clone(),
                 animations: config.animations,
                 screen_reader_detection_done: None,
