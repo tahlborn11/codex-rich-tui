@@ -1286,9 +1286,19 @@ impl RuntimeKeymap {
                 bindings.retain(|binding| {
                     !aliases.iter().any(|(alias, candidate)| {
                         binding == candidate
-                            && (configured_main_surface_alias_is_used(keymap, alias)
-                                || configured_context_alias_is_used(&keymap.list, alias)
-                                || configured_context_alias_is_used(&keymap.vim_search, alias))
+                            && (configured_main_surface_alias_is_used(
+                                keymap,
+                                alias,
+                                ConfiguredAliasMatch::Exact,
+                            ) || configured_context_alias_is_used(
+                                &keymap.list,
+                                alias,
+                                ConfiguredAliasMatch::Exact,
+                            ) || configured_context_alias_is_used(
+                                &keymap.vim_search,
+                                alias,
+                                ConfiguredAliasMatch::Exact,
+                            ))
                     }) && !chords.bindings.iter().any(|chord| {
                         chord.action.context.overlaps(KeymapContext::Chat)
                             && binding.normalized_parts() == chord.chord.prefix.normalized_parts()
@@ -1336,13 +1346,18 @@ impl RuntimeKeymap {
         };
 
         let resume_default_is_shadowed = keymap.agents.resume.is_none()
-            && (configured_context_alias_is_used(&keymap.agents, "ctrl-o")
-                || configured_context_alias_is_used(&keymap.list, "ctrl-o")
-                || chords.bindings.iter().any(|binding| {
-                    binding.action.context.overlaps(KeymapContext::Agents)
-                        && binding.chord.prefix.parts()
-                            == key_hint::ctrl(KeyCode::Char('o')).parts()
-                }));
+            && (configured_context_alias_is_used(
+                &keymap.agents,
+                "ctrl-o",
+                ConfiguredAliasMatch::Exact,
+            ) || configured_context_alias_is_used(
+                &keymap.list,
+                "ctrl-o",
+                ConfiguredAliasMatch::Exact,
+            ) || chords.bindings.iter().any(|binding| {
+                binding.action.context.overlaps(KeymapContext::Agents)
+                    && binding.chord.prefix.parts() == key_hint::ctrl(KeyCode::Char('o')).parts()
+            }));
         let mut agents = AgentsKeymap {
             resume: if resume_default_is_shadowed {
                 Vec::new()

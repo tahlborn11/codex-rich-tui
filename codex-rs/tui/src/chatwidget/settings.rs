@@ -283,7 +283,7 @@ impl ChatWidget {
                 self.clear_reserve_return();
             } else {
                 self.automatic_model_switch_state =
-                backend_banners::AutomaticModelSwitchState::default();
+                    backend_banners::AutomaticModelSwitchState::default();
             }
         }
         self.auto_selected = false;
