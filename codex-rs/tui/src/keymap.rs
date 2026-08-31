@@ -798,8 +798,15 @@ impl RuntimeKeymap {
 
         // Voice yields to explicitly configured shortcuts and chord prefixes.
         let voice_toggle_default_is_shadowed = keymap.chat.toggle_voice.is_none()
-            && (configured_main_surface_alias_is_used(keymap, "f8")
-                || configured_context_alias_is_used(&keymap.vim_search, "f8")
+            && (configured_main_surface_alias_is_used(
+                keymap,
+                "f8",
+                ConfiguredAliasMatch::ExactOrChordPrefix,
+            ) || configured_context_alias_is_used(
+                &keymap.vim_search,
+                "f8",
+                ConfiguredAliasMatch::ExactOrChordPrefix,
+            )
                 || chords.bindings.iter().any(|binding| {
                     binding.action.context.overlaps(KeymapContext::Chat)
                         && binding.chord.prefix.parts() == key_hint::plain(KeyCode::F(8)).parts()
@@ -1360,9 +1367,19 @@ impl RuntimeKeymap {
                 bindings.retain(|binding| {
                     !aliases.iter().any(|(alias, candidate)| {
                         binding == candidate
-                            && (configured_main_surface_alias_is_used(keymap, alias)
-                                || configured_context_alias_is_used(&keymap.list, alias)
-                                || configured_context_alias_is_used(&keymap.vim_search, alias))
+                            && (configured_main_surface_alias_is_used(
+                                keymap,
+                                alias,
+                                ConfiguredAliasMatch::Exact,
+                            ) || configured_context_alias_is_used(
+                                &keymap.list,
+                                alias,
+                                ConfiguredAliasMatch::Exact,
+                            ) || configured_context_alias_is_used(
+                                &keymap.vim_search,
+                                alias,
+                                ConfiguredAliasMatch::Exact,
+                            ))
                     }) && !chords.bindings.iter().any(|chord| {
                         chord.action.context.overlaps(KeymapContext::Chat)
                             && binding.normalized_parts() == chord.chord.prefix.normalized_parts()
@@ -1410,8 +1427,25 @@ impl RuntimeKeymap {
             chord_hints: Arc::clone(&chords),
         };
 
+        let resume_default_is_shadowed = keymap.agents.resume.is_none()
+            && (configured_context_alias_is_used(
+                &keymap.agents,
+                "ctrl-o",
+                ConfiguredAliasMatch::Exact,
+            ) || configured_context_alias_is_used(
+                &keymap.list,
+                "ctrl-o",
+                ConfiguredAliasMatch::Exact,
+            ) || chords.bindings.iter().any(|binding| {
+                binding.action.context.overlaps(KeymapContext::Agents)
+                    && binding.chord.prefix.parts() == key_hint::ctrl(KeyCode::Char('o')).parts()
+            }));
         let mut agents = AgentsKeymap {
-            resume: resolve_local!(keymap, defaults, agents, resume),
+            resume: if resume_default_is_shadowed {
+                Vec::new()
+            } else {
+                resolve_local!(keymap, defaults, agents, resume)
+            },
             search: resolve_local!(keymap, defaults, agents, search),
             new_task: resolve_local!(keymap, defaults, agents, new_task),
             new_worktree: resolve_local!(keymap, defaults, agents, new_worktree),
@@ -1450,9 +1484,19 @@ impl RuntimeKeymap {
             ),
         ] {
             if configured.is_none()
-                && (configured_context_alias_is_used(&keymap.agents, alias)
-                    || configured_context_alias_is_used(&keymap.list, alias)
-                    || configured_context_alias_is_used(&keymap.global, alias)
+                && (configured_context_alias_is_used(
+                    &keymap.agents,
+                    alias,
+                    ConfiguredAliasMatch::Exact,
+                ) || configured_context_alias_is_used(
+                    &keymap.list,
+                    alias,
+                    ConfiguredAliasMatch::Exact,
+                ) || configured_context_alias_is_used(
+                    &keymap.global,
+                    alias,
+                    ConfiguredAliasMatch::Exact,
+                )
                     || chords.bindings.iter().any(|chord| {
                         chord.action.context.overlaps(KeymapContext::Agents)
                             && bindings.contains(&chord.chord.prefix)
