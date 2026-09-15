@@ -1306,8 +1306,12 @@ pub const FEATURES: &[FeatureSpec] = &[
     FeatureSpec {
         id: Feature::McpOAuthRefreshCoordination,
         key: "mcp_oauth_refresh_coordination",
-        stage: Stage::UnderDevelopment,
-        default_enabled: false,
+        stage: if option_env!("CODEX_RICH_VERSION").is_some() {
+            Stage::Stable
+        } else {
+            Stage::UnderDevelopment
+        },
+        default_enabled: option_env!("CODEX_RICH_VERSION").is_some(),
     },
     FeatureSpec {
         id: Feature::AppsMcpPathOverride,
