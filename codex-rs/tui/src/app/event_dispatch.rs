@@ -2694,9 +2694,14 @@ impl App {
                 parent_thread_id,
                 user_message,
             } => {
-                return self
-                    .handle_start_side(tui, app_server, parent_thread_id, user_message)
-                    .await;
+                // Keep this large future from exhausting the TUI main thread's stack.
+                return Box::pin(self.handle_start_side(
+                    tui,
+                    app_server,
+                    parent_thread_id,
+                    user_message,
+                ))
+                .await;
             }
             AppEvent::OpenSkillsList => {
                 self.chat_widget.open_skills_list();
