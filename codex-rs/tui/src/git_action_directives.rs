@@ -3,6 +3,8 @@
 use crate::assistant_directives::AssistantDirective;
 use crate::assistant_directives::QuoteEscaping;
 use crate::assistant_directives::parse_assistant_directive;
+use crate::followup_directives::FollowupDirective;
+use crate::followup_directives::rewrite_followup_line;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -43,6 +45,7 @@ impl GitActionDirective {
 pub(crate) struct ParsedAssistantMarkdown {
     pub(crate) visible_markdown: String,
     pub(crate) git_actions: Vec<GitActionDirective>,
+    pub(crate) followups: Vec<FollowupDirective>,
 }
 
 impl ParsedAssistantMarkdown {
@@ -56,12 +59,22 @@ impl ParsedAssistantMarkdown {
 
 pub(crate) fn parse_assistant_markdown(markdown: &str, cwd: &Path) -> ParsedAssistantMarkdown {
     let mut git_actions = Vec::new();
+    let mut followups = Vec::new();
+    let mut seen_followups = HashSet::new();
     let mut seen = HashSet::new();
     let mut visible_lines = Vec::new();
 
     for line in markdown.lines() {
-        let (visible_line, line_actions) =
-            rewrite_code_comment_line(line, cwd).unwrap_or_else(|| strip_line_directives(line));
+        let (visible_line, line_actions) = if let Some(rewritten) = rewrite_followup_line(line) {
+            if let Some(followup) = rewritten.followup
+                && seen_followups.insert(followup.clone())
+            {
+                followups.push(followup);
+            }
+            (rewritten.visible_line, Vec::new())
+        } else {
+            rewrite_code_comment_line(line, cwd).unwrap_or_else(|| strip_line_directives(line))
+        };
         for action in line_actions {
             if seen.insert(action.clone()) {
                 git_actions.push(action);
@@ -80,6 +93,7 @@ pub(crate) fn parse_assistant_markdown(markdown: &str, cwd: &Path) -> ParsedAssi
     ParsedAssistantMarkdown {
         visible_markdown: visible_lines.join("\n"),
         git_actions,
+        followups,
     }
 }
 

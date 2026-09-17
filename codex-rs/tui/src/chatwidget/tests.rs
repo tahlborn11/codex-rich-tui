@@ -252,6 +252,7 @@ mod copy_export_picker_tests;
 #[path = "tests/dynamic_activity_tests.rs"]
 mod dynamic_activity_tests;
 mod exec_flow;
+mod followups;
 mod goal_menu;
 mod goal_validation;
 mod guardian;

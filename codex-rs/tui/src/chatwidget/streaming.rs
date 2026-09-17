@@ -470,6 +470,12 @@ impl ChatWidget {
                 }
             });
         }
+        if !from_replay
+            && matches!(item.phase, Some(MessagePhase::FinalAnswer) | None)
+            && !parsed.followups.is_empty()
+        {
+            self.show_followup_suggestions(parsed.followups);
+        }
         self.status_state.pending_status_indicator_restore = item.questions.is_some()
             || match item.phase {
                 // Models that don't support preambles only output AgentMessageItems on turn completion.

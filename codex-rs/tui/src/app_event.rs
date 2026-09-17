@@ -441,6 +441,11 @@ pub(crate) enum AppEvent {
         format: crate::clipboard_copy::CopyFormat,
     },
 
+    /// Replace the active composer draft with a selected assistant follow-up.
+    PrefillComposer {
+        text: String,
+    },
+
     /// Persist a submitted prompt in the cross-session message history.
     AppendMessageHistoryEntry {
         thread_id: ThreadId,

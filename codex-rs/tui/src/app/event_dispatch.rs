@@ -46,6 +46,7 @@ impl App {
                     | AppEvent::ManagedWorktreeCreated(_)
                     | AppEvent::AgentsOverviewWorktreeCreated(_)
                     | AppEvent::AppendMessageHistoryEntry { .. }
+                    | AppEvent::PrefillComposer { .. }
                     | AppEvent::BeginInitialHistoryReplayBuffer
                     | AppEvent::BeginThreadSwitchHistoryReplayBuffer
                     | AppEvent::EndInitialHistoryReplayBuffer
@@ -343,6 +344,9 @@ impl App {
             }
             AppEvent::CopySelection { text, label, format } => {
                 self.chat_widget.copy_selection(text, label, format);
+            }
+            AppEvent::PrefillComposer { text } => {
+                self.chat_widget.prefill_composer(text);
             }
             AppEvent::ClearUi { name } => {
                 if self.reject_pending_permission_root_switch() {
