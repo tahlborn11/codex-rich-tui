@@ -110,6 +110,7 @@ impl App {
                     | AppEvent::AgentsOverviewThreadsLoaded { .. }
                     | AppEvent::AgentsOverviewUsageLoaded { .. }
                     | AppEvent::AppendMessageHistoryEntry { .. }
+                    | AppEvent::PrefillComposer { .. }
                     | AppEvent::BeginInitialHistoryReplayBuffer
                     | AppEvent::BeginThreadSwitchHistoryReplayBuffer
                     | AppEvent::EndInitialHistoryReplayBuffer
@@ -553,6 +554,9 @@ impl App {
             AppEvent::CopySelection { text, label, format } => {
                 let result = tui.clipboard.copy(text, format, tui.frame_requester());
                 self.chat_widget.show_copy_result(&label, result);
+            }
+            AppEvent::PrefillComposer { text } => {
+                self.chat_widget.prefill_composer(text);
             }
             AppEvent::ClearUi { name } => {
                 if self.reject_pending_permission_root_switch() {
