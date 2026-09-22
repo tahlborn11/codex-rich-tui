@@ -105,6 +105,7 @@ async fn mcp_completion_reasserts_terminal_title() {
         arguments: serde_json::json!({}),
         app_context: None,
         mcp_app_resource_uri: None,
+        mcp_app_ui: None,
         plugin_id: None,
         read_only_hint: None,
         result: Some(Box::new(codex_app_server_protocol::McpToolCallResult {

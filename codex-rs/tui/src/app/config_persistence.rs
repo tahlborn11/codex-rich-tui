@@ -12,14 +12,14 @@ async fn build_config_on_runtime_worker(
     application_network_policy: codex_http_client::NetworkPolicy,
     error_context: String,
 ) -> Result<Config> {
-    // Tokio stores the task output inline even when it boxes the future. Keep the large
-    // Config off the caller's stack while Tokio allocates the task during session switches.
-    match tokio::spawn(async move {
+    // Tokio stores both the future and its output inline in the task allocation. Keep the large
+    // config-build future and Config output off the caller's stack during session switches.
+    match tokio::spawn(Box::pin(async move {
         builder.build().await.map(|mut config| {
             config.application_network_policy = application_network_policy;
             Box::new(config)
         })
-    })
+    }))
     .await
     {
         Ok(build_result) => build_result.map(|config| *config).wrap_err(error_context),
