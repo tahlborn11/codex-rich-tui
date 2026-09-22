@@ -5,6 +5,8 @@ use crate::assistant_directives::QuoteEscaping;
 use crate::assistant_directives::parse_assistant_directive;
 use crate::followup_directives::FollowupDirective;
 use crate::followup_directives::rewrite_followup_line;
+use crate::table_detect::FenceKind;
+use crate::table_detect::FenceTracker;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -63,8 +65,16 @@ pub(crate) fn parse_assistant_markdown(markdown: &str, cwd: &Path) -> ParsedAssi
     let mut seen_followups = HashSet::new();
     let mut seen = HashSet::new();
     let mut visible_lines = Vec::new();
+    let mut fence_tracker = FenceTracker::new();
 
     for line in markdown.lines() {
+        let fence_before = fence_tracker.kind();
+        fence_tracker.advance(line);
+        if fence_before != FenceKind::Outside || fence_tracker.kind() != FenceKind::Outside {
+            visible_lines.push(line.trim_end().to_string());
+            continue;
+        }
+
         let (visible_line, line_actions) = if let Some(rewritten) = rewrite_followup_line(line) {
             if let Some(followup) = rewritten.followup
                 && seen_followups.insert(followup.clone())
@@ -302,6 +312,37 @@ mod tests {
         let parsed = parse_assistant_markdown(markdown, Path::new("/repo"));
 
         assert_eq!(parsed.visible_markdown, markdown);
+    }
+
+    #[test]
+    fn preserves_directives_inside_fenced_code_blocks() {
+        let markdown = concat!(
+            "```text\n",
+            ":codex-followup[Literal follow-up]{prompt=\"Do not activate\"}\n",
+            "::git-stage{cwd=\"/repo\"}\n",
+            "```\n",
+            ":codex-followup[Live follow-up]{prompt=\"Activate this\"}",
+        );
+        let parsed = parse_assistant_markdown(markdown, Path::new("/repo"));
+
+        assert_eq!(
+            parsed.visible_markdown,
+            concat!(
+                "```text\n",
+                ":codex-followup[Literal follow-up]{prompt=\"Do not activate\"}\n",
+                "::git-stage{cwd=\"/repo\"}\n",
+                "```\n",
+                "- Live follow-up",
+            ),
+        );
+        assert!(parsed.git_actions.is_empty());
+        assert_eq!(
+            parsed.followups,
+            vec![FollowupDirective {
+                label: "Live follow-up".to_string(),
+                prompt: "Activate this".to_string(),
+            }],
+        );
     }
 
     #[test]

@@ -806,11 +806,10 @@ impl RuntimeKeymap {
                 &keymap.vim_search,
                 "f8",
                 ConfiguredAliasMatch::ExactOrChordPrefix,
-            )
-                || chords.bindings.iter().any(|binding| {
-                    binding.action.context.overlaps(KeymapContext::Chat)
-                        && binding.chord.prefix.parts() == key_hint::plain(KeyCode::F(8)).parts()
-                }));
+            ) || chords.bindings.iter().any(|binding| {
+                binding.action.context.overlaps(KeymapContext::Chat)
+                    && binding.chord.prefix.parts() == key_hint::plain(KeyCode::F(8)).parts()
+            }));
 
         let mut chat = ChatKeymap {
             toggle_voice: if voice_toggle_default_is_shadowed {
@@ -1496,11 +1495,10 @@ impl RuntimeKeymap {
                     &keymap.global,
                     alias,
                     ConfiguredAliasMatch::Exact,
-                )
-                    || chords.bindings.iter().any(|chord| {
-                        chord.action.context.overlaps(KeymapContext::Agents)
-                            && bindings.contains(&chord.chord.prefix)
-                    }))
+                ) || chords.bindings.iter().any(|chord| {
+                    chord.action.context.overlaps(KeymapContext::Agents)
+                        && bindings.contains(&chord.chord.prefix)
+                }))
             {
                 bindings.clear();
             }
@@ -2708,6 +2706,29 @@ fn configured_context_alias_is_used(
         return false;
     };
     keymap_value_contains_alias(&value, alias, alias_match)
+}
+
+fn configured_context_binding_is_used(context: &impl Serialize, binding: KeyBinding) -> bool {
+    let Ok(value) = serde_json::to_value(context) else {
+        return false;
+    };
+    keymap_value_contains_binding(&value, binding)
+}
+
+fn keymap_value_contains_binding(value: &serde_json::Value, binding: KeyBinding) -> bool {
+    match value {
+        serde_json::Value::String(value) => parse_keybinding(value)
+            .is_some_and(|configured| configured.normalized_parts() == binding.normalized_parts()),
+        serde_json::Value::Array(values) => values
+            .iter()
+            .any(|value| keymap_value_contains_binding(value, binding)),
+        serde_json::Value::Object(values) => values
+            .values()
+            .any(|value| keymap_value_contains_binding(value, binding)),
+        serde_json::Value::Bool(_) | serde_json::Value::Number(_) | serde_json::Value::Null => {
+            false
+        }
+    }
 }
 
 fn keymap_value_contains_alias(

@@ -1,13 +1,13 @@
 ---
 source: tui/src/markdown_render/preferences_tests.rs
-expression: rendered
+expression: snapshot
 ---
-> ```md
-> Intro
-> 
-> | A | B |
-> |---|---|
-> | a | b |
-> 
-> > literal
-> ```
+│ ```md
+│ Intro
+│
+│ | A | B |
+│ |---|---|
+│ | a | b |
+│
+│ > literal
+│ ```

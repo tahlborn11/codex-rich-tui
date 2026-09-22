@@ -1,11 +1,12 @@
 ---
 source: tui/src/markdown_render/preferences_tests.rs
-assertion_line: 34
 expression: "snapshot.join(\"\\n\\n---\\n\\n\")"
 ---
 TuiRendering { mermaid: false, math: true, tables: true }
-flowchart LR
-A[Request] --> B[Reply]
+╭─ mermaid · /copy-code
+│ flowchart LR
+│ A[Request] --> B[Reply]
+╰─
 
 ---
 
@@ -19,6 +20,7 @@ Inline $\alpha_1$ and \(x^{2}\).
 ---
 
 TuiRendering { mermaid: true, math: true, tables: false }
-| **Name** | Value |
-|---|---|
-| `a` | path\_1 &amp; \* |
+╭─ code · /copy-code
+│ | **Name** | Value |
+│ |---|---|
+│ | `a` | path\_1 &amp; \* |

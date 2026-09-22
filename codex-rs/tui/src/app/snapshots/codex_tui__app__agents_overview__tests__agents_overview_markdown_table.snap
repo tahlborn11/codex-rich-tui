@@ -20,7 +20,7 @@ expression: "normalize_agent_center_snapshot(render_bottom_popup(&app.chat_widge
                                                       │ Model: Unknown
                                                       │
                                                       │ Prompt
-                                                      │ long prompt long prompt long prompt
+                                                      │ ╭─ code ────────── copy · /copy-code ╮
                                                       │ …
                                                       │
                                                       │

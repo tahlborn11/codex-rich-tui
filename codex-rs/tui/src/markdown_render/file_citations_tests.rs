@@ -50,12 +50,13 @@ fn file_url_citation_preserves_literal_query_delimiters_snapshot() {
 fn file_citations_inside_code_existing_links_and_html_remain_literal() {
     let citation = r#":codex-file-citation{path="/tmp/report.xlsx" purpose="output"}"#;
 
-    for markdown in [
-        format!("`{citation}`"),
-        format!("```text\n{citation}\n```\n"),
-    ] {
-        assert_eq!(rendered_text(&markdown, /*cwd*/ None), citation);
-    }
+    assert_eq!(
+        rendered_text(&format!("`{citation}`"), /*cwd*/ None),
+        citation
+    );
+    let fenced = rendered_text(&format!("```text\n{citation}\n```\n"), /*cwd*/ None);
+    assert!(fenced.contains(citation));
+    assert!(fenced.starts_with("╭─ text"));
     for markdown in [
         format!("<span title='{citation}'>"),
         format!("<!-- {citation} -->"),

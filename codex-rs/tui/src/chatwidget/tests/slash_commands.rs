@@ -2485,7 +2485,9 @@ async fn slash_copy_code_copies_a_single_block_without_opening_picker() {
 
     chat.copy_code_block_or_show_picker_with(|code| {
         assert_eq!(code, "Write-Output value  \r\n");
-        Ok(Some(crate::clipboard_copy::ClipboardLease::test()))
+        Ok(crate::clipboard_copy::CopyOutcome::Copied(Some(
+            crate::clipboard_copy::ClipboardLease::test(),
+        )))
     });
 
     assert!(chat.clipboard_lease.is_some());

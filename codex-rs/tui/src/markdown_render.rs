@@ -2663,9 +2663,9 @@ mod tests {
         assert_eq!(
             source.styled_range(0..source.text.len()),
             Line::from(vec![
-                "block quote with ".green(),
-                "content".green().bold(),
-                " that should wrap nicely".green(),
+                "block quote with ".into(),
+                "content".bold(),
+                " that should wrap nicely".into(),
             ])
         );
         let lines: Vec<_> = rendered.iter().map(|line| line.line.to_string()).collect();

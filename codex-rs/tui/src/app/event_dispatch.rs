@@ -1885,11 +1885,6 @@ impl App {
                 self.persist_active_auto_selection(crate::auto_selection::AutoSelection::Auto)
                     .await;
             }
-            AppEvent::UpdatePersonality(personality) => {
-                self.on_update_personality(personality);
-                self.sync_active_thread_personality_setting(app_server, personality)
-                    .await;
-            }
             AppEvent::RealtimeWebrtcOfferCreated {
                 thread_id,
                 attempt_id,

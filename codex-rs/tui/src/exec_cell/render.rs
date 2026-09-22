@@ -449,7 +449,10 @@ impl ExecCell {
         self.group
             .calls
             .iter()
-            .flat_map(|call| self.command_call_display_lines_with_hidden_details(width, call).lines)
+            .flat_map(|call| {
+                self.command_call_display_lines_with_hidden_details(width, call)
+                    .lines
+            })
             .collect()
     }
 

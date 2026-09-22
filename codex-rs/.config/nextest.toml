@@ -52,6 +52,16 @@ filter = 'package(codex-exec) & test(worktree_start_and_fork_use_host_pool_and_p
 slow-timeout = { period = "30s", terminate-after = 4 }
 
 [[profile.default.overrides]]
+# This case exercises eight model-picker variants, each with a fresh embedded app server.
+filter = 'package(codex-tui) & test(=app::tests::fresh_sparkle_tests::astra_picker_confirms_the_model_at_application_after_an_automatic_update)'
+slow-timeout = { period = "1m", terminate-after = 2 }
+
+[[profile.default.overrides]]
+# These table-driven cases start an embedded app server for every defaults/history variant.
+filter = 'package(codex-tui) & (test(=app::agents_overview::tests::actions::lifecycle_removes_background_and_current_tasks_without_losing_the_dashboard) | test(=app::agents_overview::tests::overview_cold_resume_honors_working_directory_selection) | test(=app::tests::background_task_defaults_tests::command_center_new_preserves_explicit_choices_and_managed_defaults) | test(=app::tests::background_task_defaults_tests::command_center_new_reads_server_defaults_for_actual_destination) | test(=app::tests::session_lifecycle_requests::local_daemon_registers_approval_gated_mcp_tools_for_both_start_paths) | test(=app::tests::session_lifecycle_requests::local_mcp_respects_configured_servers_and_managed_requirements) | test(=app::tests::session_lifecycle_requests::new_session_tests::replacement_preserves_remote_launch_paths_and_older_servers) | test(=app::tests::session_lifecycle_requests::new_session_tests::replacement_uses_server_defaults_and_preserves_explicit_launch_settings) | test(=app::tests::session_lifecycle_requests::command_center_read_only_open_requests_and_failure_preservation) | test(=app::tests::session_lifecycle_requests::startup_defaults_tests::fresh_startup_uses_server_defaults_with_explicit_and_managed_precedence) | test(=app::tests::unavailable_commands::unavailable_thread_new_and_clear_start_a_writable_session) | test(=app_server_session::reasoning_defaults_tests::embedded_reasoning_defaults_reach_responses) | test(=app_server_session::rollout_history::tests::cached_legacy_resume_revalidates_history_across_migration_settings))'
+slow-timeout = { period = "1m", terminate-after = 4 }
+
+[[profile.default.overrides]]
 filter = 'test(approval_matrix_covers_all_modes)'
 slow-timeout = { period = "30s", terminate-after = 2 }
 

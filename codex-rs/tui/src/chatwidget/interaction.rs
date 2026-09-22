@@ -452,7 +452,7 @@ impl ChatWidget {
 
     pub(super) fn copy_code_block_or_show_picker_with(
         &mut self,
-        copy_fn: impl FnOnce(&str) -> Result<Option<crate::clipboard_copy::ClipboardLease>, String>,
+        copy_fn: impl FnOnce(&str) -> Result<crate::clipboard_copy::CopyOutcome, String>,
     ) {
         let Some(markdown) = self.transcript.last_agent_markdown.as_deref() else {
             self.copy_last_agent_code_block_with(copy_fn);

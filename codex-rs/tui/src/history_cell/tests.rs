@@ -675,7 +675,7 @@ fn unified_exec_interaction_cell_renders_wait_like_completed_command() {
         String::new(),
     );
 
-    let lines = cell.display_lines(/*width*/ 72);
+    let lines = cell.transcript_lines(/*width*/ 72);
     let foreground_colors = lines
         .iter()
         .flat_map(|line| &line.spans)
@@ -722,7 +722,7 @@ fn unified_exec_interaction_cell_wraps_wait_command_with_rails() {
         String::new(),
     );
 
-    let lines = render_lines(&cell.display_lines(/*width*/ 34));
+    let lines = render_lines(&cell.transcript_lines(/*width*/ 34));
     assert_eq!(
         lines,
         vec![

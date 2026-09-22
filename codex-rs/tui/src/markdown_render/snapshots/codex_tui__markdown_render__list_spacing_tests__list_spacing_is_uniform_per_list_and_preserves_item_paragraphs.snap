@@ -29,10 +29,10 @@ Compact:
     - Small
 - Other
 
-> - Quote
-> - This quoted item has
->   enough words to wrap
-> - End
+│ - Quote
+│ - This quoted item has
+│   enough words to wrap
+│ - End
 
 ---
 
@@ -43,12 +43,12 @@ Uniform:
 
 - Other
 
-> - Quote
->
-> - This quoted item has
->   enough words to wrap
->
-> - End
+│ - Quote
+│
+│ - This quoted item has
+│   enough words to wrap
+│
+│ - End
 
 ---
 
@@ -74,23 +74,29 @@ Uniform:
 
 Compact:
 - One
--
-  code
+- ╭─ text · /copy-code
+  │ code
+  ╰─
 - Three
 
-  after paragraph
+  ╭─ text · /copy-code
+  │ after paragraph
+  ╰─
 
 ---
 
 Uniform:
 - One
 
--
-  code
+- ╭─ text · /copy-code
+  │ code
+  ╰─
 
 - Three
 
-  after paragraph
+  ╭─ text · /copy-code
+  │ after paragraph
+  ╰─
 
 ---
 

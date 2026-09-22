@@ -28,7 +28,9 @@ Unsupported: $\begin{matrix}a&b\end{matrix}$.
 
 Code: $\alpha$; money: $5.00 and $10.00; shell: $HOME.
 
-\frac{a}{b}
+╭─ latex ─────────────────────────────────────────────────── copy · /copy-code ╮
+│ \frac{a}{b}                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
 
 Shell examples: $HOME and echo $$.
 
