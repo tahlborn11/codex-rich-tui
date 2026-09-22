@@ -1,6 +1,5 @@
 ---
 source: tui/src/streaming/render_tests.rs
-assertion_line: 115
 expression: render.lines
 ---
 [
@@ -79,32 +78,32 @@ expression: render.lines
     },
     HyperlinkLine {
         line: Line::from_iter([
-            Span::from("╭─ ").dim(),
-            Span::from("rust").bold(),
-            Span::from(" ").dim(),
-            Span::from("────────────────────").dim(),
-            Span::from(" copy · /copy-code ╮").dim(),
+            Span::from("╭─ ").bg(Color::Rgb(48, 48, 48)).dim(),
+            Span::from("rust").bg(Color::Rgb(48, 48, 48)).bold(),
+            Span::from(" ").bg(Color::Rgb(48, 48, 48)).dim(),
+            Span::from("────────────────────").bg(Color::Rgb(48, 48, 48)).dim(),
+            Span::from(" copy · /copy-code ╮").bg(Color::Rgb(48, 48, 48)).dim(),
         ]),
         hyperlinks: [],
     },
     HyperlinkLine {
         line: Line::from_iter([
-            Span::from("│ ").dim(),
-            Span::from("fn").fg(Color::Rgb(203, 166, 247)),
-            Span::from(" ").fg(Color::Rgb(205, 214, 244)),
-            Span::from("main").fg(Color::Rgb(137, 180, 250)),
-            Span::from("(").fg(Color::Rgb(147, 153, 178)),
-            Span::from(")").fg(Color::Rgb(147, 153, 178)),
-            Span::from(" ").fg(Color::Rgb(205, 214, 244)),
-            Span::from("{").fg(Color::Rgb(147, 153, 178)),
-            Span::from("}").fg(Color::Rgb(147, 153, 178)),
-            Span::from("                                 "),
-            Span::from("│").dim(),
+            Span::from("│ ").bg(Color::Rgb(48, 48, 48)).dim(),
+            Span::from("fn").fg(Color::Rgb(203, 166, 247)).bg(Color::Rgb(48, 48, 48)),
+            Span::from(" ").fg(Color::Rgb(205, 214, 244)).bg(Color::Rgb(48, 48, 48)),
+            Span::from("main").fg(Color::Rgb(137, 180, 250)).bg(Color::Rgb(48, 48, 48)),
+            Span::from("(").fg(Color::Rgb(147, 153, 178)).bg(Color::Rgb(48, 48, 48)),
+            Span::from(")").fg(Color::Rgb(147, 153, 178)).bg(Color::Rgb(48, 48, 48)),
+            Span::from(" ").fg(Color::Rgb(205, 214, 244)).bg(Color::Rgb(48, 48, 48)),
+            Span::from("{").fg(Color::Rgb(147, 153, 178)).bg(Color::Rgb(48, 48, 48)),
+            Span::from("}").fg(Color::Rgb(147, 153, 178)).bg(Color::Rgb(48, 48, 48)),
+            Span::from("                                 ").bg(Color::Rgb(48, 48, 48)),
+            Span::from("│").bg(Color::Rgb(48, 48, 48)).dim(),
         ]),
         hyperlinks: [],
     },
     HyperlinkLine {
-        line: Line::from(Span::from("╰──────────────────────────────────────────────╯").dim()),
+        line: Line::from(Span::from("╰──────────────────────────────────────────────╯").bg(Color::Rgb(48, 48, 48)).dim()),
         hyperlinks: [],
     },
     HyperlinkLine {

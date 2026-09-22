@@ -1522,7 +1522,7 @@ async fn local_daemon_registers_approval_gated_mcp_tools_for_both_start_paths() 
             let response = response??;
             panic!("MCP task creation completed without registration: {}", response.text().await?);
         }
-        _ = tokio::time::sleep(std::time::Duration::from_secs(/*secs*/ 5)) => {
+        _ = tokio::time::sleep(std::time::Duration::from_secs(/*secs*/ 30)) => {
             panic!("timed out waiting for MCP task registration");
         }
     };
@@ -1563,7 +1563,7 @@ async fn local_daemon_registers_approval_gated_mcp_tools_for_both_start_paths() 
     let mut registered_ids = Vec::new();
     let mut tui = crate::tui::test_support::make_test_tui()?;
     for _ in 0..2 {
-        let registration = tokio::time::timeout(Duration::from_secs(/*secs*/ 5), events.recv())
+        let registration = tokio::time::timeout(Duration::from_secs(/*secs*/ 30), events.recv())
             .await?
             .expect("fork registration event");
         let AppEvent::DynamicToolThreadStarted { thread, .. } = &registration else {

@@ -51,7 +51,7 @@ impl HistoryCell for UnifiedExecInteractionCell {
                 .as_ref()
                 .filter(|command| !command.is_empty())
             else {
-                return vec![header];
+                return vec![header.into()];
             };
 
             let command_lines = command
@@ -97,7 +97,7 @@ impl HistoryCell for UnifiedExecInteractionCell {
                 }
             }
 
-            let mut out = vec![header];
+            let mut out = vec![header.into()];
             let mut continuation_lines =
                 prefix_lines(continuation_lines, "  │ ".dim(), "  │ ".dim());
             if let Some(last) = continuation_lines.last_mut()
@@ -105,7 +105,7 @@ impl HistoryCell for UnifiedExecInteractionCell {
             {
                 *prefix = "  └ ".dim();
             }
-            out.extend(continuation_lines);
+            out.extend(continuation_lines.into_iter().map(HyperlinkLine::from));
             return out;
         }
 

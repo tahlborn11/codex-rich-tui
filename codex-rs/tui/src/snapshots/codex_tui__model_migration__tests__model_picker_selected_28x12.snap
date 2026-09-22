@@ -3,7 +3,7 @@ source: tui/src/model_migration.rs
 expression: rendered
 ---
 
-  # Introducing gpt-new
+  Introducing gpt-new
 
   A faster coding model
   with better reasoning.
