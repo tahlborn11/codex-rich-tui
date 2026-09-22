@@ -5,7 +5,6 @@ expression: rendered_cases.map(visible_lines)
 [
     [
         Line::from_iter([
-            Span::from("# ").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
             Span::from("Output").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
         ]),
         Line::default(),
@@ -18,7 +17,6 @@ expression: rendered_cases.map(visible_lines)
     ],
     [
         Line::from_iter([
-            Span::from("# ").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
             Span::from("Output").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
         ]),
         Line::default(),
