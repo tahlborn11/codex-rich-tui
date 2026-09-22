@@ -356,6 +356,17 @@ just install-rich-tui-local
 codex-rich --version
 ```
 
+After the installed build passes its smoke test, inspect the generated artifacts:
+
+```bash
+du -sh codex-rs/target/* codex-rs/target/aarch64-apple-darwin/* 2>/dev/null | sort -h
+```
+
+Remove stale release profiles, large incremental directories, and `codex-rs/target/codex-rich-*`
+package directories. Keep the signed package in `~/.local/share/codex-rich-tui`. Keep current
+dependency caches when faster future builds are worth their disk use. Report the removed paths and
+the reclaimed space after the sweep.
+
 After validation, push the merged `main` branch:
 
 ```bash
