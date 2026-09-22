@@ -6,7 +6,6 @@ expression: rendered_cases
     [
         HyperlinkLine {
             line: Line::from_iter([
-                Span::from("# ").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
                 Span::from("Output").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
             ]),
             hyperlinks: [],
@@ -34,7 +33,6 @@ expression: rendered_cases
     [
         HyperlinkLine {
             line: Line::from_iter([
-                Span::from("# ").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
                 Span::from("Output").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
             ]),
             hyperlinks: [],

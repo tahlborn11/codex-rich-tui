@@ -214,7 +214,7 @@ async fn mcp_startup_complete_does_not_clear_running_task() {
     take_terminal_title_writes();
     notify_mcp_status(&mut chat, "schaltwerk", McpServerStartupState::Ready);
 
-    assert_eq!(take_terminal_title_writes(), vec!["project".to_string()]);
+    assert_eq!(take_terminal_title_writes(), vec!["⠋ project".to_string()]);
     assert!(chat.bottom_pane.is_task_running());
     assert!(chat.bottom_pane.status_indicator_visible());
     assert_eq!(chat.status_state.current_status.header, "Working");
