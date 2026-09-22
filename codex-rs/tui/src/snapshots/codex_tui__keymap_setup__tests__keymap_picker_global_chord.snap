@@ -17,6 +17,7 @@ expression: "render_picker(params, 120)"
   Global         Focus Activity             f4
   Global         Open External Editor       ctrl-g
   Global         Copy                       ctrl-o
+  Global         Copy Code                  alt-y
   Global         Clear Terminal             ctrl-l
   Global       - Toggle Vim Mode            unbound
   Global         Toggle Raw Output          alt-r
