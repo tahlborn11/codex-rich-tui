@@ -37,10 +37,21 @@ impl App {
         let Some(completion) = tui.clipboard.poll() else {
             return;
         };
+        if let Some(redraw_after) = self
+            .overlay
+            .as_mut()
+            .and_then(|overlay| overlay.finish_clipboard(completion))
+        {
+            if !redraw_after.is_zero() {
+                tui.frame_requester().schedule_frame_in(redraw_after);
+            }
+            return;
+        }
         if let Some(characters) = self.chat_widget.finish_clipboard(completion, current) {
             self.transcript_view
                 .show_copy_feedback(&completion.1, characters);
         }
+        let _ = self.transcript_view.finish_code_copy(completion, current);
         let follow = self
             .transcript_view
             .finish_copy(&self.transcript_cells, completion, current);

@@ -11,6 +11,7 @@ mod composer_gap;
 mod disclosure;
 mod follow_control;
 mod footer;
+mod inline_control;
 mod input;
 mod layout;
 mod mutations;
@@ -88,6 +89,7 @@ pub(crate) struct TranscriptView {
     pub(crate) copy_on_select: bool,
     position: Position,
     follow_control: follow_control::FollowControl,
+    inline_control: inline_control::InlineControlState,
     copy_feedback: Option<composer_gap::CopyFeedback>,
     composer_tip: Option<(Rect, HyperlinkLine)>,
     turn_tip_key: Option<EntryKey>,
@@ -120,6 +122,7 @@ impl Default for TranscriptView {
             copy_on_select: false,
             position: Position::Latest,
             follow_control: follow_control::FollowControl::default(),
+            inline_control: inline_control::InlineControlState::default(),
             copy_feedback: None,
             composer_tip: None,
             turn_tip_key: None,
@@ -236,6 +239,7 @@ impl TranscriptView {
             };
             let row_area = Rect::new(area.x, y, area.width, /*height*/ 1);
             layout.render(row_area, buf, row);
+            self.render_inline_control(&layout, row, row_area, buf, key);
             self.render_disclosure(&activity_ids, &layout, row, row_area, buf);
             if self.highlight == Some(index) && self.selection.is_none() && !self.search.is_active()
             {

@@ -93,6 +93,16 @@ impl Overlay {
         result
     }
 
+    pub(crate) fn finish_clipboard(
+        &mut self,
+        completion: &(u64, crate::clipboard_copy::worker::CopyResult),
+    ) -> Option<std::time::Duration> {
+        match self {
+            Self::Transcript(overlay) => overlay.finish_clipboard(completion),
+            Self::Static(_) | Self::Analytics(_) => None,
+        }
+    }
+
     pub(crate) fn is_done(&self) -> bool {
         match self {
             Overlay::Transcript(o) => o.is_done(),

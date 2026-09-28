@@ -7,6 +7,7 @@ use crate::render::highlight::MAX_HIGHLIGHT_LINE_BYTES;
 use crate::render::highlight::StreamingCodeHighlighter;
 use crate::render::highlight::syntax_theme_revision;
 use crate::terminal_hyperlinks::HyperlinkLine;
+use crate::terminal_hyperlinks::LineControlAction;
 use crate::terminal_hyperlinks::LogicalLineSource;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -167,6 +168,22 @@ impl OpenCodeFence {
             })
             .collect();
         Some((self, lines))
+    }
+
+    /// Keep the retained header's copy action aligned with the append-only source.
+    pub(super) fn refresh_copy_control(&self, lines: &mut [HyperlinkLine], raw_source: &str) {
+        let Some(text) = raw_source.get(self.content_start..self.source_len) else {
+            return;
+        };
+        let Some(action) = lines.iter_mut().rev().find_map(|line| {
+            line.source
+                .as_mut()
+                .and_then(|source| source.control.as_mut())
+                .map(|control| &mut control.action)
+        }) else {
+            return;
+        };
+        *action = LineControlAction::CopyCode(Arc::from(text));
     }
 }
 

@@ -529,6 +529,13 @@ impl App {
         let copy_on_select = matches!(action, ViewAction::CopyOnSelect(_));
         match action {
             ViewAction::Changed => {}
+            ViewAction::CopyCode(text) => {
+                let result = tui
+                    .copy_transcript_selection(&text, crate::clipboard_copy::CopyFormat::PlainText);
+                self.transcript_view
+                    .show_copy_feedback(&result, text.chars().count());
+                let _ = self.transcript_view.show_code_copy_result(&result);
+            }
             ViewAction::Copy(text)
             | ViewAction::CopyOnSelect(text)
             | ViewAction::CopyAndFollow(text) => {

@@ -19,6 +19,7 @@ use super::*;
 pub(crate) enum ViewAction {
     Changed,
     Copy(String),
+    CopyCode(Arc<str>),
     CopyOnSelect(String),
     CopyAndFollow(String),
     OpenLink(String),
@@ -192,6 +193,9 @@ impl TranscriptView {
         cells: &[Arc<dyn HistoryCell>],
     ) -> Option<ViewAction> {
         if let Some(action) = self.handle_follow_control_mouse(event) {
+            return Some(action);
+        }
+        if let Some(action) = self.handle_inline_control_mouse(event) {
             return Some(action);
         }
         if event.kind == MouseEventKind::Down(MouseButton::Left)

@@ -11,7 +11,7 @@ expression: "normalize_agent_center_snapshot(render_bottom_popup(&app.chat_widge
                                                       │ ○ Ready
                                                       │
                                                       │ Last message
-                                                      │ ╭─ code ────────── copy · /copy-code ╮
+                                                      │ ╭─ code ────────────────────────── ⎘ ╮
                                                       │ │ let explanation = "A long code lin │
                                                       │ │ e should wrap inside the task deta │
                                                       │ │ ils panel.";                       │
@@ -22,7 +22,7 @@ expression: "normalize_agent_center_snapshot(render_bottom_popup(&app.chat_widge
                                                       │ Model: Unknown
                                                       │
                                                       │ Prompt
-                                                      │ ╭─ code ────────── copy · /copy-code ╮
+                                                      │ ╭─ code ────────────────────────── ⎘ ╮
                                                       │ …
                                                       │
   ? help  esc back  ↑/↓ move  enter open  n new

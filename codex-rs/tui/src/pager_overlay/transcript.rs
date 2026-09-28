@@ -171,18 +171,10 @@ impl TranscriptOverlay {
 
     pub(crate) fn handle_event(&mut self, tui: &mut tui::Tui, event: TuiEvent) -> Result<()> {
         if let Some(completion) = tui.clipboard.poll()
-            && let Some(follow) =
-                self.view
-                    .finish_copy(&self.cells, completion, /*current*/ true)
+            && let Some(redraw_after) = self.finish_clipboard(completion)
+            && !redraw_after.is_zero()
         {
-            self.notice = Some(match &completion.1 {
-                Ok(status) => status.message("selection"),
-                Err(error) => format!("Copy failed: {error}"),
-            });
-            if follow {
-                self.view.jump_to_latest();
-                self.is_done = self.browsing_footer.is_some();
-            }
+            tui.frame_requester().schedule_frame_in(redraw_after);
         }
         if matches!(event, TuiEvent::Resume) {
             self.view.end_drag();
@@ -230,6 +222,34 @@ impl TranscriptOverlay {
             tui.frame_requester().schedule_frame();
         }
         Ok(())
+    }
+
+    pub(crate) fn finish_clipboard(
+        &mut self,
+        completion: &(u64, crate::clipboard_copy::worker::CopyResult),
+    ) -> Option<std::time::Duration> {
+        if let Some(redraw_after) = self.view.finish_code_copy(completion, /*current*/ true) {
+            self.notice = Some(match &completion.1 {
+                Ok(crate::clipboard_copy::CopyStatus::Confirmed) => {
+                    "Copied! code block to clipboard".to_string()
+                }
+                Ok(status) => status.message("code block"),
+                Err(error) => format!("Copy failed: {error}"),
+            });
+            return Some(redraw_after);
+        }
+        let follow = self
+            .view
+            .finish_copy(&self.cells, completion, /*current*/ true)?;
+        self.notice = Some(match &completion.1 {
+            Ok(status) => status.message("selection"),
+            Err(error) => format!("Copy failed: {error}"),
+        });
+        if follow {
+            self.view.jump_to_latest();
+            self.is_done = self.browsing_footer.is_some();
+        }
+        Some(std::time::Duration::ZERO)
     }
 
     pub(crate) fn is_done(&self) -> bool {
@@ -443,6 +463,17 @@ impl TranscriptOverlay {
         let copy_on_select = matches!(action, ViewAction::CopyOnSelect(_));
         match action {
             ViewAction::Changed => {}
+            ViewAction::CopyCode(text) => {
+                let result = tui
+                    .copy_transcript_selection(&text, crate::clipboard_copy::CopyFormat::PlainText);
+                if let Some(redraw_after) = self.view.show_code_copy_result(&result) {
+                    tui.frame_requester().schedule_frame_in(redraw_after);
+                }
+                self.notice = Some(match result {
+                    Ok(status) => status.message("code block"),
+                    Err(error) => error,
+                });
+            }
             ViewAction::Copy(text)
             | ViewAction::CopyOnSelect(text)
             | ViewAction::CopyAndFollow(text) => {

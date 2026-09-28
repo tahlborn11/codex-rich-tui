@@ -1459,7 +1459,7 @@ async fn fullscreen_composer_mouse_copy_and_input_ownership() -> Result<()> {
     }
     assert_eq!(app.chat_widget.capture_thread_input_state(), draft);
     app.render_owned_transcript(&mut tui, size)?;
-    assert!(row_containing(&tui, "Copied 5 chars to host clipboard") < y);
+    assert!(row_containing(&tui, "Copied! 5 chars to host clipboard") < y);
     insta::assert_snapshot!(
         "fullscreen_composer_right_click_copy",
         format!(

@@ -49,6 +49,8 @@ use crate::render::line_utils::line_to_static;
 use crate::style::accent_color;
 use crate::style::table_separator_style;
 use crate::terminal_hyperlinks::HyperlinkLine;
+use crate::terminal_hyperlinks::LineControl;
+use crate::terminal_hyperlinks::LineControlAction;
 use crate::terminal_hyperlinks::remap_wrapped_line;
 use crate::terminal_hyperlinks::visible_lines;
 use crate::terminal_hyperlinks::web_destination;
@@ -73,6 +75,7 @@ use ratatui::text::Text;
 use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 mod code_panel;
 mod file_citations;
@@ -109,12 +112,11 @@ const TABLE_COLUMN_GAP: usize = 2;
 const TABLE_CELL_PADDING: usize = 1;
 const TABLE_HEADER_SEPARATOR_CHAR: char = '━';
 const TABLE_BODY_SEPARATOR_CHAR: char = '─';
-const CODE_BLOCK_COPY_HINT: &str = "copy · /copy-code";
-const COMPACT_CODE_BLOCK_COPY_HINT: &str = "/copy-code";
+const CODE_BLOCK_COPY_ICON: &str = "⎘";
 
 pub(crate) fn code_panel_supports_full_width(label: &str, width: usize) -> bool {
     let left_width = display_width(&format!("╭─ {label} "));
-    let right_width = display_width(&format!(" {CODE_BLOCK_COPY_HINT} ╮"));
+    let right_width = display_width(&format!(" {CODE_BLOCK_COPY_ICON} ╮"));
     width >= left_width + right_width
 }
 
@@ -497,6 +499,7 @@ struct Writer<'a, 'policy> {
     code_block_content_end: usize,
     code_block_chrome: CodeBlockChrome,
     code_panel_full_width: bool,
+    code_panel_header_line: Option<usize>,
     code_block_fence: Option<FenceDelimiter>,
     details_depth: usize,
     details_summary_open: bool,
@@ -511,6 +514,7 @@ struct Writer<'a, 'policy> {
     current_line_style: Style,
     current_line_in_code_block: bool,
     current_code_panel_line: CodePanelLine,
+    current_line_control: Option<LineControl>,
     table_state: Option<TableState>,
 }
 
@@ -545,6 +549,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             code_block_content_end: 0,
             code_block_chrome: CodeBlockChrome::Hidden,
             code_panel_full_width: false,
+            code_panel_header_line: None,
             code_block_fence: None,
             details_depth: 0,
             details_summary_open: false,
@@ -559,6 +564,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             current_line_style: Style::default(),
             current_line_in_code_block: false,
             current_code_panel_line: CodePanelLine::Hidden,
+            current_line_control: None,
             table_state: None,
         }
     }
@@ -877,9 +883,11 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         // text into the buffer for batch highlighting in end_codeblock().
         // Append verbatim — pulldown-cmark text events already contain the
         // original line breaks, so inserting separators would double them.
-        if self.in_code_block && self.code_block_lang.is_some() {
+        if self.in_code_block {
             self.code_block_buffer.push_str(&text);
-            return;
+            if self.code_block_lang.is_some() {
+                return;
+            }
         }
 
         if self.in_code_block && !self.needs_newline {
@@ -1228,10 +1236,13 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 if !uses_table_wrapper_syntax {
                     self.code_panel_full_width = self.code_panel_supports_full_width(&label);
                     let pending_marker_line = self.pending_marker_line;
-                    self.push_code_panel_line(
-                        self.code_panel_header(&label),
-                        CodePanelLine::Header,
-                    );
+                    let (header, columns) = self.code_panel_header(&label);
+                    self.push_code_panel_line(header, CodePanelLine::Header);
+                    self.current_line_control = Some(LineControl {
+                        columns,
+                        action: LineControlAction::CopyCode(Arc::from("")),
+                    });
+                    self.code_panel_header_line = Some(self.text.len());
                     // The panel header owns the list marker visually, while the first code row
                     // still needs that marker in copied Markdown.
                     self.pending_marker_line = pending_marker_line;
@@ -1282,33 +1293,33 @@ impl<'a, 'policy> Writer<'a, 'policy> {
     }
 
     fn end_codeblock(&mut self, range: Range<usize>) {
+        let code = std::mem::take(&mut self.code_block_buffer);
         // Completed Mermaid fences can replace source with a diagram; other blocks keep highlighting.
-        if let Some(lang) = self.code_block_lang.take() {
-            let code = std::mem::take(&mut self.code_block_buffer);
-            if !code.is_empty() {
-                let diagram = if preferences::current().mermaid
-                    && lang == "mermaid"
-                    && mermaid::has_closing_fence(self.input, range, self.code_block_content_end)
-                {
-                    let indent =
-                        Self::spans_display_width(&self.prefix_spans(self.pending_marker_line));
-                    Some(mermaid::render(
-                        &code,
-                        self.wrap_width.map(|width| width.saturating_sub(indent)),
-                        &current_syntax_theme(),
-                    ))
-                } else {
-                    None
-                };
-                let highlighted = match diagram {
-                    Some(diagram) => diagram,
-                    None => highlight_code_to_lines(&code, &lang),
-                };
-                for hl_line in highlighted {
-                    self.push_line(Line::default());
-                    for span in hl_line.spans {
-                        self.push_span(span);
-                    }
+        if let Some(lang) = self.code_block_lang.take()
+            && !code.is_empty()
+        {
+            let diagram = if preferences::current().mermaid
+                && lang == "mermaid"
+                && mermaid::has_closing_fence(self.input, range, self.code_block_content_end)
+            {
+                let indent =
+                    Self::spans_display_width(&self.prefix_spans(self.pending_marker_line));
+                Some(mermaid::render(
+                    &code,
+                    self.wrap_width.map(|width| width.saturating_sub(indent)),
+                    &current_syntax_theme(),
+                ))
+            } else {
+                None
+            };
+            let highlighted = match diagram {
+                Some(diagram) => diagram,
+                None => highlight_code_to_lines(&code, &lang),
+            };
+            for hl_line in highlighted {
+                self.push_line(Line::default());
+                for span in hl_line.spans {
+                    self.push_span(span);
                 }
             }
         }
@@ -1336,10 +1347,20 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             // final body row while the panel geometry is still active so streaming and finalized
             // renders use the same right edge.
             self.flush_current_line();
+            if let Some(header) = self
+                .code_panel_header_line
+                .take()
+                .and_then(|index| self.text.get_mut(index))
+                .and_then(|line| line.source.as_mut())
+                .and_then(|source| source.control.as_mut())
+            {
+                header.action = LineControlAction::CopyCode(Arc::from(code));
+            }
             if has_closing_fence {
                 self.push_code_panel_line(self.code_panel_footer(), CodePanelLine::Footer);
             }
         }
+        self.code_panel_header_line = None;
         self.code_block_chrome = CodeBlockChrome::Hidden;
         self.code_panel_full_width = false;
         self.needs_newline = true;
@@ -2493,6 +2514,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             let style = self.current_line_style;
             let mut source = crate::terminal_hyperlinks::LogicalLineSource::from_line(&line.line);
             source.copy = Some(std::sync::Arc::new(std::mem::take(&mut self.copy_line)));
+            let line_control = self.current_line_control.take();
             line.source = Some(source.clone());
             if self.current_code_panel_line == CodePanelLine::Body
                 && let Some(width) = self.wrap_width
@@ -2563,6 +2585,10 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                         hyperlink.columns.start + shift..hyperlink.columns.end + shift;
                 }
                 line.line = Line::from_iter(spans);
+                source.control = line_control.map(|mut control| {
+                    control.columns = control.columns.start + shift..control.columns.end + shift;
+                    control
+                });
                 self.finish_code_panel_line(&mut line.line, panel_span_start);
                 if matches!(
                     self.current_code_panel_line,
@@ -2679,29 +2705,38 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             .map(|width| width.saturating_sub(prefix_width))
     }
 
-    fn code_panel_header(&self, label: &str) -> Line<'static> {
+    fn code_panel_header(&self, label: &str) -> (Line<'static>, Range<usize>) {
         if !self.code_panel_full_width {
-            return vec![
-                "╭─ ".dim(),
-                label.to_string().bold(),
-                " · ".dim(),
-                COMPACT_CODE_BLOCK_COPY_HINT.dim(),
-            ]
-            .into();
+            let prefix = format!("╭─ {label} · ");
+            let start = display_width(&prefix);
+            return (
+                vec![
+                    "╭─ ".dim(),
+                    label.to_string().bold(),
+                    " · ".dim(),
+                    CODE_BLOCK_COPY_ICON.dim(),
+                ]
+                .into(),
+                start..start + display_width(CODE_BLOCK_COPY_ICON),
+            );
         }
         let width = self.code_panel_width().unwrap_or_default();
 
         let left = format!("╭─ {label} ");
-        let right = format!(" {CODE_BLOCK_COPY_HINT} ╮");
+        let right = format!(" {CODE_BLOCK_COPY_ICON} ╮");
         let fill = width.saturating_sub(display_width(&left) + display_width(&right));
-        vec![
-            "╭─ ".dim(),
-            label.to_string().bold(),
-            " ".dim(),
-            "─".repeat(fill).dim(),
-            right.dim(),
-        ]
-        .into()
+        let start = display_width(&left) + fill + 1;
+        (
+            vec![
+                "╭─ ".dim(),
+                label.to_string().bold(),
+                " ".dim(),
+                "─".repeat(fill).dim(),
+                right.dim(),
+            ]
+            .into(),
+            start..start + display_width(CODE_BLOCK_COPY_ICON),
+        )
     }
 
     fn code_panel_footer(&self) -> Line<'static> {
@@ -3032,7 +3067,7 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "╭─ code · /copy-code".to_string(),
+                "╭─ code · ⎘".to_string(),
                 "│ fn main(".to_string(),
                 "│ ) { prin".to_string(),
                 "│ tln!(\"hi".to_string(),
@@ -3095,7 +3130,7 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "╭─ rust · /copy-code".to_string(),
+                "╭─ rust · ⎘".to_string(),
                 "│ fn main() {}".to_string(),
                 "│     line2".to_string(),
                 "╰─".to_string(),
