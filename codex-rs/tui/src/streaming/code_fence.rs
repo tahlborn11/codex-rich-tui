@@ -162,6 +162,9 @@ impl OpenCodeFence {
                 for span in &mut line.spans {
                     span.style = span.style.patch(panel_style);
                 }
+                if self.panel_full_width {
+                    line.style = line.style.patch(panel_style);
+                }
                 let mut line = HyperlinkLine::new(line);
                 line.source = Some(source);
                 line

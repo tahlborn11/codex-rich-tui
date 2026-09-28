@@ -1403,6 +1403,39 @@ fn fenced_code_panel_wraps_long_rows_inside_the_background_and_rails() {
 }
 
 #[test]
+fn fenced_code_panel_root_rows_keep_background_through_the_right_rail() {
+    let text = crate::terminal_palette::with_test_default_colors(
+        crate::terminal_probe::DefaultColors {
+            fg: (220, 220, 220),
+            bg: (20, 20, 20),
+        },
+        || {
+            render_markdown_text_with_width(
+                "```csharp\nvar response = await cashflows.RetrieveCashflowsAsync(\n    new RetrieveCashflowsV2Request\n    {\n        FinancialInstrumentId = financialInstrumentId,\n    },\n    cancellationToken\n);\n```\n",
+                Some(106),
+            )
+        },
+    );
+    let panel_background = crate::terminal_palette::with_test_default_colors(
+        crate::terminal_probe::DefaultColors {
+            fg: (220, 220, 220),
+            bg: (20, 20, 20),
+        },
+        || crate::style::user_message_style().bg,
+    );
+
+    assert!(text.lines[1..text.lines.len() - 1]
+        .iter()
+        .all(|line| line.style.bg == panel_background));
+    let lines = plain_lines(&text);
+    assert!(lines.iter().all(|line| display_width(line) == 106));
+    assert!(lines[1..lines.len() - 1]
+        .iter()
+        .all(|line| line.ends_with('│')));
+    assert_debug_snapshot!("fenced_code_panel_background_and_rail", text.lines);
+}
+
+#[test]
 fn code_block_unknown_lang_plain() {
     let text = render_markdown_text("```xyzlang\nhello world\n```\n");
     let content: Vec<String> = text

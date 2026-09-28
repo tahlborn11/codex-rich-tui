@@ -2553,7 +2553,8 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                         source.continuation_indent = subsequent_indent.clone().into();
                     }
                     self.finish_code_panel_line(&mut wrapped_line.line, panel_span_start);
-                    self.push_output_line(wrapped_line.style(style));
+                    let line_style = style.patch(wrapped_line.line.style);
+                    self.push_output_line(wrapped_line.style(line_style));
                 }
             } else if !self.current_line_in_code_block
                 && self.current_code_panel_line == CodePanelLine::Hidden
@@ -2600,7 +2601,8 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                     source.continuation_indent = Line::default();
                 }
                 line.source = Some(source);
-                self.push_output_line(line.style(style));
+                let line_style = style.patch(line.line.style);
+                self.push_output_line(line.style(line_style));
             }
             self.current_initial_indent.clear();
             self.current_subsequent_indent.clear();
@@ -2763,6 +2765,13 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         }
 
         let panel_style = crate::style::user_message_style();
+        let prefix_width =
+            Self::spans_display_width(&line.spans[..panel_span_start.min(line.spans.len())]);
+        if self.code_panel_full_width && prefix_width == 0 {
+            // Root panels span the transcript width. Paint the row itself so a retained or
+            // reflowed gap cannot expose the terminal background between code and the right rail.
+            line.style = line.style.patch(panel_style);
+        }
         if self.current_code_panel_line == CodePanelLine::Body
             && self.code_panel_full_width
             && let Some(width) = self.wrap_width
