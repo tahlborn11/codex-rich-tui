@@ -177,6 +177,7 @@ impl StreamingRender {
             && let Some((fence, lines)) = fence.append(raw_source, committed_source)
         {
             self.lines.extend(lines);
+            fence.refresh_copy_control(&mut self.lines, raw_source);
             self.open_code_fence = Some(fence);
             return;
         }

@@ -32,6 +32,8 @@ use crate::line_truncation::truncate_line_to_width;
 use crate::markdown_copy::table::TableLine;
 use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_hyperlinks::HyperlinkParagraph;
+use crate::terminal_hyperlinks::LineControl;
+use crate::terminal_hyperlinks::LineControlAction;
 use crate::terminal_hyperlinks::LineWrapPolicy;
 use crate::terminal_hyperlinks::LogicalLineSource;
 use crate::terminal_hyperlinks::ReaderLink;
@@ -83,6 +85,7 @@ struct TextRow {
     prefix_columns: usize,
     marker_only: bool,
     tabs: tabs::TabStops,
+    control: Option<LineControl>,
 }
 
 pub(super) struct TableCellHit {
@@ -374,6 +377,7 @@ impl TextLayout {
                 prefix_columns: indent,
                 marker_only: false,
                 tabs: tabs::TabStops::default(),
+                control: None,
             },
         );
     }
@@ -700,6 +704,21 @@ impl TextLayout {
         row.first_column as u16..line_width(&row.line.line).min(usize::from(self.width)) as u16
     }
 
+    pub(super) fn control_at(&self, row: usize, column: u16) -> Option<LineControlAction> {
+        let control = self.rows.get(row)?.control.as_ref()?;
+        control
+            .columns
+            .contains(&usize::from(column))
+            .then(|| control.action.clone())
+    }
+
+    pub(super) fn control_columns(&self, row: usize) -> Option<Range<u16>> {
+        let columns = self.rows.get(row)?.control.as_ref()?.columns.clone();
+        let start = u16::try_from(columns.start).ok()?.min(self.width);
+        let end = u16::try_from(columns.end).ok()?.min(self.width);
+        (start < end).then_some(start..end)
+    }
+
     /// Paint visible rows, including inherited styles on empty rows and trailing columns.
     pub(crate) fn render(&self, area: Rect, buf: &mut Buffer, start_row: usize) {
         for (screen_row, row) in self.visible_rows(area, start_row) {
@@ -1015,7 +1034,9 @@ fn table_cell_intersection(ranges: &[Range<usize>], within: &Range<usize>) -> Op
 fn layout_line(logical: &LogicalLine, text_start: usize, width: u16) -> Vec<TextRow> {
     let content_width = width.saturating_sub(logical.right_reserve).max(/*other*/ 1);
     let mut logical = Cow::Borrowed(logical);
-    if line_width(&logical.initial_indent) >= usize::from(content_width)
+    if (line_width(&logical.initial_indent) == usize::from(content_width)
+        && !logical.origin.range.is_empty())
+        || line_width(&logical.initial_indent) > usize::from(content_width)
         || line_width(&logical.subsequent_indent) >= usize::from(content_width)
     {
         let logical = logical.to_mut();
@@ -1060,7 +1081,8 @@ fn layout_line(logical: &LogicalLine, text_start: usize, width: u16) -> Vec<Text
         .into_iter()
         .zip(positions)
         .zip(tab_stops)
-        .map(|((mut wrapped, (source, prefix_bytes)), tabs)| {
+        .enumerate()
+        .map(|(index, ((mut wrapped, (source, prefix_bytes)), tabs))| {
             wrapped.line.alignment = line.line.alignment;
             for link in &mut wrapped.hyperlinks {
                 link.columns = tabs.project_link(link.columns.clone());
@@ -1094,6 +1116,9 @@ fn layout_line(logical: &LogicalLine, text_start: usize, width: u16) -> Vec<Text
                         .as_ref()
                         .is_some_and(|copy| copy.has_list_marker()),
                 tabs,
+                control: (index == 0)
+                    .then(|| logical.origin.control.clone())
+                    .flatten(),
             }
         })
         .collect()

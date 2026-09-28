@@ -683,7 +683,8 @@ impl TranscriptView {
             | ViewAction::CopyOnSelect(text)
             | ViewAction::PrimarySelection(text)
             | ViewAction::CopyAndFollow(text) => text.as_str(),
-            ViewAction::Changed
+            ViewAction::CopyCode(_)
+            | ViewAction::Changed
             | ViewAction::ExitSelectMode
             | ViewAction::OpenAgent(_)
             | ViewAction::OpenLink(_)

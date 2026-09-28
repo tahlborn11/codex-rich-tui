@@ -14,6 +14,7 @@ mod document;
 pub(crate) use document::DocumentPosition;
 mod follow_control;
 mod footer;
+mod inline_control;
 mod input;
 mod layout;
 mod mutations;
@@ -105,6 +106,7 @@ pub(crate) struct TranscriptView {
     position: Position,
     follow_control: follow_control::FollowControl,
     pub(crate) show_follow_control: bool,
+    inline_control: inline_control::InlineControlState,
     copy_feedback: Option<composer_gap::CopyFeedback>,
     composer_tip: Option<(Rect, HyperlinkLine)>,
     turn_tip_key: Option<EntryKey>,
@@ -150,6 +152,7 @@ impl Default for TranscriptView {
             position: Position::Latest,
             follow_control: follow_control::FollowControl::default(),
             show_follow_control: true,
+            inline_control: inline_control::InlineControlState::default(),
             copy_feedback: None,
             composer_tip: None,
             turn_tip_key: None,
@@ -348,6 +351,7 @@ impl TranscriptView {
             if self.agent_links.is_some() {
                 layout.underline_agent_links(row_area, buf, row);
             }
+            self.render_inline_control(&layout, row, row_area, buf, key);
             self.render_disclosure(&activity_ids, &layout, row, row_area, buf);
             if self.highlight == Some(index) && self.selection.is_none() && !self.search.is_active()
             {
