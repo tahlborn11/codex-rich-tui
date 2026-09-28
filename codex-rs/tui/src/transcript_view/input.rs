@@ -22,6 +22,7 @@ pub(crate) enum ViewAction {
     Changed,
     ExitSelectMode,
     Copy(String),
+    CopyCode(Arc<str>),
     CopyOnSelect(String),
     PrimarySelection(String),
     CopyAndFollow(String),
@@ -276,6 +277,11 @@ impl TranscriptView {
                 self.jump_to_entry(cells, index);
             }
             return Some(ViewAction::Changed);
+        }
+        if mode == MouseMode::Interactive
+            && let Some(action) = self.handle_inline_control_mouse(event)
+        {
+            return Some(action);
         }
         if mode == MouseMode::Interactive
             && event.kind == MouseEventKind::Down(MouseButton::Left)

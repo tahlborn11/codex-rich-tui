@@ -1,8 +1,14 @@
 //! Standalone transcript behavior exercised through the shared viewport.
 
 use super::*;
+use crate::clipboard_copy::CopyStatus;
 use crate::history_cell;
+use crate::history_cell::AgentMarkdownCell;
+use crate::transcript_view::ViewAction;
 use crossterm::event::KeyModifiers;
+use crossterm::event::MouseButton;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use insta::assert_snapshot;
 use pretty_assertions::assert_eq;
 
@@ -26,6 +32,59 @@ fn default_pager_keymap() -> PagerKeymap {
 
 fn transcript_overlay(cells: Vec<Arc<dyn HistoryCell>>) -> TranscriptOverlay {
     TranscriptOverlay::new(cells, default_pager_keymap())
+}
+
+#[test]
+fn code_copy_completion_updates_the_overlay_and_requests_expiry_redraw() {
+    let cells: Vec<Arc<dyn HistoryCell>> = vec![Arc::new(AgentMarkdownCell::new(
+        "```text\ncopy me\n```".into(),
+        std::path::Path::new("/"),
+    ))];
+    let mut overlay = transcript_overlay(cells);
+    let area = Rect::new(
+        /*x*/ 0, /*y*/ 0, /*width*/ 40, /*height*/ 12,
+    );
+    let mut buffer = Buffer::empty(area);
+    overlay.render(area, &mut buffer);
+    let icon = (area.top()..area.bottom())
+        .flat_map(|y| (area.left()..area.right()).map(move |x| (x, y)))
+        .find(|position| buffer[*position].symbol() == "⎘")
+        .expect("code panel should expose a copy control");
+    let mouse = |kind| MouseEvent {
+        kind,
+        column: icon.0,
+        row: icon.1,
+        modifiers: KeyModifiers::NONE,
+    };
+    assert!(matches!(
+        overlay.view.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left)),
+            &overlay.cells
+        ),
+        Some(ViewAction::Changed)
+    ));
+    let Some(ViewAction::CopyCode(text)) = overlay
+        .view
+        .handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left)), &overlay.cells)
+    else {
+        panic!("copy control should copy its code block");
+    };
+    assert_eq!(text.as_ref(), "copy me\n");
+    assert_eq!(
+        overlay
+            .view
+            .show_code_copy_result(&Ok(CopyStatus::Pending(7))),
+        None
+    );
+    assert_eq!(
+        overlay.finish_clipboard(&(7, Ok(CopyStatus::Confirmed))),
+        Some(std::time::Duration::from_secs(5))
+    );
+
+    let mut confirmed = Buffer::empty(area);
+    overlay.render(area, &mut confirmed);
+    assert_eq!(confirmed[icon].symbol(), "✓");
+    assert!(buffer_to_text(&confirmed, area).contains("Copied! code block to clipboard"));
 }
 
 #[test]
