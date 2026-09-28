@@ -6,6 +6,7 @@ use super::lines_to_plain_strings;
 use super::test_cwd;
 use crate::history_cell::HistoryRenderMode;
 use crate::render::highlight::MAX_HIGHLIGHT_LINE_BYTES;
+use crate::terminal_hyperlinks::LineControlAction;
 use insta::assert_debug_snapshot;
 use pretty_assertions::assert_eq;
 
@@ -32,24 +33,24 @@ fn growing_code_fences_preserve_styles_unicode_links_and_blank_lines() {
         "Before link",
         "(https://example.com).",
         "",
-        "╭─ rust · /copy-code",
-        "│ fn main() {",
-        "│     /* a multili",
-        "│ ne",
-        "│        comment *",
-        "│ /",
-        "│ ",
-        "│     println!(\"界",
-        "│  e\u{301} https://examp",
-        "│ le.com\");",
-        "│ }",
-        "╰─",
+        "╭─ rust ────── ⎘ ╮",
+        "│ fn main() {    │",
+        "│     /* a multi │",
+        "│ line           │",
+        "│        comment │",
+        "│  */            │",
+        "│                │",
+        "│     println!(\" │",
+        "│ 界 e\u{301} https://e │",
+        "│ xample.com\");  │",
+        "│ }              │",
+        "╰────────────────╯",
         "",
-        "╭─ python · /copy-code",
-        "│ text = \"\"\"a mult",
-        "│ iline",
-        "│ string\"\"\"",
-        "╰─",
+        "╭─ python ──── ⎘ ╮",
+        "│ text = \"\"\"a mu │",
+        "│ ltiline        │",
+        "│ string\"\"\"      │",
+        "╰────────────────╯",
     ]
     "#);
 }
@@ -80,6 +81,41 @@ fn long_open_fence_retains_its_rendered_prefix() {
     }
     assert_eq!(render.lines[0].line.spans[1].content.as_ptr(), first_line);
     append_rich_and_assert_matches_full(&mut render, &mut source, "}\n```\n", Some(80), &cwd);
+}
+
+#[test]
+fn growing_open_fence_updates_its_copy_control() {
+    let cwd = test_cwd();
+    let mut source = String::new();
+    let mut render = StreamingRender::new();
+    append(
+        &mut render,
+        &mut source,
+        "```rust\nfn first() {}\n",
+        Some(40),
+        &cwd,
+        HistoryRenderMode::Rich,
+    );
+    append(
+        &mut render,
+        &mut source,
+        "fn second() {}\n",
+        Some(40),
+        &cwd,
+        HistoryRenderMode::Rich,
+    );
+
+    let action = render
+        .lines
+        .iter()
+        .find_map(|line| line.source.as_ref()?.control.as_ref())
+        .map(|control| &control.action);
+    assert_eq!(
+        action,
+        Some(&LineControlAction::CopyCode(
+            "fn first() {}\nfn second() {}\n".into()
+        ))
+    );
 }
 
 #[test]

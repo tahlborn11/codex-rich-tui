@@ -1167,7 +1167,15 @@ impl App {
         };
         let resume_following = matches!(action, ViewAction::CopyAndFollow(_));
         if !matches!(action, ViewAction::ExitSelectMode) {
-            if let Some((characters, result)) = self.transcript_view.copy_action(
+            if let ViewAction::CopyCode(text) = &action {
+                let result = tui.copy_transcript_selection(
+                    text,
+                    crate::clipboard_copy::CopyFormat::PlainText,
+                );
+                self.transcript_view
+                    .show_copy_feedback(&result, text.chars().count());
+                let _ = self.transcript_view.show_code_copy_result(&result);
+            } else if let Some((characters, result)) = self.transcript_view.copy_action(
                 tui,
                 &self.transcript_cells,
                 &action,
