@@ -691,7 +691,7 @@ impl AgentMarkdownCell {
                 if self.spoken_artifacts {
                     super::spoken_artifacts::annotate_spoken_artifacts(&mut lines, &self.cwd);
                 }
-                prefix_hyperlink_lines(lines, "• ".dim(), "  ".into())
+                prefix_hyperlink_lines_outside_background(lines, "• ".dim(), "  ".into())
             } else {
                 super::async_questions::render(
                     &self.markdown_source,
