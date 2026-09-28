@@ -951,7 +951,7 @@ mod tests {
         let streamed =
             collect_streamed_lines(&["- [x] Checked\n", "- [ ] Unchecked\n", "\n"], Some(80));
 
-        assert_eq!(streamed, vec!["- ✓ Checked", "- ○ Unchecked"]);
+        assert_eq!(streamed, vec!["☑ Checked", "☐ Unchecked"]);
     }
 
     #[test]

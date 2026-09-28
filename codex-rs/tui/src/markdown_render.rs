@@ -161,7 +161,7 @@ impl MarkdownStyles {
             emphasis: Style::new().italic(),
             strong: Style::new().bold(),
             strikethrough: Style::new().crossed_out(),
-            ordered_list_marker: Style::new().light_blue(),
+            ordered_list_marker: Style::new().fg(accent_color()),
             unordered_list_marker: Style::new(),
             link: Style::new().fg(accent_color()).underlined(),
             blockquote: Style::new(),
@@ -435,7 +435,6 @@ pub(crate) fn render_markdown_lines_with_width_cwd_and_hidden_link_destinations(
     options.insert(Options::ENABLE_TABLES);
     options.set(Options::ENABLE_TASKLISTS, preferences::current().lists);
     let math = math::MathMarkdown::new(input, options, width);
-    options.insert(Options::ENABLE_TASKLISTS);
     let parser = DecodedTextMerge::new(source_tables::preserve(
         input,
         math.events(Parser::new_ext(&math.markdown, options).into_offset_iter()),
@@ -804,6 +803,9 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             HeadingLevel::H6 => self.styles.h6,
         };
         self.push_line(Line::default());
+        let copy_prefix = format!("{} ", "#".repeat(level as usize));
+        self.copy_line.prefix.push_str(&copy_prefix);
+        self.copy_line.item_prefix.push_str(&copy_prefix);
         self.push_inline_style(heading_style);
         self.needs_newline = false;
     }
@@ -1197,15 +1199,6 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         self.needs_newline = false;
     }
 
-    fn task_list_marker(&mut self, checked: bool) {
-        let marker = if checked {
-            "✓ ".green()
-        } else {
-            "○ ".dim()
-        };
-        self.push_span(marker);
-    }
-
     fn start_codeblock(&mut self, kind: CodeBlockKind<'a>, source_range: Range<usize>) {
         self.flush_current_line();
         let first_item_block = self.pending_marker_line
@@ -1234,10 +1227,14 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 let label = language.clone().unwrap_or_else(|| "code".to_string());
                 if !uses_table_wrapper_syntax {
                     self.code_panel_full_width = self.code_panel_supports_full_width(&label);
+                    let pending_marker_line = self.pending_marker_line;
                     self.push_code_panel_line(
                         self.code_panel_header(&label),
                         CodePanelLine::Header,
                     );
+                    // The panel header owns the list marker visually, while the first code row
+                    // still needs that marker in copied Markdown.
+                    self.pending_marker_line = pending_marker_line;
                 }
                 self.code_block_lang = language;
                 self.code_block_chrome = if uses_table_wrapper_syntax {
@@ -2520,6 +2517,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                     } else {
                         subsequent_indent.clone()
                     };
+                    let prefix_bytes = spans.iter().map(|span| span.content.len()).sum::<usize>();
                     let panel_span_start = spans.len().saturating_sub(1);
                     let shift = Self::spans_display_width(&spans);
                     spans.append(&mut wrapped_line.line.spans);
@@ -2528,6 +2526,10 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                             hyperlink.columns.start + shift..hyperlink.columns.end + shift;
                     }
                     wrapped_line.line = Line::from_iter(spans);
+                    if let Some(source) = wrapped_line.source.as_mut() {
+                        source.prefix_bytes += prefix_bytes;
+                        source.continuation_indent = subsequent_indent.clone().into();
+                    }
                     self.finish_code_panel_line(&mut wrapped_line.line, panel_span_start);
                     self.push_output_line(wrapped_line.style(style));
                 }
@@ -2549,7 +2551,6 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 let mut spans = self.current_initial_indent.clone();
                 source.prefix_bytes = spans.iter().map(|span| span.content.len()).sum();
                 source.continuation_indent = self.current_subsequent_indent.clone().into();
-                line.source = Some(source);
                 let panel_span_start = match self.current_code_panel_line {
                     CodePanelLine::Body => spans.len().saturating_sub(1),
                     CodePanelLine::Header | CodePanelLine::Footer => spans.len(),
@@ -2563,6 +2564,16 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 }
                 line.line = Line::from_iter(spans);
                 self.finish_code_panel_line(&mut line.line, panel_span_start);
+                if matches!(
+                    self.current_code_panel_line,
+                    CodePanelLine::Header | CodePanelLine::Footer
+                ) {
+                    source.range = 0..0;
+                    source.prefix_bytes =
+                        line.line.spans.iter().map(|span| span.content.len()).sum();
+                    source.continuation_indent = Line::default();
+                }
+                line.source = Some(source);
                 self.push_output_line(line.style(style));
             }
             self.current_initial_indent.clear();
@@ -2629,7 +2640,9 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         };
         let was_pending = self.pending_marker_line;
 
-        self.current_initial_indent = self.prefix_spans(was_pending);
+        let display_pending_marker = was_pending
+            && !(self.in_code_block && self.code_block_chrome == CodeBlockChrome::Fenced);
+        self.current_initial_indent = self.prefix_spans(display_pending_marker);
         self.current_subsequent_indent = self.prefix_spans(/*pending_marker_line*/ false);
         self.current_line_style = style;
         self.copy_line = crate::markdown_copy::CopyLine::default();
@@ -2655,6 +2668,8 @@ impl<'a, 'policy> Writer<'a, 'policy> {
 
     fn push_code_panel_line(&mut self, line: Line<'static>, kind: CodePanelLine) {
         self.push_line(line);
+        self.copy_line.omit = true;
+        self.copy_line.code = false;
         self.current_code_panel_line = kind;
     }
 
@@ -2809,8 +2824,9 @@ impl<'a, 'policy> Writer<'a, 'policy> {
     fn copy_prefix(&self, pending_marker_line: bool) -> String {
         // Code's display padding is not a Markdown container. Keep only the innermost semantic
         // containers so lazy continuation lines cannot each retain an arbitrarily deep prefix.
+        let display_code_indent = usize::from(self.in_code_block);
         let containers =
-            &self.indent_stack[..self.indent_stack.len() - usize::from(self.in_code_block)];
+            &self.indent_stack[..self.indent_stack.len().saturating_sub(display_code_indent)];
         let containers = &containers[containers
             .len()
             .saturating_sub(crate::markdown_copy::MAX_COPY_DEPTH)..];
@@ -2826,7 +2842,9 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                     prefix.extend(std::iter::repeat_n(' ', width));
                 }
             } else {
-                prefix.extend(context.prefix.iter().map(|span| span.content.as_ref()));
+                // Rich rendering uses a vertical rail for blockquotes, but copied Markdown must
+                // retain the canonical blockquote marker.
+                prefix.push_str("> ");
             }
         }
         prefix

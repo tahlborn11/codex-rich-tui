@@ -9,6 +9,7 @@ use crate::render::highlight::syntax_theme_revision;
 use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_hyperlinks::LogicalLineSource;
 use ratatui::style::Stylize;
+use ratatui::text::Line;
 use ratatui::text::Span;
 use std::sync::Arc;
 
@@ -147,6 +148,8 @@ impl OpenCodeFence {
                 source.copy = Some(Arc::clone(&copy));
                 line.spans
                     .insert(/*index*/ 0, Span::styled("│ ", panel_style.dim()));
+                source.prefix_bytes = "│ ".len();
+                source.continuation_indent = Line::from("│ ".dim());
                 if self.panel_full_width
                     && let Some(width) = self.panel_width
                     && line.width() < width

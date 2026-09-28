@@ -106,6 +106,15 @@ fn next_copy_selection(
     selection
 }
 
+fn next_direct_copy_selection(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+) -> (String, String) {
+    match rx.try_recv() {
+        Ok(AppEvent::CopySelection { text, label, .. }) => (text.to_string(), label),
+        other => panic!("expected direct clipboard content, got {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn service_tier_commands_lowercase_catalog_names() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.5")).await;
@@ -2421,19 +2430,11 @@ async fn slash_copy_code_copies_the_last_fenced_block() {
     chat.transcript.last_agent_markdown =
         Some("```rust\nfn first() {}\n```\n\n```text\ncopy me\n```\n".to_string());
 
-    chat.copy_last_agent_code_block_with(|code| {
-        assert_eq!(code, "copy me\n");
-        Ok(crate::clipboard_copy::CopyOutcome::Copied(Some(
-            crate::clipboard_copy::ClipboardLease::test(),
-        )))
-    });
+    chat.copy_last_agent_code_block();
 
-    assert!(chat.clipboard_lease.is_some());
-    let cells = drain_insert_history(&mut rx);
-    assert_eq!(cells.len(), 1, "expected one success message");
-    assert!(
-        lines_to_single_string(&cells[0]).contains("Copied last code block to clipboard"),
-        "expected code-copy confirmation"
+    assert_eq!(
+        next_direct_copy_selection(&mut rx),
+        ("copy me\n".to_string(), "last code block".to_string())
     );
 }
 
@@ -2445,17 +2446,16 @@ async fn slash_copy_code_copies_a_single_block_without_opening_picker() {
     chat.transcript.last_agent_source =
         Some("Before\r\n\r\n```powershell\r\nWrite-Output value  \r\n```\r\n".to_string());
 
-    chat.copy_code_block_or_show_picker_with(|code| {
-        assert_eq!(code, "Write-Output value  \r\n");
-        Ok(crate::clipboard_copy::CopyOutcome::Copied(Some(
-            crate::clipboard_copy::ClipboardLease::test(),
-        )))
-    });
+    chat.copy_code_block_or_show_picker();
 
-    assert!(chat.clipboard_lease.is_some());
     assert!(chat.bottom_pane.no_modal_or_popup_active());
-    let rendered = lines_to_single_string(&drain_insert_history(&mut rx)[0]);
-    assert!(rendered.contains("Copied powershell code to clipboard"));
+    assert_eq!(
+        next_direct_copy_selection(&mut rx),
+        (
+            "Write-Output value  \r\n".to_string(),
+            "powershell code".to_string(),
+        )
+    );
 }
 
 #[tokio::test]

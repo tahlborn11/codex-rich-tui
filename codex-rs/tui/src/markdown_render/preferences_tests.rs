@@ -62,10 +62,11 @@ fn disabled_mermaid_keeps_unsupported_source_without_notice() {
     let source = "```mermaid\npie\n\"Cats\": 2\n```\n";
     let rendered = render_markdown_text(source);
     init(TuiRendering::default());
-    assert_eq!(
-        rendered.to_string(),
-        render_markdown_text(&source.replacen("mermaid", "unknown", /*count*/ 1)).to_string(),
-    );
+    let rendered = rendered.to_string();
+    assert!(rendered.starts_with("╭─ mermaid"));
+    assert!(rendered.contains("pie"));
+    assert!(rendered.contains("\"Cats\": 2"));
+    assert!(!rendered.contains("doesn't support"));
 }
 
 #[test]
