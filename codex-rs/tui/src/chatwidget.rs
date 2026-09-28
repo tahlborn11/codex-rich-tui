@@ -178,8 +178,6 @@ const PLAN_MODE_REASONING_SCOPE_PLAN_ONLY: &str = "Apply to Plan mode override";
 const PLAN_MODE_REASONING_SCOPE_ALL_MODES: &str = "Apply to global default and Plan mode override";
 const CONNECTORS_SELECTION_VIEW_ID: &str = "connectors-selection";
 const PET_SELECTION_LOADING_VIEW_ID: &str = "pet-selection-loading";
-const AMBIENT_PET_WRAP_GAP_COLUMNS: u16 = 2;
-const AMBIENT_PET_MIN_CONTENT_COLUMNS: u16 = 80;
 const TUI_STUB_MESSAGE: &str = "Not available in TUI yet.";
 const PARENT_OWNED_INPUT_MESSAGE: &str =
     "This sub-agent is controlled by its parent. Direct input is disabled.";
