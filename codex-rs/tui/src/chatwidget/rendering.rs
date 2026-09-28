@@ -140,11 +140,6 @@ impl ChatWidget {
             );
         }
 
-        let active_cell_right_reserve = self
-            .last_rendered_width
-            .get()
-            .map(|width| self.ambient_pet_wrap_reserved_cols(width))
-            .unwrap_or(0);
         let active_cell_renderable = match &self.transcript.active_cell {
             Some(cell) => RenderableItem::Owned(Box::new(TranscriptAreaRenderable {
                 child: cell.as_ref(),
@@ -154,7 +149,7 @@ impl ChatWidget {
                 } else {
                     1
                 },
-                right: active_cell_right_reserve,
+                right: 0,
                 // Externally backed transcript cells can also change viewport height without an
                 // active-cell revision. Spinner cells remain safe because their indicator width
                 // is stable and their display lines are still rebuilt on every frame.
@@ -183,7 +178,7 @@ impl ChatWidget {
                 RenderableItem::Owned(Box::new(TranscriptAreaRenderable {
                     child: cell.as_ref(),
                     top: 1,
-                    right: active_cell_right_reserve,
+                    right: 0,
                     persistent_layout: None,
                 })),
             );
@@ -195,7 +190,7 @@ impl ChatWidget {
                 RenderableItem::Owned(Box::new(TranscriptAreaRenderable {
                     child: cell,
                     top: 1,
-                    right: active_cell_right_reserve,
+                    right: 0,
                     persistent_layout: None,
                 })),
             );
@@ -239,24 +234,12 @@ impl ChatWidget {
                 transcript_hint: self.bottom_pane.transcript_shortcut_hint(),
             }))
         } else {
-            let right_reserve = if self
-                .bottom_pane
-                .selected_index_for_active_view(crate::app::AGENTS_OVERVIEW_VIEW_ID)
-                .is_some()
-            {
-                0
-            } else {
-                self.last_rendered_width
-                    .get()
-                    .map(|width| self.ambient_pet_wrap_reserved_cols(width))
-                    .unwrap_or(0)
-            };
             self.bottom_pane
                 .as_renderable_with_options(crate::bottom_pane::ComposerRenderOptions {
                     composer_gap,
                     working_tip,
                     warning_count: self.warning_display_state.count,
-                    textarea_right_reserve: right_reserve,
+                    textarea_right_reserve: 0,
                     separate_status_line: command_popup_placement
                         != crate::bottom_pane::CommandPopupPlacement::AboveComposer,
                     command_popup_placement,

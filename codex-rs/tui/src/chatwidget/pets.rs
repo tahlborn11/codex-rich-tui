@@ -89,10 +89,6 @@ impl ChatWidget {
         if !self.bottom_pane.no_modal_or_popup_active() {
             return None;
         }
-        if self.ambient_pet_wrap_reserved_cols(area.width) == 0 {
-            return None;
-        }
-
         let anchor_bottom_y = match self.local_settings.tui.pet_anchor {
             TuiPetAnchor::Composer => composer_bottom_y,
             TuiPetAnchor::ScreenBottom => area.bottom(),
@@ -102,26 +98,8 @@ impl ChatWidget {
             .draw_request(area, anchor_bottom_y)
     }
 
-    pub(super) fn ambient_pet_wrap_reserved_cols(&self, width: u16) -> u16 {
-        let reserved = self
-            .ambient_pet
-            .as_ref()
-            .filter(|pet| pet.image_enabled())
-            .map(|pet| {
-                pet.image_columns()
-                    .saturating_add(AMBIENT_PET_WRAP_GAP_COLUMNS)
-            })
-            .unwrap_or(0);
-        if width.saturating_sub(reserved) < AMBIENT_PET_MIN_CONTENT_COLUMNS {
-            return 0;
-        }
-        reserved
-    }
-
     pub(crate) fn history_wrap_width(&self, width: u16) -> u16 {
-        width
-            .saturating_sub(self.ambient_pet_wrap_reserved_cols(width))
-            .max(1)
+        width.max(1)
     }
 
     pub(crate) fn pet_picker_preview_draw(&self) -> Option<crate::pets::AmbientPetDraw> {

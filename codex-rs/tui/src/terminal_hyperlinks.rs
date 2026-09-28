@@ -284,6 +284,25 @@ pub(crate) fn prefix_hyperlink_lines(
         .collect()
 }
 
+pub(crate) fn prefix_hyperlink_lines_outside_background(
+    lines: Vec<HyperlinkLine>,
+    initial_prefix: Span<'static>,
+    subsequent_prefix: Span<'static>,
+) -> Vec<HyperlinkLine> {
+    let mut lines = prefix_hyperlink_lines(lines, initial_prefix, subsequent_prefix);
+    for line in &mut lines {
+        if line.line.style.bg.is_some()
+            && let Some(prefix) = line.line.spans.first_mut()
+            && prefix.style.bg.is_none()
+        {
+            // A line-level background fills every span. Keep the structural transcript gutter
+            // outside that surface unless its caller explicitly supplied a background.
+            prefix.style.bg = Some(Color::Reset);
+        }
+    }
+    lines
+}
+
 /// Retain a known first-line label in copy text without changing the existing wrapping.
 ///
 /// Callers pass the suffix of the first row's synthetic prefix that carries meaning, such as
@@ -877,7 +896,34 @@ mod regression_tests;
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use ratatui::layout::Rect;
     use ratatui::style::Style;
+    use ratatui::style::Stylize;
+    use ratatui::widgets::Widget;
+
+    #[test]
+    fn line_background_starts_after_an_unstyled_structural_prefix() {
+        let lines = prefix_hyperlink_lines_outside_background(
+            vec![HyperlinkLine::new(Line::from("panel").bg(Color::Blue))],
+            "• ".dim(),
+            "  ".into(),
+        );
+        let area = Rect::new(
+            /*x*/ 0, /*y*/ 0, /*width*/ 8, /*height*/ 1,
+        );
+        let mut buffer = Buffer::empty(area);
+
+        Paragraph::new(visible_lines(lines)).render(area, &mut buffer);
+
+        assert_eq!(buffer[(0, 0)].bg, Color::Reset);
+        assert_eq!(buffer[(1, 0)].bg, Color::Reset);
+        assert!((2..7).all(|x| buffer[(x, 0)].bg == Color::Blue));
+        assert_eq!(buffer[(7, 0)].bg, Color::Reset);
+        insta::assert_snapshot!(
+            "prefixed_line_background_starts_after_gutter",
+            format!("{buffer:?}")
+        );
+    }
 
     #[test]
     fn only_web_destinations_receive_osc8() {
