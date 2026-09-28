@@ -36,6 +36,7 @@ use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_hyperlinks::HyperlinkParagraph;
 use crate::terminal_hyperlinks::plain_hyperlink_lines;
 use crate::terminal_hyperlinks::prefix_hyperlink_lines;
+use crate::terminal_hyperlinks::prefix_hyperlink_lines_outside_background;
 use crate::terminal_hyperlinks::visible_lines;
 #[cfg(test)]
 use crate::test_support::PathBufExt;

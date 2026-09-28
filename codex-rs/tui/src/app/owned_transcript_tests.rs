@@ -552,7 +552,7 @@ async fn owned_details_keep_the_composer_cursor_and_screen() -> Result<()> {
 }
 
 #[tokio::test]
-async fn narrow_owned_transcript_uses_full_width_when_the_pet_is_hidden() -> Result<()> {
+async fn narrow_owned_transcript_uses_full_width_with_a_pet() -> Result<()> {
     let mut app = crate::app::test_support::make_test_app().await;
     app.transcript_cells = vec![Arc::new(crate::history_cell::PlainHistoryCell::new(vec![
         "x".repeat(/*n*/ 150).into(),
