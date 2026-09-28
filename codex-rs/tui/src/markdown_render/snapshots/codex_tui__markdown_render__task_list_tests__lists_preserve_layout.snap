@@ -1,6 +1,6 @@
 ---
 source: tui/src/markdown_render/task_list_tests.rs
-expression: "stages.join(\"\\n\\n---\\n\\n\")"
+expression: "stages.join(\"\\n---\\n\")"
 ---
 ☐ Unchecked
 ☑ Checked
@@ -21,10 +21,10 @@ expression: "stages.join(\"\\n\\n---\\n\\n\")"
 10. ☑ Done
 11. Ordinary
 ---
-> ☐ Quoted task with
->   enough words to wrap
-> 
-> ☑ Done
+│ ☐ Quoted task with
+│   enough words to wrap
+│ 
+│ ☑ Done
 ---
 ☐ First paragraph
 
@@ -39,7 +39,9 @@ expression: "stages.join(\"\\n\\n---\\n\\n\")"
 
 - [x] inline
 
-- [x] fenced
+╭─ text · /copy-code
+│ - [x] fenced
+╰─
 
 [ ] Plain text
 
@@ -48,8 +50,8 @@ expression: "stages.join(\"\\n\\n---\\n\\n\")"
 ☐ 
     • child
 
-☑ # title
-☑ > quote
+☑ title
+☑ │ quote
 ☑ 
 
   ———
@@ -67,7 +69,7 @@ expression: "stages.join(\"\\n\\n---\\n\\n\")"
 ---
 ☑ <div>done</div>
 ---
-> • Parent
->     ☑ 
->   
->   Continued paragraph
+│ • Parent
+│     ☑ 
+│   
+│   Continued paragraph
