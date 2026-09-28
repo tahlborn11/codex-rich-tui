@@ -225,6 +225,7 @@ pub(crate) fn simulate_stream_markdown_for_tests(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::style::accent_color;
     use ratatui::style::Color;
 
     #[tokio::test]
@@ -313,14 +314,14 @@ mod tests {
         });
         let idx = find_idx.expect("expected third-level ordered line");
         let line = &out[idx];
-        // Expect at least one span on this line to use the terminal's LightBlue color.
+        // Expect at least one span on this line to use the terminal accent color.
         let has_accent = line
             .spans
             .iter()
-            .any(|s| s.style.fg == Some(Color::LightBlue));
+            .any(|s| s.style.fg == Some(accent_color()));
         assert!(
             has_accent,
-            "expected an ordered-list marker span with LightBlue on: {line:?}"
+            "expected an ordered-list marker span with the accent color on: {line:?}"
         );
     }
 
@@ -605,7 +606,7 @@ mod tests {
         });
 
         // The marker (including indent and "1.") is expected to be in the first span
-        // and colored with LightBlue; following content should be default color.
+        // and colored with the accent color; following content should be default color.
         assert!(
             !line.spans.is_empty(),
             "expected non-empty spans for the third-level line"
@@ -613,8 +614,8 @@ mod tests {
         let marker_span = &line.spans[0];
         assert_eq!(
             marker_span.style.fg,
-            Some(Color::LightBlue),
-            "expected LightBlue 3rd-level ordered marker, got {:?}",
+            Some(accent_color()),
+            "expected accent-colored 3rd-level ordered marker, got {:?}",
             marker_span.style.fg
         );
         // Find the first non-empty non-space content span and verify it is default color.

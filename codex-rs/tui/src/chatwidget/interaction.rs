@@ -408,17 +408,8 @@ impl ChatWidget {
     }
 
     pub(crate) fn copy_code_block_or_show_picker(&mut self) {
-        self.copy_code_block_or_show_picker_with(|text| {
-            crate::clipboard_copy::copy_to_clipboard(text, CopyFormat::PlainText)
-        });
-    }
-
-    pub(super) fn copy_code_block_or_show_picker_with(
-        &mut self,
-        copy_fn: impl FnOnce(&str) -> Result<crate::clipboard_copy::CopyOutcome, String>,
-    ) {
         let Some(markdown) = self.transcript.last_agent_markdown.as_deref() else {
-            self.copy_last_agent_code_block_with(copy_fn);
+            self.add_error_message("No fenced code block to copy".into());
             return;
         };
         let source = self
@@ -446,8 +437,12 @@ impl ChatWidget {
             .collect();
 
         match choices.as_slice() {
-            [] => self.copy_last_agent_code_block_with(copy_fn),
-            [(label, content)] => self.copy_selection_with(content, label, copy_fn),
+            [] => self.add_error_message("No fenced code block to copy".into()),
+            [(label, content)] => self.app_event_tx.send(AppEvent::CopySelection {
+                text: Arc::clone(content),
+                label: label.clone(),
+                format: crate::clipboard_copy::CopyFormat::PlainText,
+            }),
             _ => {
                 let items = choices
                     .into_iter()
@@ -463,7 +458,7 @@ impl ChatWidget {
                                 tx.send(AppEvent::CopySelection {
                                     text: Arc::clone(&text),
                                     label: label.clone(),
-                                    format: CopyFormat::PlainText,
+                                    format: crate::clipboard_copy::CopyFormat::PlainText,
                                 });
                             })],
                             dismiss_on_select: true,
@@ -481,58 +476,23 @@ impl ChatWidget {
                 self.defer_input_until_settings_applied();
             }
         }
-    }
-
-    pub(super) fn copy_selection_with(
-        &mut self,
-        text: &str,
-        label: &str,
-        copy_fn: impl FnOnce(&str) -> Result<crate::clipboard_copy::CopyOutcome, String>,
-    ) {
-        match self.write_clipboard(text, copy_fn) {
-            Ok(status) => self.add_info_message(status.message(label), /*hint*/ None),
-            Err(error) => self.add_error_message(format!("Copy failed: {error}")),
-        }
         self.request_redraw();
-    }
-
-    fn write_clipboard(
-        &mut self,
-        text: &str,
-        copy_fn: impl FnOnce(&str) -> Result<crate::clipboard_copy::CopyOutcome, String>,
-    ) -> Result<crate::clipboard_copy::CopyStatus, String> {
-        Ok(copy_fn(text)?.store(&mut self.clipboard_lease))
     }
 
     /// Copy the last non-empty fenced code block in the latest agent response.
     pub(crate) fn copy_last_agent_code_block(&mut self) {
-        self.copy_last_agent_code_block_with(|text| {
-            crate::clipboard_copy::copy_to_clipboard(text, CopyFormat::PlainText)
-        });
-    }
-
-    pub(super) fn copy_last_agent_code_block_with(
-        &mut self,
-        copy_fn: impl FnOnce(&str) -> Result<crate::clipboard_copy::CopyOutcome, String>,
-    ) {
         let code = self
             .transcript
             .last_agent_markdown
             .as_deref()
             .and_then(crate::markdown_code_blocks::last_fenced_code_block);
         match code {
-            Some(code) => match self.write_clipboard(&code, copy_fn) {
-                Ok(status) => self.add_to_history(history_cell::new_info_event(
-                    status.message("last code block"),
-                    /*hint*/ None,
-                )),
-                Err(error) => self.add_to_history(history_cell::new_error_event(format!(
-                    "Copy failed: {error}"
-                ))),
-            },
-            None => self.add_to_history(history_cell::new_error_event(
-                "No fenced code block to copy".into(),
-            )),
+            Some(code) => self.app_event_tx.send(AppEvent::CopySelection {
+                text: Arc::from(code),
+                label: "last code block".into(),
+                format: crate::clipboard_copy::CopyFormat::PlainText,
+            }),
+            None => self.add_error_message("No fenced code block to copy".into()),
         }
         self.request_redraw();
     }
