@@ -12,11 +12,13 @@ macOS-specific.
 
 - Markdown headings render typographically without visible `#` markers.
 - Blockquotes use a visual quote rail.
-- Fenced code blocks use a full-width, palette-aware frame with the language on the left and the
-  `alt+y` copy shortcut on the right.
+- Fenced code blocks use a full-width, palette-aware frame with the language on the left and a
+  clickable `⎘` copy control on the right. Hovering highlights the control; clicking copies that
+  block's exact code without changing transcript selection. Confirmed copies temporarily change
+  the clicked control to `✓` and show `Copied!` in the transcript status area.
 - `/copy-code` copies the only non-empty fenced block from the latest response immediately, or
-  opens a numbered picker when the response contains multiple blocks. `alt+y` keeps the fast path
-  that copies the last non-empty fenced block.
+  opens a numbered picker when the response contains multiple blocks. It remains the keyboard and
+  non-mouse fallback, while `alt+y` keeps the fast path that copies the last non-empty fenced block.
 - Task lists use semantic status markers, and expanded HTML `<details>` blocks render with a `▾`
   disclosure marker instead of raw tags.
 - Completed background-terminal waits use the same visual rail language as completed commands.
