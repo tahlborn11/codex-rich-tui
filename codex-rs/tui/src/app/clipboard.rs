@@ -56,6 +56,14 @@ impl App {
     pub(super) fn finish_clipboard(&mut self, tui: &mut tui::Tui, event: &TuiEvent) {
         let current = tui.is_owned_screen() && self.overlay.is_none();
         if let Some(completion) = tui.clipboard.poll() {
+            if let Some(redraw_after) = self
+                .overlay
+                .as_mut()
+                .and_then(|overlay| overlay.finish_clipboard(completion))
+                && !redraw_after.is_zero()
+            {
+                tui.frame_requester().schedule_frame_in(redraw_after);
+            }
             if let Some(characters) = self.chat_widget.finish_clipboard(completion, current) {
                 self.transcript_view
                     .show_copy_feedback(&completion.1, characters);
@@ -66,6 +74,7 @@ impl App {
                     &mut *selection;
                 view.finish_copy(cells, completion, current);
             }
+            let _ = self.transcript_view.finish_code_copy(completion, current);
             let follow =
                 self.transcript_view
                     .finish_copy(&self.transcript_cells, completion, current);

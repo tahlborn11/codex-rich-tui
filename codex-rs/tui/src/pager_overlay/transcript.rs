@@ -198,7 +198,11 @@ impl TranscriptOverlay {
     ) -> Result<Option<u64>> {
         let completed_copy = if let Some(completion) = tui.clipboard.poll() {
             let id = completion.0;
-            self.finish_pending_copy(completion);
+            if let Some(redraw_after) = self.finish_clipboard(completion)
+                && !redraw_after.is_zero()
+            {
+                tui.frame_requester().schedule_frame_in(redraw_after);
+            }
             Some(id)
         } else {
             None
@@ -250,6 +254,26 @@ impl TranscriptOverlay {
             tui.frame_requester().schedule_frame();
         }
         Ok(completed_copy)
+    }
+
+    pub(crate) fn finish_clipboard(
+        &mut self,
+        completion: &(u64, crate::clipboard_copy::worker::CopyResult),
+    ) -> Option<std::time::Duration> {
+        if matches!(self.pending_follow_close, Some((id, _)) if id < completion.0) {
+            self.pending_follow_close = None;
+        }
+        if let Some(redraw_after) = self.view.finish_code_copy(completion, /*current*/ true) {
+            self.notice = Some(match &completion.1 {
+                Ok(crate::clipboard_copy::CopyStatus::Confirmed) => {
+                    "Copied! code block to clipboard".to_string()
+                }
+                Ok(status) => status.message("code block"),
+                Err(error) => format!("Copy failed: {error}"),
+            });
+            return Some(redraw_after);
+        }
+        self.finish_pending_copy(completion)
     }
 
     pub(crate) fn is_done(&self) -> bool {
@@ -523,6 +547,16 @@ impl TranscriptOverlay {
         let close_overlay = self.view.is_select_mode() || self.browsing_footer.is_some();
         if matches!(action, ViewAction::ExitSelectMode) {
             self.is_done = true;
+        } else if let ViewAction::CopyCode(text) = &action {
+            let result = tui
+                .copy_transcript_selection(text, crate::clipboard_copy::CopyFormat::PlainText);
+            if let Some(redraw_after) = self.view.show_code_copy_result(&result) {
+                tui.frame_requester().schedule_frame_in(redraw_after);
+            }
+            self.notice = Some(match result {
+                Ok(status) => status.message("code block"),
+                Err(error) => error,
+            });
         } else if let Some((_, result)) = self.view.copy_action(
             tui,
             &self.cells,
@@ -559,7 +593,7 @@ impl TranscriptOverlay {
     pub(super) fn finish_pending_copy(
         &mut self,
         completion: &(u64, crate::clipboard_copy::worker::CopyResult),
-    ) {
+    ) -> Option<std::time::Duration> {
         let close_overlay = match self.pending_follow_close {
             Some((id, close_overlay)) if id == completion.0 => {
                 self.pending_follow_close = None;
@@ -582,7 +616,9 @@ impl TranscriptOverlay {
             if follow {
                 self.finish_select_follow(close_overlay.unwrap_or(false));
             }
+            return Some(std::time::Duration::ZERO);
         }
+        None
     }
 
     fn render_hints(&self, area: Rect, buf: &mut Buffer) {

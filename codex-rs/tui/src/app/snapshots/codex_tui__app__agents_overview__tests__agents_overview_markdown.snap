@@ -24,7 +24,7 @@ expression: normalize_agent_center_snapshot(&cached)
 "                                                      │                                         "
 "                                                      │ • Kept compatibility.                   "
 "                                                      │                                         "
-"                                                      │ ╭─ rust ────────── copy · /copy-code ╮  "
+"                                                      │ ╭─ rust ────────────────────────── ⎘ ╮  "
 "                                                      │ │ let token = 1;                     │  "
 "                                                      │ ╰────────────────────────────────────╯  "
 "                                                      │                                         "
