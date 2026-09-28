@@ -119,9 +119,9 @@ impl CopyFeedback {
         let characters = self.characters;
         let labels = match self.result {
             Ok(CopyStatus::Confirmed) => [
-                format!("Copied {characters} chars to host clipboard"),
-                format!("Copied {characters} chars"),
-                "Copied".into(),
+                format!("Copied! {characters} chars to host clipboard"),
+                format!("Copied! {characters} chars"),
+                "Copied!".into(),
             ],
             Ok(CopyStatus::Pending(_)) => [
                 format!("Copying {characters} chars…"),
