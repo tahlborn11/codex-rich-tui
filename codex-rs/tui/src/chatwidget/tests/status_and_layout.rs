@@ -2508,13 +2508,17 @@ async fn ambient_pet_stays_hidden_until_a_pet_is_selected() {
     crate::pets::write_test_pack(&chat.config.codex_home);
     chat.set_tui_pet(Some("codex".to_string()));
 
-    let area = Rect::new(
+    let narrow = Rect::new(
         /*x*/ 0, /*y*/ 0, /*width*/ 60, /*height*/ 20,
+    );
+    assert!(chat.ambient_pet_draw(narrow, narrow.bottom()).is_none());
+    let area = Rect::new(
+        /*x*/ 0, /*y*/ 0, /*width*/ 100, /*height*/ 20,
     );
     let draw = chat
         .ambient_pet_draw(area, area.bottom())
         .expect("ambient pet draw request");
-    assert_eq!(draw.x, 51);
+    assert_eq!(draw.x, 91);
     assert_eq!(draw.y, 14);
     assert_eq!(draw.columns, 9);
     assert_eq!(draw.rows, 5);
@@ -2545,7 +2549,7 @@ async fn ambient_pet_screen_bottom_anchor_uses_terminal_bottom() {
     enable_test_ambient_pet(&mut chat);
 
     let terminal_area = Rect::new(
-        /*x*/ 0, /*y*/ 0, /*width*/ 80, /*height*/ 24,
+        /*x*/ 0, /*y*/ 0, /*width*/ 100, /*height*/ 24,
     );
     let composer_bottom_y = 20;
     let default_draw = chat
@@ -2601,7 +2605,7 @@ async fn added_history_uses_pet_adjusted_terminal_width() {
 
     chat.add_to_history(WidthCell(std::sync::Arc::clone(&width)));
 
-    assert_eq!(width.load(std::sync::atomic::Ordering::Relaxed), 69);
+    assert_eq!(width.load(std::sync::atomic::Ordering::Relaxed), 80);
     let backend = VT100Backend::new(/*width*/ 80, /*height*/ 4);
     let mut terminal = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
     terminal.set_viewport_area(Rect::new(
@@ -2626,11 +2630,12 @@ width-sensitive history
 
 #[tokio::test]
 #[serial]
-async fn ambient_pet_reserves_history_wrap_width() {
+async fn ambient_pet_reserves_history_wrap_width_only_when_content_stays_wide() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     enable_test_ambient_pet(&mut chat);
 
-    assert_eq!(chat.history_wrap_width(/*width*/ 80), 69);
+    assert_eq!(chat.history_wrap_width(/*width*/ 80), 80);
+    assert_eq!(chat.history_wrap_width(/*width*/ 100), 89);
 
     chat.set_tui_pet(Some(crate::pets::DISABLED_PET_ID.to_string()));
 
@@ -2639,28 +2644,43 @@ async fn ambient_pet_reserves_history_wrap_width() {
 
 #[tokio::test]
 #[serial]
-async fn ambient_pet_reduces_stream_width_and_composer_text_width() {
+async fn ambient_pet_hides_when_narrow_and_reserves_wide_stream_and_composer_width() {
     use ratatui::Terminal;
 
     let (mut with_pet, _with_pet_rx, _with_pet_op_rx) =
         make_chatwidget_manual(/*model_override*/ None).await;
     enable_test_ambient_pet(&mut with_pet);
     with_pet.last_rendered_width.set(Some(80));
-    let stream_width_with_pet = with_pet.current_stream_width(/*reserved_cols*/ 2);
+    let narrow_stream_width_with_pet = with_pet.current_stream_width(/*reserved_cols*/ 2);
 
     let (mut disabled, _disabled_rx, _disabled_op_rx) =
         make_chatwidget_manual(/*model_override*/ None).await;
     disabled.set_tui_pet(Some(crate::pets::DISABLED_PET_ID.to_string()));
     disabled.last_rendered_width.set(Some(80));
+    let narrow_stream_width_without_pet = disabled.current_stream_width(/*reserved_cols*/ 2);
+
+    assert_eq!(
+        narrow_stream_width_with_pet,
+        narrow_stream_width_without_pet
+    );
+    assert!(
+        with_pet
+            .ambient_pet_draw(Rect::new(0, 0, 80, 24), /*composer_bottom_y*/ 24)
+            .is_none()
+    );
+
+    with_pet.last_rendered_width.set(Some(100));
+    disabled.last_rendered_width.set(Some(100));
+    let stream_width_with_pet = with_pet.current_stream_width(/*reserved_cols*/ 2);
     let stream_width_without_pet = disabled.current_stream_width(/*reserved_cols*/ 2);
 
     assert_eq!(
         stream_width_with_pet,
-        crate::width::usable_content_width(/*total_width*/ 69, /*reserved_cols*/ 2)
+        crate::width::usable_content_width(/*total_width*/ 89, /*reserved_cols*/ 2)
     );
     assert_eq!(
         stream_width_without_pet,
-        crate::width::usable_content_width(/*total_width*/ 80, /*reserved_cols*/ 2)
+        crate::width::usable_content_width(/*total_width*/ 100, /*reserved_cols*/ 2)
     );
     assert!(stream_width_with_pet < stream_width_without_pet);
 
@@ -2675,12 +2695,12 @@ async fn ambient_pet_reduces_stream_width_and_composer_text_width() {
         .set_composer_text(draft, Vec::new(), Vec::new());
 
     let mut with_pet_terminal =
-        Terminal::new(TestBackend::new(/*width*/ 80, /*height*/ 6)).expect("create terminal");
+        Terminal::new(TestBackend::new(/*width*/ 100, /*height*/ 6)).expect("create terminal");
     with_pet_terminal
         .draw(|f| with_pet.render(f.area(), f.buffer_mut()))
         .expect("draw pet-enabled chat");
     let mut disabled_terminal =
-        Terminal::new(TestBackend::new(/*width*/ 80, /*height*/ 6)).expect("create terminal");
+        Terminal::new(TestBackend::new(/*width*/ 100, /*height*/ 6)).expect("create terminal");
     disabled_terminal
         .draw(|f| disabled.render(f.area(), f.buffer_mut()))
         .expect("draw disabled-pet chat");
@@ -2690,8 +2710,8 @@ async fn ambient_pet_reduces_stream_width_and_composer_text_width() {
     let disabled_row = buffer_row_containing(disabled_terminal.backend().buffer(), "Minim")
         .expect("disabled-pet composer row should render draft");
 
-    assert!(row_tail_is_blank(&pet_row, /*start_col*/ 69));
-    assert!(!row_tail_is_blank(&disabled_row, /*start_col*/ 69));
+    assert!(row_tail_is_blank(&pet_row, /*start_col*/ 89));
+    assert!(!row_tail_is_blank(&disabled_row, /*start_col*/ 89));
 }
 
 fn buffer_row_containing(buffer: &ratatui::buffer::Buffer, text: &str) -> Option<String> {
@@ -2719,7 +2739,7 @@ async fn ambient_pet_draw_uses_terminal_screen_area_not_short_inline_viewport() 
     assert!(
         chat.ambient_pet_draw(
             Rect::new(
-                /*x*/ 0, /*y*/ 21, /*width*/ 80, /*height*/ 3,
+                /*x*/ 0, /*y*/ 21, /*width*/ 100, /*height*/ 3,
             ),
             /*composer_bottom_y*/ 24
         )
@@ -2730,12 +2750,12 @@ async fn ambient_pet_draw_uses_terminal_screen_area_not_short_inline_viewport() 
     let draw = chat
         .ambient_pet_draw(
             Rect::new(
-                /*x*/ 0, /*y*/ 0, /*width*/ 80, /*height*/ 24,
+                /*x*/ 0, /*y*/ 0, /*width*/ 100, /*height*/ 24,
             ),
             /*composer_bottom_y*/ 24,
         )
         .expect("full terminal screen has room for the ambient pet");
-    assert_eq!(draw.x, 71);
+    assert_eq!(draw.x, 91);
     assert_eq!(draw.y, 18);
 }
 

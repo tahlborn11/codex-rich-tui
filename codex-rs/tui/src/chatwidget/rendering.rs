@@ -156,7 +156,11 @@ impl ChatWidget {
                 .bottom_pane_renderable(crate::bottom_pane::ComposerRenderOptions::default());
         }
 
-        let active_cell_right_reserve = self.ambient_pet_wrap_reserved_cols();
+        let active_cell_right_reserve = self
+            .last_rendered_width
+            .get()
+            .map(|width| self.ambient_pet_wrap_reserved_cols(width))
+            .unwrap_or(0);
         let active_cell_renderable = match &self.transcript.active_cell {
             Some(cell) => RenderableItem::Owned(Box::new(TranscriptAreaRenderable {
                 child: cell.as_ref(),
@@ -250,7 +254,10 @@ impl ChatWidget {
             {
                 0
             } else {
-                self.ambient_pet_wrap_reserved_cols()
+                self.last_rendered_width
+                    .get()
+                    .map(|width| self.ambient_pet_wrap_reserved_cols(width))
+                    .unwrap_or(0)
             };
             options.warning_count = self.warning_display_state.count;
             options.textarea_right_reserve = right_reserve;
