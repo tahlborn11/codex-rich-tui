@@ -394,7 +394,7 @@ impl TranscriptView {
                 self.publish_primary(tui, text);
                 return None;
             }
-            ViewAction::Changed | ViewAction::OpenLink(_) => return None,
+            ViewAction::Changed | ViewAction::CopyCode(_) | ViewAction::OpenLink(_) => return None,
         };
         let selection_copy = self.selection_copy(action);
         let clear_selection = selection_copy.clear_selection();

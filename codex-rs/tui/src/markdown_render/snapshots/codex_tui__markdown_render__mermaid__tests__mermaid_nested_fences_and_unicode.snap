@@ -2,7 +2,7 @@
 source: tui/src/markdown_render/mermaid_tests.rs
 expression: "markdown_text(source, 60)"
 ---
-│ ╭─ mermaid ─────────────────────────── copy · /copy-code ╮
+│ ╭─ mermaid ─────────────────────────────────────────── ⎘ ╮
 │ │ ┌─────────┐                                            │
 │ │ │ 请求    │                                            │
 │ │ │         ├─────┐                                      │
@@ -17,7 +17,7 @@ expression: "markdown_text(source, 60)"
 
 • Diagram:
 
-  ╭─ mermaid ─────────────────────────── copy · /copy-code ╮
+  ╭─ mermaid ─────────────────────────────────────────── ⎘ ╮
   │ ┌───┐  ┌───┐                                           │
   │ │ A │  │ B │                                           │
   │ └┬──┘  └┬──┘                                           │

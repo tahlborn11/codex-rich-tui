@@ -642,7 +642,7 @@ mod tests {
         assert_eq!(
             texts,
             vec![
-                "╭─ bash · /copy-code".to_string(),
+                "╭─ bash · ⎘".to_string(),
                 "╰─".to_string(),
                 String::new(),
                 "Heading".to_string(),

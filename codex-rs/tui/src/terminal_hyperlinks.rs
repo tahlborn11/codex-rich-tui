@@ -9,6 +9,8 @@ mod source;
 pub(crate) use paragraph::HyperlinkParagraph;
 pub(crate) use paragraph::HyperlinkRows;
 pub(crate) use paragraph::HyperlinkText;
+pub(crate) use source::LineControl;
+pub(crate) use source::LineControlAction;
 pub(crate) use source::LineWrapPolicy;
 pub(crate) use source::LogicalLineSource;
 
@@ -264,6 +266,9 @@ pub(crate) fn prefix_hyperlink_lines(
                 .take()
                 .unwrap_or_else(|| LogicalLineSource::from_line(&line.line));
             source.prefix_bytes += prefix.content.len();
+            if let Some(control) = &mut source.control {
+                control.columns = control.columns.start + shift..control.columns.end + shift;
+            }
             source
                 .continuation_indent
                 .spans
