@@ -6,6 +6,19 @@ use ratatui::text::Span;
 use std::ops::Range;
 use std::sync::Arc;
 
+/// An action attached to a bounded region of a rendered transcript line.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum LineControlAction {
+    CopyCode(Arc<str>),
+}
+
+/// Display columns and action for a control that stays outside selectable source text.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct LineControl {
+    pub(crate) columns: Range<usize>,
+    pub(crate) action: LineControlAction,
+}
+
 /// Wrapping policy of an existing display renderer.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum LineWrapPolicy {
@@ -38,6 +51,7 @@ pub(crate) struct LogicalLineSource {
     pub(crate) continuation_indent: Line<'static>,
     /// Blank columns after wrapped content; they remain outside the copied source text.
     pub(crate) right_reserve: u16,
+    pub(crate) control: Option<LineControl>,
 }
 
 impl LogicalLineSource {
@@ -55,6 +69,7 @@ impl LogicalLineSource {
             wrap_policy: LineWrapPolicy::Word,
             continuation_indent: Line::default(),
             right_reserve: 0,
+            control: None,
         }
     }
 
@@ -115,6 +130,7 @@ impl LogicalLineSource {
             wrap_policy: self.wrap_policy,
             continuation_indent: self.continuation_indent.clone(),
             right_reserve: self.right_reserve,
+            control: self.control.clone(),
         }
     }
 }

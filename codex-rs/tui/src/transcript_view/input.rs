@@ -20,6 +20,7 @@ use super::*;
 pub(crate) enum ViewAction {
     Changed,
     Copy(String),
+    CopyCode(Arc<str>),
     CopyOnSelect(String),
     PrimarySelection(String),
     CopyAndFollow(String),
@@ -226,6 +227,11 @@ impl TranscriptView {
     ) -> Option<ViewAction> {
         if mode == MouseMode::Interactive
             && let Some(action) = self.handle_follow_control_mouse(event)
+        {
+            return Some(action);
+        }
+        if mode == MouseMode::Interactive
+            && let Some(action) = self.handle_inline_control_mouse(event)
         {
             return Some(action);
         }

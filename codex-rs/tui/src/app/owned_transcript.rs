@@ -581,6 +581,13 @@ impl App {
         match action {
             ViewAction::Changed => {}
             ViewAction::PrimarySelection(text) => self.transcript_view.publish_primary(tui, &text),
+            ViewAction::CopyCode(text) => {
+                let result = tui
+                    .copy_transcript_selection(&text, crate::clipboard_copy::CopyFormat::PlainText);
+                self.transcript_view
+                    .show_copy_feedback(&result, text.chars().count());
+                let _ = self.transcript_view.show_code_copy_result(&result);
+            }
             ViewAction::Copy(text)
             | ViewAction::CopyOnSelect(text)
             | ViewAction::CopyAndFollow(text) => {
