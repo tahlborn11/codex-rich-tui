@@ -73,7 +73,7 @@ pub(crate) fn parse_assistant_markdown(markdown: &str, cwd: &Path) -> ParsedAssi
         let fence_before = fence_tracker.kind();
         fence_tracker.advance(line);
         if fence_before != FenceKind::Outside || fence_tracker.kind() != FenceKind::Outside {
-            visible_lines.push(line.trim_end().to_string());
+            visible_lines.push(line.to_string());
             continue;
         }
 
