@@ -585,39 +585,38 @@ impl AgentMarkdownCell {
         width: u16,
         list_spacing: crate::markdown_render::ListSpacing,
     ) -> Vec<HyperlinkLine> {
-        let render = || {
-            let Some(wrap_width) =
-                crate::width::usable_content_width_u16(width, /*reserved_cols*/ 2)
-            else {
-                return prefix_hyperlink_lines(
-                    vec![HyperlinkLine::new(Line::default())],
-                    "• ".dim(),
-                    "  ".into(),
-                );
-            };
+        let render =
+            || {
+                let Some(wrap_width) =
+                    crate::width::usable_content_width_u16(width, /*reserved_cols*/ 2)
+                else {
+                    return prefix_hyperlink_lines(
+                        vec![HyperlinkLine::new(Line::default())],
+                        "• ".dim(),
+                        "  ".into(),
+                    );
+                };
 
-            // Re-render markdown from source at the current width. Reserve 2 columns for the "• " /
-            // " " prefix prepended below.
-            let lines = crate::markdown::render_markdown_agent_with_list_spacing(
-                &self.markdown_source,
-                Some(wrap_width),
-                Some(self.cwd.as_path()),
-                self.inline_visualization_context.as_ref(),
-                list_spacing,
-            );
-            let lines = if self.spoken_artifacts {
-                let mut lines = lines;
-                super::spoken_artifacts::annotate_spoken_artifacts(&mut lines, &self.cwd);
-                lines
-            } else {
-                lines
+                // Re-render markdown from source at the current width. Reserve 2 columns for the "• " /
+                // " " prefix prepended below.
+                let lines = crate::markdown::render_markdown_agent_with_list_spacing(
+                    &self.markdown_source,
+                    Some(wrap_width),
+                    Some(self.cwd.as_path()),
+                    self.inline_visualization_context.as_ref(),
+                    list_spacing,
+                );
+                let lines = if self.spoken_artifacts {
+                    let mut lines = lines;
+                    super::spoken_artifacts::annotate_spoken_artifacts(&mut lines, &self.cwd);
+                    lines
+                } else {
+                    lines
+                };
+                normalize_whitespace_only_hyperlink_lines(
+                    prefix_hyperlink_lines_outside_background(lines, "• ".dim(), "  ".into()),
+                )
             };
-            normalize_whitespace_only_hyperlink_lines(prefix_hyperlink_lines(
-                lines,
-                "• ".dim(),
-                "  ".into(),
-            ))
-        };
 
         if let Some(rendered_lines) = &self.rendered_lines {
             rendered_lines.render(width, list_spacing, render)
@@ -696,7 +695,7 @@ impl HistoryCell for StreamingAgentTailCell {
     fn display_hyperlink_lines(&self, _width: u16) -> Vec<HyperlinkLine> {
         // Tail lines are already rendered at the controller's current stream width.
         // Re-wrapping them here can split table borders and produce malformed in-flight rows.
-        normalize_whitespace_only_hyperlink_lines(prefix_hyperlink_lines(
+        normalize_whitespace_only_hyperlink_lines(prefix_hyperlink_lines_outside_background(
             self.lines.clone(),
             if self.is_first_line {
                 "• ".dim()
