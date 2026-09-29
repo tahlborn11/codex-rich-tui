@@ -19,6 +19,8 @@ fn next_configured_pet_load_generation() -> ConfiguredPetLoadGeneration {
     )
 }
 
+const AMBIENT_PET_COMPOSER_GAP_COLUMNS: u16 = 2;
+
 pub(super) fn load_ambient_pet(
     config: &crate::local_settings::LocalSettings,
     frame_requester: FrameRequester,
@@ -119,6 +121,20 @@ impl ChatWidget {
 
     pub(crate) fn history_wrap_width(&self, width: u16) -> u16 {
         width.max(1)
+    }
+
+    pub(super) fn ambient_pet_composer_reserved_cols(&self) -> u16 {
+        if !self.bottom_pane.no_modal_or_popup_active() {
+            return 0;
+        }
+        self.ambient_pet
+            .as_ref()
+            .filter(|pet| pet.image_enabled())
+            .map(|pet| {
+                pet.image_columns()
+                    .saturating_add(AMBIENT_PET_COMPOSER_GAP_COLUMNS)
+            })
+            .unwrap_or(0)
     }
 
     pub(crate) fn pet_picker_preview_draw(&self) -> Option<crate::pets::AmbientPetDraw> {
