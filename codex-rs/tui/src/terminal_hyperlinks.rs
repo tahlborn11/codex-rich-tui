@@ -9,6 +9,7 @@ mod source;
 pub(crate) use paragraph::HyperlinkParagraph;
 pub(crate) use source::LineControl;
 pub(crate) use source::LineControlAction;
+pub(crate) use source::LinePanel;
 pub(crate) use source::LineWrapPolicy;
 pub(crate) use source::LogicalLineSource;
 
@@ -259,11 +260,15 @@ pub(crate) fn prefix_hyperlink_lines(
                 subsequent_prefix.clone()
             };
             let shift = display_width(prefix.content.as_ref());
+            let shift_u16 = u16::try_from(shift).unwrap_or(u16::MAX);
             let mut source = line
                 .source
                 .take()
                 .unwrap_or_else(|| LogicalLineSource::from_line(&line.line));
             source.prefix_bytes += prefix.content.len();
+            if let Some(panel) = &mut source.panel {
+                panel.start_column = panel.start_column.saturating_add(shift_u16);
+            }
             if let Some(control) = &mut source.control {
                 control.columns = control.columns.start + shift..control.columns.end + shift;
             }
