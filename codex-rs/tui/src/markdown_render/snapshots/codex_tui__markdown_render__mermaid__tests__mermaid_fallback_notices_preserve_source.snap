@@ -3,40 +3,40 @@ source: tui/src/markdown_render/mermaid_tests.rs
 expression: "cases.join(\"\\n\\n---\\n\\n\")"
 ---
 invalid
-╭─ mermaid ───────────────────────────────────────────────────────────────── ⎘ ╮
-│ This Mermaid diagram uses features the terminal renderer doesn't support.    │
-│ flowchart LR                                                                 │
-│ A[unfinished                                                                 │
-╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ mermaid ─────────────────────────────────────────────────────────────── ⎘ ╮
+│ This Mermaid diagram uses features the terminal renderer doesn't support.  │
+│ flowchart LR                                                               │
+│ A[unfinished                                                               │
+╰────────────────────────────────────────────────────────────────────────────╯
 
 ---
 
 unsupported
-╭─ mermaid ───────────────────────────────────────────────────────────────── ⎘ ╮
-│ This Mermaid diagram uses features the terminal renderer doesn't support.    │
-│ pie                                                                          │
-│ "Cats": 2                                                                    │
-╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ mermaid ─────────────────────────────────────────────────────────────── ⎘ ╮
+│ This Mermaid diagram uses features the terminal renderer doesn't support.  │
+│ pie                                                                        │
+│ "Cats": 2                                                                  │
+╰────────────────────────────────────────────────────────────────────────────╯
 
 ---
 
 unsupported shape after supported edges
-╭─ mermaid ───────────────────────────────────────────────────────────────── ⎘ ╮
-│ This Mermaid diagram uses features the terminal renderer doesn't support.    │
-│ flowchart TD                                                                 │
-│ P --> Q                                                                      │
-│ A[(Database)]                                                                │
-╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ mermaid ─────────────────────────────────────────────────────────────── ⎘ ╮
+│ This Mermaid diagram uses features the terminal renderer doesn't support.  │
+│ flowchart TD                                                               │
+│ P --> Q                                                                    │
+│ A[(Database)]                                                              │
+╰────────────────────────────────────────────────────────────────────────────╯
 
 ---
 
 Markdown string after supported edges
-╭─ mermaid ───────────────────────────────────────────────────────────────── ⎘ ╮
-│ This Mermaid diagram uses features the terminal renderer doesn't support.    │
-│ flowchart TD                                                                 │
-│ P --> Q                                                                      │
-│ A["`hello **world**`"]                                                       │
-╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ mermaid ─────────────────────────────────────────────────────────────── ⎘ ╮
+│ This Mermaid diagram uses features the terminal renderer doesn't support.  │
+│ flowchart TD                                                               │
+│ P --> Q                                                                    │
+│ A["`hello **world**`"]                                                     │
+╰────────────────────────────────────────────────────────────────────────────╯
 
 ---
 
@@ -66,8 +66,8 @@ too wide
 ---
 
 limit
-╭─ mermaid ───────────────────────────────────────────────────────────────── ⎘ ╮
-│ This Mermaid diagram exceeds the terminal renderer's size limits.            │
-│ flowchart TD                                                                 │
-│ A[This label exceeds the forty column limit]                                 │
-╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ mermaid ─────────────────────────────────────────────────────── ⎘ ╮
+│ This Mermaid diagram exceeds the terminal renderer's size limits.  │
+│ flowchart TD                                                       │
+│ A[This label exceeds the forty column limit]                       │
+╰────────────────────────────────────────────────────────────────────╯
