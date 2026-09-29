@@ -1365,19 +1365,19 @@ fn code_block_known_lang_has_syntax_colors() {
 }
 
 #[test]
-fn fenced_code_panel_uses_full_available_width() {
+fn fenced_code_panel_sizes_to_content_with_right_padding() {
     let text = render_markdown_text_with_width("```rust\nfn main() {}\n```\n", Some(36));
     let lines = plain_lines(&text);
 
     assert_eq!(
         lines,
         vec![
-            "╭─ rust ──────────────────────── ⎘ ╮",
-            "│ fn main() {}                     │",
-            "╰──────────────────────────────────╯",
+            "╭─ rust ───── ⎘ ╮",
+            "│ fn main() {}  │",
+            "╰───────────────╯",
         ]
     );
-    assert!(lines.iter().all(|line| display_width(line) == 36));
+    assert!(lines.iter().all(|line| display_width(line) == 17));
 }
 
 #[test]
@@ -1391,19 +1391,19 @@ fn fenced_code_panel_wraps_long_rows_inside_the_background_and_rails() {
     assert_eq!(
         lines,
         vec![
-            "╭─ rust ──────────────── ⎘ ╮",
-            "│ let message = \"a line th │",
-            "│ at is wider than the pan │",
-            "│ el\";                     │",
-            "╰──────────────────────────╯",
+            "╭─ rust ────────────── ⎘ ╮",
+            "│ let message = \"a line  │",
+            "│  that is wider than t  │",
+            "│ he panel\";             │",
+            "╰────────────────────────╯",
         ]
     );
-    assert!(lines.iter().all(|line| display_width(line) == 28));
+    assert!(lines.iter().all(|line| display_width(line) == 26));
     assert_debug_snapshot!("fenced_code_panel_narrow_wrapping", text.lines);
 }
 
 #[test]
-fn fenced_code_panel_root_rows_keep_background_through_the_right_rail() {
+fn fenced_code_panel_background_stops_at_the_content_sized_right_rail() {
     let text = crate::terminal_palette::with_test_default_colors(
         crate::terminal_probe::DefaultColors {
             fg: (220, 220, 220),
@@ -1424,11 +1424,19 @@ fn fenced_code_panel_root_rows_keep_background_through_the_right_rail() {
         || crate::style::user_message_style().bg,
     );
 
-    assert!(text.lines[1..text.lines.len() - 1]
+    assert!(text
+        .lines
         .iter()
-        .all(|line| line.style.bg == panel_background));
+        .all(|line| line.style.bg.is_none()));
+    assert!(text
+        .lines
+        .iter()
+        .flat_map(|line| &line.spans)
+        .all(|span| span.style.bg == panel_background));
     let lines = plain_lines(&text);
-    assert!(lines.iter().all(|line| display_width(line) == 106));
+    let panel_width = display_width(&lines[0]);
+    assert!(panel_width < 106);
+    assert!(lines.iter().all(|line| display_width(line) == panel_width));
     assert!(lines[1..lines.len() - 1]
         .iter()
         .all(|line| line.ends_with('│')));

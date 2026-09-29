@@ -205,7 +205,7 @@ impl StreamingRender {
             &pending_source[final_block_start..],
             raw_source.len(),
             theme_revision,
-            width,
+            width.map(|width| width.saturating_sub(/*assistant marker gutter*/ 2)),
         );
 
         let mut newly_stable_rendered_len = None;

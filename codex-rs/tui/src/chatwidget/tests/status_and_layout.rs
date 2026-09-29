@@ -2608,7 +2608,7 @@ async fn ambient_pet_does_not_reduce_history_wrap_width() {
 
 #[tokio::test]
 #[serial]
-async fn ambient_pet_does_not_reduce_stream_or_composer_width() {
+async fn ambient_pet_only_reserves_composer_text_width() {
     use ratatui::Terminal;
 
     let (mut with_pet, _with_pet_rx, _with_pet_op_rx) =
@@ -2651,10 +2651,31 @@ async fn ambient_pet_does_not_reduce_stream_or_composer_width() {
         .draw(|f| disabled.render(f.area(), f.buffer_mut()))
         .expect("draw disabled-pet chat");
 
-    assert_eq!(
-        with_pet_terminal.backend().buffer(),
-        disabled_terminal.backend().buffer()
+    let pet_row = buffer_row_containing(with_pet_terminal.backend().buffer(), "Minim")
+        .expect("pet-enabled composer row should render draft");
+    let disabled_row = buffer_row_containing(disabled_terminal.backend().buffer(), "Minim")
+        .expect("disabled-pet composer row should render draft");
+
+    assert!(row_tail_is_blank(&pet_row, /*start_col*/ 69));
+    assert!(!row_tail_is_blank(&disabled_row, /*start_col*/ 69));
+    assert_chatwidget_snapshot!(
+        "ambient_pet_composer_text_reserve",
+        normalized_backend_snapshot(with_pet_terminal.backend())
     );
+}
+
+fn buffer_row_containing(buffer: &ratatui::buffer::Buffer, text: &str) -> Option<String> {
+    (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer.cell((x, y)).expect("cell should exist").symbol())
+                .collect::<String>()
+        })
+        .find(|row| row.contains(text))
+}
+
+fn row_tail_is_blank(row: &str, start_col: usize) -> bool {
+    row.chars().skip(start_col).all(char::is_whitespace)
 }
 
 #[tokio::test]

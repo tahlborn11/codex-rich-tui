@@ -12,9 +12,9 @@ expression: "normalize_agent_center_snapshot(render_bottom_popup(&app.chat_widge
                                                       │
                                                       │ Last message
                                                       │ ╭─ code ────────────────────────── ⎘ ╮
-                                                      │ │ let explanation = "A long code lin │
-                                                      │ │ e should wrap inside the task deta │
-                                                      │ │ ils panel.";                       │
+                                                      │ │ let explanation = "A long code li  │
+                                                      │ │ ne should wrap inside the task de  │
+                                                      │ │ tails panel.";                     │
                                                       │ ╰────────────────────────────────────╯
                                                       │
                                                       │ Project

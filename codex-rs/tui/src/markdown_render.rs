@@ -113,11 +113,25 @@ const TABLE_CELL_PADDING: usize = 1;
 const TABLE_HEADER_SEPARATOR_CHAR: char = '━';
 const TABLE_BODY_SEPARATOR_CHAR: char = '─';
 const CODE_BLOCK_COPY_ICON: &str = "⎘";
+const CODE_PANEL_RIGHT_PADDING: usize = 2;
 
 pub(crate) fn code_panel_supports_full_width(label: &str, width: usize) -> bool {
     let left_width = display_width(&format!("╭─ {label} "));
     let right_width = display_width(&format!(" {CODE_BLOCK_COPY_ICON} ╮"));
     width >= left_width + right_width
+}
+
+pub(crate) fn code_panel_width_for_content(
+    label: &str,
+    available_width: usize,
+    content_width: usize,
+) -> Option<usize> {
+    if !code_panel_supports_full_width(label, available_width) {
+        return None;
+    }
+    let header_width = display_width(&format!("╭─ {label}  {CODE_BLOCK_COPY_ICON} ╮"));
+    let body_width = /*left rail*/ 2 + content_width + CODE_PANEL_RIGHT_PADDING + /*right rail*/ 1;
+    Some(available_width.min(header_width.max(body_width)))
 }
 
 struct MarkdownStyles {
@@ -499,6 +513,7 @@ struct Writer<'a, 'policy> {
     code_block_content_end: usize,
     code_block_chrome: CodeBlockChrome,
     code_panel_full_width: bool,
+    code_panel_render_width: Option<usize>,
     code_panel_header_line: Option<usize>,
     code_block_fence: Option<FenceDelimiter>,
     details_depth: usize,
@@ -549,6 +564,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             code_block_content_end: 0,
             code_block_chrome: CodeBlockChrome::Hidden,
             code_panel_full_width: false,
+            code_panel_render_width: None,
             code_panel_header_line: None,
             code_block_fence: None,
             details_depth: 0,
@@ -1234,7 +1250,16 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                     matches!(language.as_deref(), Some("md" | "markdown"));
                 let label = language.clone().unwrap_or_else(|| "code".to_string());
                 if !uses_table_wrapper_syntax {
-                    self.code_panel_full_width = self.code_panel_supports_full_width(&label);
+                    self.code_panel_render_width =
+                        self.code_panel_available_width()
+                            .and_then(|available_width| {
+                                code_panel_width_for_content(
+                                    &label,
+                                    available_width,
+                                    self.fenced_code_content_width(source_range.start),
+                                )
+                            });
+                    self.code_panel_full_width = self.code_panel_render_width.is_some();
                     let pending_marker_line = self.pending_marker_line;
                     let (header, columns) = self.code_panel_header(&label);
                     self.push_code_panel_line(header, CodePanelLine::Header);
@@ -1316,6 +1341,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 Some(diagram) => diagram,
                 None => highlight_code_to_lines(&code, &lang),
             };
+            self.resize_code_panel_for_rendered_lines(&lang, &highlighted);
             for hl_line in highlighted {
                 self.push_line(Line::default());
                 for span in hl_line.spans {
@@ -1363,6 +1389,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         self.code_panel_header_line = None;
         self.code_block_chrome = CodeBlockChrome::Hidden;
         self.code_panel_full_width = false;
+        self.code_panel_render_width = None;
         self.needs_newline = true;
     }
 
@@ -2521,16 +2548,14 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             {
                 let first_indent = self.current_initial_indent.clone();
                 let subsequent_indent = self.current_subsequent_indent.clone();
-                let right_rail_width = if self.code_panel_full_width {
-                    /*padding + rail*/
-                    2
+                let content_width = if self.code_panel_full_width {
+                    self.code_panel_width()
+                        .unwrap_or_default()
+                        .saturating_sub(/*left rail + right padding + right rail*/ 5)
                 } else {
-                    0
-                };
-                let content_width = width
-                    .saturating_sub(Self::spans_display_width(&first_indent))
-                    .saturating_sub(right_rail_width)
-                    .max(1);
+                    width.saturating_sub(Self::spans_display_width(&first_indent))
+                }
+                .max(1);
                 let wrapped = hard_wrap_code_line(&line.line, content_width);
                 let wrapped = remap_wrapped_line(&line, wrapped);
                 for (index, mut wrapped_line) in wrapped.into_iter().enumerate() {
@@ -2701,10 +2726,78 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         self.current_code_panel_line = kind;
     }
 
-    fn code_panel_width(&self) -> Option<usize> {
+    fn code_panel_available_width(&self) -> Option<usize> {
         let prefix_width = Self::spans_display_width(&self.prefix_spans(self.pending_marker_line));
         self.wrap_width
             .map(|width| width.saturating_sub(prefix_width))
+    }
+
+    fn code_panel_width(&self) -> Option<usize> {
+        self.code_panel_render_width
+            .or_else(|| self.code_panel_available_width())
+    }
+
+    fn fenced_code_content_width(&self, source_start: usize) -> usize {
+        let Some(source) = self.input.get(source_start..) else {
+            return 0;
+        };
+        let Some(opening) = source.lines().next() else {
+            return 0;
+        };
+        let opening = opening.trim_start_matches([' ', '\t', '>']);
+        let Some(marker) = opening
+            .chars()
+            .next()
+            .filter(|marker| matches!(marker, '`' | '~'))
+        else {
+            return 0;
+        };
+        let marker_len = opening
+            .chars()
+            .take_while(|candidate| *candidate == marker)
+            .count();
+        source
+            .lines()
+            .skip(1)
+            .take_while(|line| {
+                let line = line.trim_start_matches([' ', '\t', '>']);
+                let count = line
+                    .chars()
+                    .take_while(|candidate| *candidate == marker)
+                    .count();
+                count < marker_len || !line[count..].trim().is_empty()
+            })
+            .map(display_width)
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn resize_code_panel_for_rendered_lines(&mut self, label: &str, lines: &[Line<'static>]) {
+        let Some(width) = self
+            .code_panel_available_width()
+            .and_then(|available_width| {
+                code_panel_width_for_content(
+                    label,
+                    available_width,
+                    lines.iter().map(Line::width).max().unwrap_or(0),
+                )
+            })
+        else {
+            return;
+        };
+        if self.code_panel_render_width == Some(width) {
+            return;
+        }
+        self.code_panel_render_width = Some(width);
+        let (header, columns) = self.code_panel_header(label);
+        if self.current_code_panel_line == CodePanelLine::Header {
+            if let Some(line) = self.current_line_content.as_mut() {
+                line.line = header;
+            }
+            if let Some(control) = self.current_line_control.as_mut() {
+                control.columns = columns;
+            }
+        }
     }
 
     fn code_panel_header(&self, label: &str) -> (Line<'static>, Range<usize>) {
@@ -2754,11 +2847,6 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         }
     }
 
-    fn code_panel_supports_full_width(&self, label: &str) -> bool {
-        self.code_panel_width()
-            .is_some_and(|width| code_panel_supports_full_width(label, width))
-    }
-
     fn finish_code_panel_line(&self, line: &mut Line<'static>, panel_span_start: usize) {
         if panel_span_start == usize::MAX {
             return;
@@ -2767,17 +2855,14 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         let panel_style = crate::style::user_message_style();
         let prefix_width =
             Self::spans_display_width(&line.spans[..panel_span_start.min(line.spans.len())]);
-        if self.code_panel_full_width && prefix_width == 0 {
-            // Root panels span the transcript width. Paint the row itself so a retained or
-            // reflowed gap cannot expose the terminal background between code and the right rail.
-            line.style = line.style.patch(panel_style);
-        }
         if self.current_code_panel_line == CodePanelLine::Body
             && self.code_panel_full_width
-            && let Some(width) = self.wrap_width
-            && line.width() < width
+            && let Some(panel_width) = self.code_panel_width()
+            && line.width() < prefix_width.saturating_add(panel_width)
         {
-            let padding = width.saturating_sub(line.width() + 1);
+            let padding = prefix_width
+                .saturating_add(panel_width)
+                .saturating_sub(line.width() + 1);
             line.push_span(Span::styled(" ".repeat(padding), panel_style));
             line.push_span(Span::styled("│", panel_style.dim()));
         }

@@ -234,12 +234,13 @@ impl ChatWidget {
                 transcript_hint: self.bottom_pane.transcript_shortcut_hint(),
             }))
         } else {
+            let textarea_right_reserve = self.ambient_pet_composer_reserved_cols();
             self.bottom_pane
                 .as_renderable_with_options(crate::bottom_pane::ComposerRenderOptions {
                     composer_gap,
                     working_tip,
                     warning_count: self.warning_display_state.count,
-                    textarea_right_reserve: 0,
+                    textarea_right_reserve,
                     separate_status_line: command_popup_placement
                         != crate::bottom_pane::CommandPopupPlacement::AboveComposer,
                     command_popup_placement,

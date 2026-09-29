@@ -1,6 +1,7 @@
 use super::*;
 use crate::clipboard_copy::CopyFormat;
 use crate::history_cell::AgentMarkdownCell;
+use crate::history_cell::AgentMessageCell;
 use crate::history_cell::HistoryCell;
 use pretty_assertions::assert_eq;
 use ratatui::buffer::Buffer;
@@ -509,6 +510,12 @@ fn selected_open_code_fence_keeps_streamed_rows_in_one_block() {
         while let Some(cell) = stream.on_commit_tick_batch(/*max_lines*/ 1).0 {
             cells.push(cell.into());
         }
+    }
+    let tail = stream.current_tail_lines();
+    if !tail.is_empty() {
+        cells.push(Arc::new(AgentMessageCell::new_hyperlink_lines(
+            tail, /*is_first_line*/ false,
+        )));
     }
     let area = Rect::new(
         /*x*/ 0, /*y*/ 0, /*width*/ 80, /*height*/ 10,
