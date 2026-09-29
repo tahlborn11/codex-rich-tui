@@ -82,6 +82,7 @@ pub(crate) fn render_with_copy_sources(
         last_start: 0,
         first_is_html: false,
         mutable_fence_start: None,
+        resizable_fence: None,
     };
     let mut writer = Writer::new(input, width, cwd, is_hidden_link_destination);
     // Drop the consumed parser before the rendering state, including on unwind.
@@ -103,7 +104,16 @@ pub(crate) fn render_with_copy_sources(
             }),
         has_reference_link_definition,
         first_top_level_block_is_html: parser.first_is_html,
-        mutable_fence_start: parser.mutable_fence_start,
+        mutable_fence_start: [
+            parser.mutable_fence_start,
+            parser
+                .resizable_fence
+                .filter(|(_, fence_start)| !has_closing_fence(input, *fence_start))
+                .map(|(block_start, _)| block_start),
+        ]
+        .into_iter()
+        .flatten()
+        .min(),
     }
 }
 
@@ -115,6 +125,8 @@ struct TopLevelBlockTracker<I> {
     last_start: usize,
     first_is_html: bool,
     mutable_fence_start: Option<usize>,
+    /// Final framed fence plus its exact opening delimiter offset.
+    resizable_fence: Option<(usize, usize)>,
 }
 
 impl<'a, I> Iterator for TopLevelBlockTracker<I>
@@ -127,6 +139,7 @@ where
         let (event, range) = self.iter.next()?;
         if self.depth == 0 && matches!(&event, Event::Start(_) | Event::Rule | Event::Html(_)) {
             self.mutable_fence_start = None;
+            self.resizable_fence = None;
             self.block_count += 1;
             self.last_start = range.start;
             if self.block_count == 1 {
@@ -134,13 +147,19 @@ where
                     matches!(&event, Event::Start(Tag::HtmlBlock) | Event::Html(_));
             }
         }
-        if let Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))) = &event
-            && (super::preferences::current().mermaid
-                && info.split([',', ' ', '\t']).next() == Some("mermaid")
-                || !super::preferences::current().tables
-                    && crate::table_detect::is_markdown_fence_info(info, /*marker_len*/ 0))
-        {
-            self.mutable_fence_start.get_or_insert(self.last_start);
+        if let Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))) = &event {
+            let language = info.split([',', ' ', '\t']).next();
+            let has_resizable_panel = !matches!(language, Some("md" | "markdown"));
+            let has_mutable_rendering = (super::preferences::current().mermaid
+                && language == Some("mermaid"))
+                || (!super::preferences::current().tables
+                    && crate::table_detect::is_markdown_fence_info(info, /*marker_len*/ 0));
+            if has_mutable_rendering {
+                self.mutable_fence_start.get_or_insert(self.last_start);
+            } else if has_resizable_panel {
+                self.resizable_fence
+                    .get_or_insert((self.last_start, range.start));
+            }
         }
         match event {
             Event::Start(_) => self.depth += 1,
@@ -149,4 +168,40 @@ where
         }
         Some((event, range))
     }
+}
+
+fn has_closing_fence(input: &str, source_start: usize) -> bool {
+    let Some(source) = input.get(source_start..) else {
+        return false;
+    };
+    let mut lines = source.lines();
+    let Some(mut opening) = lines.next().map(str::trim_start) else {
+        return false;
+    };
+    while let Some(remainder) = opening.strip_prefix('>') {
+        opening = remainder.trim_start();
+    }
+    let Some(marker) = opening
+        .chars()
+        .next()
+        .filter(|marker| matches!(marker, '`' | '~'))
+    else {
+        return false;
+    };
+    let marker_len = opening
+        .chars()
+        .take_while(|candidate| *candidate == marker)
+        .count();
+    marker_len >= 3
+        && lines.any(|mut line| {
+            line = line.trim_start();
+            while let Some(remainder) = line.strip_prefix('>') {
+                line = remainder.trim_start();
+            }
+            let count = line
+                .chars()
+                .take_while(|candidate| *candidate == marker)
+                .count();
+            count >= marker_len && line[count..].trim().is_empty()
+        })
 }

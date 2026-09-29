@@ -81,9 +81,9 @@ expression: render.lines
             Span::from("╭─ ").bg(Color::Rgb(48, 48, 48)).dim(),
             Span::from("rust").bg(Color::Rgb(48, 48, 48)).bold(),
             Span::from(" ").bg(Color::Rgb(48, 48, 48)).dim(),
-            Span::from("────────────────────────────────────").bg(Color::Rgb(48, 48, 48)).dim(),
+            Span::from("─────").bg(Color::Rgb(48, 48, 48)).dim(),
             Span::from(" ⎘ ╮").bg(Color::Rgb(48, 48, 48)).dim(),
-        ]).bg(Color::Rgb(48, 48, 48)),
+        ]),
         hyperlinks: [],
     },
     HyperlinkLine {
@@ -97,13 +97,13 @@ expression: render.lines
             Span::from(" ").fg(Color::Rgb(205, 214, 244)).bg(Color::Rgb(48, 48, 48)),
             Span::from("{").fg(Color::Rgb(147, 153, 178)).bg(Color::Rgb(48, 48, 48)),
             Span::from("}").fg(Color::Rgb(147, 153, 178)).bg(Color::Rgb(48, 48, 48)),
-            Span::from("                                 ").bg(Color::Rgb(48, 48, 48)),
+            Span::from("  ").bg(Color::Rgb(48, 48, 48)),
             Span::from("│").bg(Color::Rgb(48, 48, 48)).dim(),
-        ]).bg(Color::Rgb(48, 48, 48)),
+        ]),
         hyperlinks: [],
     },
     HyperlinkLine {
-        line: Line::from(Span::from("╰──────────────────────────────────────────────╯").bg(Color::Rgb(48, 48, 48)).dim()),
+        line: Line::from(Span::from("╰───────────────╯").bg(Color::Rgb(48, 48, 48)).dim()),
         hyperlinks: [],
     },
     HyperlinkLine {

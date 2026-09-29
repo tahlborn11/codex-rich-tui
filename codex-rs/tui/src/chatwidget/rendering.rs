@@ -244,7 +244,7 @@ impl ChatWidget {
         } else {
             options.rendered_selection = Some(&self.rendered_selection);
             options.warning_count = self.warning_display_state.count;
-            options.textarea_right_reserve = 0;
+            options.textarea_right_reserve = self.ambient_pet_composer_reserved_cols();
             options.separate_status_line = options.command_popup_placement
                 != crate::bottom_pane::CommandPopupPlacement::AboveComposer;
             self.bottom_pane.backdrop_with_options(options)
