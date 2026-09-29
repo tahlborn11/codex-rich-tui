@@ -1,0 +1,10 @@
+---
+source: tui/src/chatwidget/tests/status_and_layout.rs
+expression: normalized_backend_snapshot(with_pet_terminal.backend())
+---
+"                                                                                "
+"                                                                                "
+"› Minim commodo esse elit Lorem exercitation elit ipsum proident                "
+"  labore. Esse culpa aliqua                                                     "
+"                                                                                "
+"  GPT-5.6-Sol default · /tmp/project                                            "

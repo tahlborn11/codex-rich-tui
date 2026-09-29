@@ -1,7 +1,7 @@
 //! A conservative fast path for one open, top-level, language-tagged code fence.
 
 use crate::markdown_copy::CopyLine;
-use crate::markdown_render::code_panel_supports_full_width;
+use crate::markdown_render::code_panel_width_for_content;
 use crate::markdown_render::hard_wrap_code_line;
 use crate::render::highlight::MAX_HIGHLIGHT_LINE_BYTES;
 use crate::render::highlight::StreamingCodeHighlighter;
@@ -9,6 +9,7 @@ use crate::render::highlight::syntax_theme_revision;
 use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_hyperlinks::LineControlAction;
 use crate::terminal_hyperlinks::LogicalLineSource;
+use crate::width::display_width;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -22,8 +23,8 @@ pub(super) struct OpenCodeFence {
     content_start: usize,
     source_len: usize,
     theme_revision: u64,
+    available_width: Option<usize>,
     panel_width: Option<usize>,
-    panel_full_width: bool,
     /// Initialized only if another chunk arrives, avoiding duplicate work on one-shot fences.
     highlighter: Option<StreamingCodeHighlighter>,
 }
@@ -77,8 +78,14 @@ impl OpenCodeFence {
         {
             return None;
         }
-        let panel_full_width =
-            panel_width.is_some_and(|width| code_panel_supports_full_width(language, width));
+        let available_width = panel_width;
+        let panel_width = available_width.and_then(|available_width| {
+            code_panel_width_for_content(
+                language,
+                available_width,
+                code.lines().map(display_width).max().unwrap_or(0),
+            )
+        });
         Some(Self {
             marker,
             marker_len,
@@ -86,8 +93,8 @@ impl OpenCodeFence {
             content_start: source_len.checked_sub(code.len())?,
             source_len,
             theme_revision,
+            available_width,
             panel_width,
-            panel_full_width,
             highlighter: None,
         })
     }
@@ -109,6 +116,17 @@ impl OpenCodeFence {
         {
             return None;
         }
+        let content_width = raw_source[self.content_start..]
+            .lines()
+            .map(display_width)
+            .max()
+            .unwrap_or(0);
+        let desired_width = self.available_width.and_then(|available_width| {
+            code_panel_width_for_content(&self.language, available_width, content_width)
+        });
+        if desired_width != self.panel_width {
+            return None;
+        }
         let highlighter = match self.highlighter.take() {
             Some(highlighter) => highlighter,
             None => StreamingCodeHighlighter::new(
@@ -127,21 +145,14 @@ impl OpenCodeFence {
         let lines = lines
             .into_iter()
             .flat_map(|line| {
-                let inner_width = self
-                    .panel_width
-                    .map(|width| {
-                        width.saturating_sub(
-                            /*left rail*/
-                            2 + if self.panel_full_width {
-                                /*padding + right rail*/
-                                2
-                            } else {
-                                0
-                            },
-                        )
-                    })
-                    .unwrap_or(usize::MAX)
-                    .max(1);
+                let inner_width = match (self.panel_width, self.available_width) {
+                    (Some(width), _) => {
+                        width.saturating_sub(/*left rail + right padding + right rail*/ 5)
+                    }
+                    (None, Some(width)) => width.saturating_sub(/*left rail*/ 2),
+                    (None, None) => usize::MAX,
+                }
+                .max(1);
                 hard_wrap_code_line(&line, inner_width)
             })
             .map(|mut line| {
@@ -151,8 +162,7 @@ impl OpenCodeFence {
                     .insert(/*index*/ 0, Span::styled("│ ", panel_style.dim()));
                 source.prefix_bytes = "│ ".len();
                 source.continuation_indent = Line::from("│ ".dim());
-                if self.panel_full_width
-                    && let Some(width) = self.panel_width
+                if let Some(width) = self.panel_width
                     && line.width() < width
                 {
                     let padding = width.saturating_sub(line.width() + 1);
@@ -161,9 +171,6 @@ impl OpenCodeFence {
                 }
                 for span in &mut line.spans {
                     span.style = span.style.patch(panel_style);
-                }
-                if self.panel_full_width {
-                    line.style = line.style.patch(panel_style);
                 }
                 let mut line = HyperlinkLine::new(line);
                 line.source = Some(source);
