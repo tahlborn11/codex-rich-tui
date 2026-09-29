@@ -1,0 +1,11 @@
+---
+source: tui/src/transcript_view/text_tests.rs
+expression: "format!(\"{rendered}\\n\\nshort-row background:\\n{background}\")"
+---
+• ╭─ csharp ───────────────────────────────────────────── ⎘ ╮
+  │ var response = await cashflows.RetrieveCashflowsAsync(  │
+  │     new RetrieveCashflowsV2Request                      │
+  ╰─────────────────────────────────────────────────────────╯
+
+short-row background:
+··▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓·············································

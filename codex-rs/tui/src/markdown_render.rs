@@ -51,6 +51,7 @@ use crate::style::table_separator_style;
 use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_hyperlinks::LineControl;
 use crate::terminal_hyperlinks::LineControlAction;
+use crate::terminal_hyperlinks::LinePanel;
 use crate::terminal_hyperlinks::remap_wrapped_line;
 use crate::terminal_hyperlinks::visible_lines;
 use crate::terminal_hyperlinks::web_destination;
@@ -117,6 +118,7 @@ const TABLE_HEADER_SEPARATOR_CHAR: char = '━';
 const TABLE_BODY_SEPARATOR_CHAR: char = '─';
 const CODE_BLOCK_COPY_ICON: &str = "⎘";
 const CODE_PANEL_RIGHT_PADDING: usize = 2;
+pub(crate) const CODE_PANEL_RIGHT_RESERVE: u16 = 3;
 
 pub(crate) fn code_panel_supports_full_width(label: &str, width: usize) -> bool {
     let left_width = display_width(&format!("╭─ {label} "));
@@ -2617,7 +2619,14 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                         source.prefix_bytes += prefix_bytes;
                         source.continuation_indent = subsequent_indent.clone().into();
                     }
-                    self.finish_code_panel_line(&mut wrapped_line.line, panel_span_start);
+                    let panel =
+                        self.finish_code_panel_line(&mut wrapped_line.line, panel_span_start);
+                    if let Some(source) = wrapped_line.source.as_mut()
+                        && let Some(panel) = panel
+                    {
+                        source.right_reserve = CODE_PANEL_RIGHT_RESERVE;
+                        source.panel = Some(panel);
+                    }
                     let line_style = style.patch(wrapped_line.line.style);
                     self.push_output_line(wrapped_line.style(line_style));
                 }
@@ -2655,7 +2664,11 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                     control.columns = control.columns.start + shift..control.columns.end + shift;
                     control
                 });
-                self.finish_code_panel_line(&mut line.line, panel_span_start);
+                let panel = self.finish_code_panel_line(&mut line.line, panel_span_start);
+                if let Some(panel) = panel {
+                    source.right_reserve = CODE_PANEL_RIGHT_RESERVE;
+                    source.panel = Some(panel);
+                }
                 if matches!(
                     self.current_code_panel_line,
                     CodePanelLine::Header | CodePanelLine::Footer
@@ -2891,14 +2904,29 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         }
     }
 
-    fn finish_code_panel_line(&self, line: &mut Line<'static>, panel_span_start: usize) {
+    fn finish_code_panel_line(
+        &self,
+        line: &mut Line<'static>,
+        panel_span_start: usize,
+    ) -> Option<LinePanel> {
         if panel_span_start == usize::MAX {
-            return;
+            return None;
         }
 
         let panel_style = crate::style::user_message_style();
         let prefix_width =
             Self::spans_display_width(&line.spans[..panel_span_start.min(line.spans.len())]);
+        let panel =
+            if self.current_code_panel_line == CodePanelLine::Body && self.code_panel_full_width {
+                self.code_panel_width().map(|panel_width| LinePanel {
+                    start_column: u16::try_from(prefix_width).unwrap_or(u16::MAX),
+                    width: u16::try_from(panel_width).unwrap_or(u16::MAX),
+                    style: panel_style,
+                    right_rail_style: panel_style.dim(),
+                })
+            } else {
+                None
+            };
         if self.current_code_panel_line == CodePanelLine::Body
             && self.code_panel_full_width
             && let Some(panel_width) = self.code_panel_width()
@@ -2913,6 +2941,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         for span in line.spans.iter_mut().skip(panel_span_start) {
             span.style = span.style.patch(panel_style);
         }
+        panel
     }
 
     fn push_hyperlink_line(&mut self, line: HyperlinkLine) {

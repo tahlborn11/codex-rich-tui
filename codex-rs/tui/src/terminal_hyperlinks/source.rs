@@ -19,6 +19,15 @@ pub(crate) struct LineControl {
     pub(crate) action: LineControlAction,
 }
 
+/// A bounded panel surface that stays outside selectable source text during transcript reflow.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LinePanel {
+    pub(crate) start_column: u16,
+    pub(crate) width: u16,
+    pub(crate) style: Style,
+    pub(crate) right_rail_style: Style,
+}
+
 /// Wrapping policy of an existing display renderer.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum LineWrapPolicy {
@@ -51,6 +60,7 @@ pub(crate) struct LogicalLineSource {
     pub(crate) continuation_indent: Line<'static>,
     /// Blank columns after wrapped content; they remain outside the copied source text.
     pub(crate) right_reserve: u16,
+    pub(crate) panel: Option<LinePanel>,
     pub(crate) control: Option<LineControl>,
 }
 
@@ -69,6 +79,7 @@ impl LogicalLineSource {
             wrap_policy: LineWrapPolicy::Word,
             continuation_indent: Line::default(),
             right_reserve: 0,
+            panel: None,
             control: None,
         }
     }
@@ -130,6 +141,7 @@ impl LogicalLineSource {
             wrap_policy: self.wrap_policy,
             continuation_indent: self.continuation_indent.clone(),
             right_reserve: self.right_reserve,
+            panel: self.panel,
             control: self.control.clone(),
         }
     }

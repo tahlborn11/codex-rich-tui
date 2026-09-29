@@ -1,6 +1,7 @@
 //! A conservative fast path for one open, top-level, language-tagged code fence.
 
 use crate::markdown_copy::CopyLine;
+use crate::markdown_render::CODE_PANEL_RIGHT_RESERVE;
 use crate::markdown_render::code_panel_width_for_content;
 use crate::markdown_render::hard_wrap_code_line;
 use crate::render::highlight::MAX_HIGHLIGHT_LINE_BYTES;
@@ -8,6 +9,7 @@ use crate::render::highlight::StreamingCodeHighlighter;
 use crate::render::highlight::syntax_theme_revision;
 use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_hyperlinks::LineControlAction;
+use crate::terminal_hyperlinks::LinePanel;
 use crate::terminal_hyperlinks::LogicalLineSource;
 use crate::width::display_width;
 use ratatui::style::Stylize;
@@ -168,6 +170,15 @@ impl OpenCodeFence {
                     let padding = width.saturating_sub(line.width() + 1);
                     line.push_span(Span::styled(" ".repeat(padding), panel_style));
                     line.push_span(Span::styled("│", panel_style.dim()));
+                }
+                if let Some(width) = self.panel_width {
+                    source.right_reserve = CODE_PANEL_RIGHT_RESERVE;
+                    source.panel = Some(LinePanel {
+                        start_column: 0,
+                        width: u16::try_from(width).unwrap_or(u16::MAX),
+                        style: panel_style,
+                        right_rail_style: panel_style.dim(),
+                    });
                 }
                 for span in &mut line.spans {
                     span.style = span.style.patch(panel_style);

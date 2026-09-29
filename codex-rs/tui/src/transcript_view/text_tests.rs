@@ -291,6 +291,100 @@ fn source_backed_markdown_copy_preserves_code_indentation() {
 }
 
 #[test]
+fn code_panel_fill_and_right_rail_survive_source_backed_layout() {
+    use crate::history_cell::AgentMarkdownCell;
+    use crate::history_cell::HistoryCell;
+
+    let lines = crate::terminal_palette::with_test_default_colors(
+        crate::terminal_probe::DefaultColors {
+            fg: (220, 220, 220),
+            bg: (20, 20, 20),
+        },
+        || {
+            AgentMarkdownCell::new(
+                "```csharp\nvar response = await cashflows.RetrieveCashflowsAsync(\n    new RetrieveCashflowsV2Request\n```"
+                    .into(),
+                std::path::Path::new("."),
+            )
+            .display_hyperlink_lines(/*width*/ 106)
+        },
+    );
+    let layout = TextLayout::new(lines, /*width*/ 106);
+    let area = Rect::new(
+        /*x*/ 0, /*y*/ 0, /*width*/ 106, /*height*/ 4,
+    );
+    let mut buffer = Buffer::empty(area);
+    layout.render(area, &mut buffer, /*start_row*/ 0);
+
+    let rows = (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+    let header_row = rows
+        .iter()
+        .position(|row| row.contains("csharp"))
+        .expect("code panel header");
+    let body_row = rows
+        .iter()
+        .position(|row| row.contains("new RetrieveCashflowsV2Request"))
+        .expect("short code row");
+    let right_rail_column = (0..area.width)
+        .rfind(|&column| {
+            !buffer[(column, header_row as u16)]
+                .symbol()
+                .trim()
+                .is_empty()
+        })
+        .map(usize::from)
+        .expect("header right rail");
+    let panel_background = crate::terminal_palette::with_test_default_colors(
+        crate::terminal_probe::DefaultColors {
+            fg: (220, 220, 220),
+            bg: (20, 20, 20),
+        },
+        || {
+            crate::style::user_message_style()
+                .bg
+                .expect("panel background")
+        },
+    );
+
+    assert_eq!(
+        buffer[(right_rail_column as u16, body_row as u16)].symbol(),
+        "│"
+    );
+    assert!(
+        (2..=right_rail_column)
+            .all(|column| buffer[(column as u16, body_row as u16)].bg == panel_background)
+    );
+    assert_ne!(
+        buffer[((right_rail_column + 1) as u16, body_row as u16)].bg,
+        panel_background
+    );
+    let rendered = rows
+        .iter()
+        .map(|row| row.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let background = (0..area.width)
+        .map(|column| {
+            if buffer[(column, body_row as u16)].bg == panel_background {
+                '▓'
+            } else {
+                '·'
+            }
+        })
+        .collect::<String>();
+    insta::assert_snapshot!(
+        "code_panel_fill_survives_source_backed_layout",
+        format!("{rendered}\n\nshort-row background:\n{background}")
+    );
+}
+
+#[test]
 fn repeated_source_prefix_never_becomes_a_synthetic_indent() {
     let source = "x x x x x";
     let wrapped = adaptive_wrap_hyperlink_lines(
