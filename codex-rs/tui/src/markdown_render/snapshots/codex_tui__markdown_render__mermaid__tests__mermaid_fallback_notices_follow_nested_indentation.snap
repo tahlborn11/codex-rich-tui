@@ -2,20 +2,22 @@
 source: tui/src/markdown_render/mermaid_tests.rs
 expression: "markdown_text(source, 40)"
 ---
-│ ╭─ mermaid ─────────────────────── ⎘ ╮
-│ │ This Mermaid diagram uses features │
-│ │ the terminal renderer doesn't      │
-│ │ support.                           │
-│ │ pie                                │
-│ │ "Cats": 2                          │
-│ ╰────────────────────────────────────╯
+│ ╭─ mermaid ───────────────────── ⎘ ╮
+│ │ This Mermaid diagram uses featu  │
+│ │ res                              │
+│ │ the terminal renderer doesn't    │
+│ │ support.                         │
+│ │ pie                              │
+│ │ "Cats": 2                        │
+│ ╰──────────────────────────────────╯
 
 • Diagram:
 
-  ╭─ mermaid ─────────────────────── ⎘ ╮
-  │ This Mermaid diagram uses features │
-  │ the terminal renderer doesn't      │
-  │ support.                           │
-  │ pie                                │
-  │ "Cats": 2                          │
-  ╰────────────────────────────────────╯
+  ╭─ mermaid ───────────────────── ⎘ ╮
+  │ This Mermaid diagram uses featu  │
+  │ res                              │
+  │ the terminal renderer doesn't    │
+  │ support.                         │
+  │ pie                              │
+  │ "Cats": 2                        │
+  ╰──────────────────────────────────╯
