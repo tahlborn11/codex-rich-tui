@@ -30,6 +30,7 @@ use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_hyperlinks::HyperlinkParagraph;
 use crate::terminal_hyperlinks::LineControl;
 use crate::terminal_hyperlinks::LineControlAction;
+use crate::terminal_hyperlinks::LinePanel;
 use crate::terminal_hyperlinks::LineWrapPolicy;
 use crate::terminal_hyperlinks::LogicalLineSource;
 use crate::terminal_hyperlinks::remap_source_wrapped_line;
@@ -68,6 +69,7 @@ struct TextRow {
     first_column: usize,
     prefix_columns: usize,
     tabs: tabs::TabStops,
+    panel: Option<LinePanel>,
     control: Option<LineControl>,
 }
 
@@ -188,6 +190,7 @@ impl TextLayout {
                 first_column: indent,
                 prefix_columns: indent,
                 tabs: tabs::TabStops::default(),
+                panel: None,
                 control: None,
             },
         );
@@ -222,6 +225,7 @@ impl TextLayout {
                     first_column: 0,
                     prefix_columns: 0,
                     tabs: tabs::TabStops::default(),
+                    panel: None,
                     control: None,
                 },
             );
@@ -311,9 +315,31 @@ impl TextLayout {
             let mut row_area =
                 Rect::new(area.x, area.y + screen_row, area.width, /*height*/ 1);
             buf.set_style(row_area, row.line.line.style);
+            if let Some(panel) = row.panel {
+                let start = panel.start_column.min(row_area.width);
+                let width = panel.width.min(row_area.width.saturating_sub(start));
+                if width > 0 {
+                    buf.set_style(
+                        Rect::new(row_area.x + start, row_area.y, width, /*height*/ 1),
+                        panel.style,
+                    );
+                }
+            }
             row_area.width = row.content_width;
             HyperlinkParagraph::new(std::slice::from_ref(&row.line), row.line.line.style)
                 .render(row_area, buf);
+            if let Some(panel) = row.panel {
+                let start = panel.start_column.min(area.width);
+                let width = panel.width.min(area.width.saturating_sub(start));
+                if width > 0 {
+                    buf.set_string(
+                        area.x + start + width - 1,
+                        area.y + screen_row,
+                        "│",
+                        panel.right_rail_style,
+                    );
+                }
+            }
         }
     }
 
@@ -480,7 +506,12 @@ impl TextLayout {
 }
 
 fn layout_line(logical: &LogicalLine, text_start: usize, width: u16) -> Vec<TextRow> {
-    let content_width = width.saturating_sub(logical.right_reserve).max(/*other*/ 1);
+    let row_width = logical.origin.panel.map_or(width, |panel| {
+        width.min(panel.start_column.saturating_add(panel.width))
+    });
+    let content_width = row_width
+        .saturating_sub(logical.right_reserve)
+        .max(/*other*/ 1);
     let mut logical = Cow::Borrowed(logical);
     if (line_width(&logical.initial_indent) == usize::from(content_width)
         && !logical.origin.range.is_empty())
@@ -558,6 +589,7 @@ fn layout_line(logical: &LogicalLine, text_start: usize, width: u16) -> Vec<Text
                 first_column: first_column + prefix_columns,
                 prefix_columns,
                 tabs,
+                panel: logical.origin.panel,
                 control: (index == 0)
                     .then(|| logical.origin.control.clone())
                     .flatten(),
