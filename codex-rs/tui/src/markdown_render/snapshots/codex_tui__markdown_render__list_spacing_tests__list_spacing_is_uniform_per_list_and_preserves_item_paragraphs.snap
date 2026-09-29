@@ -74,31 +74,31 @@ Uniform:
 
 Compact:
 • One
-• ╭─ text ────────── ⎘ ╮
-  │                    │
-  │ code               │
-  ╰────────────────────╯
+• ╭─ text  ⎘ ╮
+  │          │
+  │ code     │
+  ╰──────────╯
 • Three
 
-  ╭─ text ────────── ⎘ ╮
-  │ after paragraph    │
-  ╰────────────────────╯
+  ╭─ text ──────── ⎘ ╮
+  │ after paragraph  │
+  ╰──────────────────╯
 
 ---
 
 Uniform:
 • One
 
-• ╭─ text ────────── ⎘ ╮
-  │                    │
-  │ code               │
-  ╰────────────────────╯
+• ╭─ text  ⎘ ╮
+  │          │
+  │ code     │
+  ╰──────────╯
 
 • Three
 
-  ╭─ text ────────── ⎘ ╮
-  │ after paragraph    │
-  ╰────────────────────╯
+  ╭─ text ──────── ⎘ ╮
+  │ after paragraph  │
+  ╰──────────────────╯
 
 ---
 

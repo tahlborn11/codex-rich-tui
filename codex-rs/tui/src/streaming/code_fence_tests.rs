@@ -2,6 +2,7 @@ use super::OpenCodeFence;
 use super::has_possible_closing_line;
 use crate::render::highlight::MAX_HIGHLIGHT_LINE_BYTES;
 use crate::render::highlight::syntax_theme_revision;
+use crate::width::display_width;
 
 #[test]
 fn detects_only_source_preserving_open_fences() {
@@ -73,4 +74,39 @@ fn lazy_initialization_rejects_a_changed_theme() {
             .append(&format!("{source}{appended}"), appended)
             .is_none()
     );
+}
+
+#[test]
+fn append_keeps_the_content_sized_rail_for_shorter_lines() {
+    let source = "```rust\nlet message = 1;\n";
+    let fence =
+        OpenCodeFence::detect(source, source.len(), syntax_theme_revision(), Some(80)).unwrap();
+    let panel_width = fence.panel_width.expect("framed panel width");
+    let appended = "return;\n";
+    let raw_source = format!("{source}{appended}");
+
+    let (_, lines) = fence
+        .append(&raw_source, appended)
+        .expect("append short line");
+
+    assert!(lines.iter().all(|line| line.line.width() == panel_width));
+    assert!(lines.iter().all(|line| {
+        line.line
+            .spans
+            .last()
+            .is_some_and(|span| span.content == "│")
+    }));
+}
+
+#[test]
+fn append_recomputes_when_new_code_needs_a_wider_panel() {
+    let source = "```rust\nx\n";
+    let fence =
+        OpenCodeFence::detect(source, source.len(), syntax_theme_revision(), Some(80)).unwrap();
+    let appended = "let message = \"this line grows the panel\";\n";
+    let raw_source = format!("{source}{appended}");
+    let panel_width = fence.panel_width.expect("framed panel width");
+
+    assert!(display_width(appended.trim_end()) + 5 > panel_width);
+    assert!(fence.append(&raw_source, appended).is_none());
 }
