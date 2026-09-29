@@ -14,9 +14,9 @@ rich before:
   ━━━━━━  ━━━━━━━
    code    x = 1
 
-  ╭─ text ────────────────────────── ⎘ ╮
-  │ copy me                            │
-  ╰────────────────────────────────────╯
+  ╭─ text  ⎘ ╮
+  │ copy me  │
+  ╰──────────╯
 • Called
   └ workspace.inspect({"path":"README.md
         "})
@@ -52,9 +52,9 @@ rich after:
   ━━━━━━  ━━━━━━━
    code    x = 1
 
-  ╭─ text ────────────────────────── ⎘ ╮
-  │ copy me                            │
-  ╰────────────────────────────────────╯
+  ╭─ text  ⎘ ╮
+  │ copy me  │
+  ╰──────────╯
 • Called
   └ workspace.inspect({"path":"README.md
         "})

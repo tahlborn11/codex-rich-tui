@@ -39,9 +39,9 @@ expression: "stages.join(\"\\n---\\n\")"
 
 - [x] inline
 
-╭─ text ──────────── ⎘ ╮
-│ - [x] fenced         │
-╰──────────────────────╯
+╭─ text ───── ⎘ ╮
+│ - [x] fenced  │
+╰───────────────╯
 
 [ ] Plain text
 
