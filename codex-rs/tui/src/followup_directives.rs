@@ -26,6 +26,25 @@ pub(crate) fn rewrite_followup_line(line: &str) -> Option<RewrittenFollowupLine>
     let content = line.trim_start_matches([' ', '\t']);
     let indent = &line[..line.len() - content.len()];
     let content = content.strip_prefix("- ").unwrap_or(content);
+    if let Some(directive) = parse_assistant_directive(content, QuoteEscaping::Backslash)
+        && directive.name == "codex-followup"
+        && let Some(label) = directive
+            .label
+            .map(str::trim)
+            .filter(|label| !label.is_empty())
+    {
+        let prompt = directive
+            .attributes
+            .get("prompt")
+            .and_then(|prompt| nonempty(prompt));
+        return Some(RewrittenFollowupLine {
+            visible_line: format!("{indent}- {label}"),
+            followup: prompt.map(|prompt| FollowupDirective {
+                label: label.to_string(),
+                prompt,
+            }),
+        });
+    }
     let remainder = content.strip_prefix(DIRECTIVE_PREFIX)?;
     let label_end = remainder.find(']')?;
     let label = remainder[..label_end].trim();
