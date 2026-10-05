@@ -2,7 +2,7 @@
 source: tui/src/custom_terminal/tests/cursor_tests.rs
 expression: "frames.join(\"\\n\")"
 ---
-\u{1b}[?25l\u{1b}[2;1H\u{1b}[1mab  cd  ef  \u{1b}[m\u{1b}[m\u{1b}[0m\u{1b}[2;1H\u{1b}[0 q\u{1b}[2;1H\u{1b}[1ma\u{1b}[m\u{1b}[m\u{1b}[0m\u{1b}[2;2H\u{1b}[?25h
-\u{1b}[m\u{1b}[m\u{1b}[0m\u{1b}[2;5H\u{1b}[?25h
-\u{1b}[m\u{1b}[m\u{1b}[0m\u{1b}[?25l\u{1b}[2;1H\u{1b}[6 q\u{1b}[2;1H\u{1b}[1ma\u{1b}[m\u{1b}[m\u{1b}[0m\u{1b}[2;4H\u{1b}[?25h
-\u{1b}[m\u{1b}[m\u{1b}[0m\u{1b}[?25l\u{1b}[2;1H\u{1b}[2 q\u{1b}[2;1H\u{1b}[1ma\u{1b}[m\u{1b}[m\u{1b}[0m\u{1b}[2;2H\u{1b}[?25h
+\u{1b}[?25l\u{1b}[2;1H\u{1b}[1mab  cd  ef  \u{1b}[0m\u{1b}[2;1H\u{1b}[0 q\u{1b}[2;1H\u{1b}[1ma\u{1b}[0m\u{1b}[2;2H\u{1b}[?25h
+\u{1b}[0m\u{1b}[2;5H\u{1b}[?25h
+\u{1b}[0m\u{1b}[?25l\u{1b}[2;1H\u{1b}[6 q\u{1b}[2;1H\u{1b}[1ma\u{1b}[0m\u{1b}[2;4H\u{1b}[?25h
+\u{1b}[0m\u{1b}[?25l\u{1b}[2;1H\u{1b}[2 q\u{1b}[2;1H\u{1b}[1ma\u{1b}[0m\u{1b}[2;2H\u{1b}[?25h
