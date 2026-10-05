@@ -83,7 +83,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 mod code_panel;
-mod file_citations;
 mod inline_directives;
 mod list_spacing;
 mod local_links;
@@ -98,7 +97,6 @@ mod task_lists;
 mod web_links;
 
 pub(crate) use code_panel::hard_wrap_code_line;
-use file_citations::FileCitations;
 use inline_directives::InlineDirectives;
 pub(crate) use inline_directives::followup_labels;
 pub(crate) use list_spacing::ListSpacing;
@@ -1499,7 +1497,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 .and_then(|line| line.source.as_mut())
                 .and_then(|source| source.control.as_mut())
             {
-                header.action = LineControlAction::CopyCode(Arc::from(code));
+                header.action = LineControlAction::CopyCode(Arc::clone(&code));
             }
             if has_closing_fence {
                 self.push_code_panel_line(self.code_panel_footer(), CodePanelLine::Footer);
