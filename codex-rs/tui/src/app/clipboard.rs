@@ -49,11 +49,9 @@ impl App {
                         .show_copy_feedback(&completion.1, characters);
                 }
                 let _ = self.transcript_view.finish_code_copy(completion, current);
-                let follow = self.transcript_view.finish_copy(
-                    &self.transcript_cells,
-                    completion,
-                    current,
-                );
+                let follow =
+                    self.transcript_view
+                        .finish_copy(&self.transcript_cells, completion, current);
                 if follow == Some(true) {
                     if self.backtrack.overlay_preview_active {
                         self.close_transcript_overlay(tui);

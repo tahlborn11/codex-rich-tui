@@ -75,12 +75,13 @@ fn navigate_copy_resize_and_exit() {
     );
     insta::assert_snapshot!(text(&buffer), @"
     › User text > user quote ``` user code ```
-
       Latest plan
 
-      > assistant quote
+      │ assistant quote
 
-      assistant code
+      ╭─ rust ─────── ⎘ ╮
+      │ assistant code  │
+      ╰─────────────────╯
     ");
     insta::assert_snapshot!(
         view.footer_with_navigation(/*width*/ 50, crate::motion::MotionMode::Reduced, "")
@@ -143,9 +144,10 @@ fn copy_reveals_offscreen_block_with_context() {
     let after = render(&mut view, &cells, /*width*/ 50, /*height*/ 5);
     insta::assert_snapshot!(text(&after), @"
     line
-    line
 
-    last code
+    ╭─ sh ──── ⎘ ╮
+    │ last code  │
+    ╰────────────╯
     ");
 }
 
@@ -346,7 +348,7 @@ fn copy_completion_keeps_payload_count_and_follow_intent() {
             std::time::Instant::now(),
         );
         insta::allow_duplicates! {
-            insta::assert_snapshot!(text(&buffer).trim(), @"Copied 8 chars to host clipboard");
+            insta::assert_snapshot!(text(&buffer).trim(), @"Copied! 8 chars to host clipboard");
         }
         assert_eq!(view.copy_feedback.as_ref().unwrap().characters, 8);
     }

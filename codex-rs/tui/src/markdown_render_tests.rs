@@ -1685,6 +1685,7 @@ fn code_block_multiple_lines_inside_unordered_list() {
     );
 }
 
+#[test]
 fn list_item_after_code_block_keeps_blank_separator() {
     let md = "1. First:\n\n   ```rust\n   fn first() {}\n   ```\n\n2. Second:\n";
     let text = render_markdown_text(md);

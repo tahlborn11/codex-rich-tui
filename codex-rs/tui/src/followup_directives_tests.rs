@@ -18,6 +18,22 @@ fn rewrites_canonical_followup() {
 }
 
 #[test]
+fn rewrites_canonical_followup_with_nested_label_brackets() {
+    assert_eq!(
+        rewrite_followup_line(
+            r#"- :codex-followup[**Inspect items[0]**]{prompt="Inspect the first item."}"#,
+        ),
+        Some(RewrittenFollowupLine {
+            visible_line: "- **Inspect items[0]**".to_string(),
+            followup: Some(FollowupDirective {
+                label: "**Inspect items[0]**".to_string(),
+                prompt: "Inspect the first item.".to_string(),
+            }),
+        })
+    );
+}
+
+#[test]
 fn rewrites_observed_bare_prompt_followup() {
     assert_eq!(
         rewrite_followup_line(
