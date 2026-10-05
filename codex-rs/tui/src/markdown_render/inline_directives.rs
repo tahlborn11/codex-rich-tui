@@ -195,24 +195,55 @@ impl<'a> InlineDirectives<'a> {
                     .label
                     .filter(|_| directive.name == "codex-followup")
                 {
-                    // Keep the unmatched `[` as a sentinel so labels cannot introduce blocks.
-                    let inline = &directive.raw
-                        [":codex-followup".len()..":codex-followup[".len() + label.len()];
-                    events.extend(
-                        Parser::new_ext(inline, Options::ENABLE_STRIKETHROUGH)
-                            .into_offset_iter()
-                            .filter_map(|(event, range)| {
-                                let event = match event {
-                                    Event::Start(Tag::Paragraph)
-                                    | Event::End(TagEnd::Paragraph) => return None,
-                                    Event::Text(text) if range.start == 0 => {
-                                        Event::Text(text[1..].to_owned().into())
+                    if label.contains(['[', ']']) {
+                        events.extend(
+                            Parser::new_ext(label, Options::ENABLE_STRIKETHROUGH)
+                                .into_offset_iter()
+                                .filter_map(|(event, _range)| {
+                                    // Labels are inline-only. Drop any block container that their
+                                    // Markdown happens to resemble. This direct path is required for
+                                    // nested brackets, which can close the sentinel used below.
+                                    match &event {
+                                        Event::Start(
+                                            Tag::Emphasis
+                                            | Tag::Strong
+                                            | Tag::Strikethrough
+                                            | Tag::Link { .. }
+                                            | Tag::Image { .. },
+                                        )
+                                        | Event::End(
+                                            TagEnd::Emphasis
+                                            | TagEnd::Strong
+                                            | TagEnd::Strikethrough
+                                            | TagEnd::Link
+                                            | TagEnd::Image,
+                                        ) => {}
+                                        Event::Start(_) | Event::End(_) => return None,
+                                        _ => {}
                                     }
-                                    event => event,
-                                };
-                                Some((event, span.clone()))
-                            }),
-                    );
+                                    Some((event, span.clone()))
+                                }),
+                        );
+                    } else {
+                        // Keep an unmatched `[` as a sentinel so labels cannot introduce blocks.
+                        let inline = &directive.raw
+                            [":codex-followup".len()..":codex-followup[".len() + label.len()];
+                        events.extend(
+                            Parser::new_ext(inline, Options::ENABLE_STRIKETHROUGH)
+                                .into_offset_iter()
+                                .filter_map(|(event, range)| {
+                                    let event = match event {
+                                        Event::Start(Tag::Paragraph)
+                                        | Event::End(TagEnd::Paragraph) => return None,
+                                        Event::Text(text) if range.start == 0 => {
+                                            Event::Text(text[1..].to_owned().into())
+                                        }
+                                        event => event,
+                                    };
+                                    Some((event, span.clone()))
+                                }),
+                        );
+                    }
                     continue;
                 }
                 let path = directive.attributes["path"].as_ref();

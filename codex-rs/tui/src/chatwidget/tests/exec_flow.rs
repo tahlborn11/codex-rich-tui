@@ -1410,7 +1410,7 @@ async fn exec_history_extends_previous_when_consecutive() {
         "",
         /*exit_code*/ 0,
     );
-    assert_eq!(active_blob(&chat), explored_foo);
+    assert_chatwidget_snapshot!("exploring_step5_finish_sed_range", active_blob(&chat));
 
     // 6) Start & complete "cat bar.txt"
     let begin_cat_bar = begin_exec(&mut chat, "call-cat-bar", "cat bar.txt");
