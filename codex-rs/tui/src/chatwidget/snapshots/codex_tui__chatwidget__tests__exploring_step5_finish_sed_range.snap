@@ -1,0 +1,10 @@
+---
+source: tui/src/chatwidget/tests/exec_flow.rs
+expression: active_blob(&chat)
+---
+• Ran ls -la
+  └ (no output)
+• Ran cat foo.txt
+  └ hello from foo
+• Ran sed -n 100,200p foo.txt
+  └ chunk

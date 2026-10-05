@@ -81,9 +81,6 @@ fn transport_error_requires_authentication(error: &DynamicTransportError) -> boo
                 StreamableHttpClientAdapterError::HttpRequest(error)
                 | StreamableHttpClientAdapterError::HandshakeHttpRequest(error),
             ) => exec_server_error_requires_authentication(error),
-            StreamableHttpError::Client(
-                StreamableHttpClientAdapterError::AccessTokenRejected { .. },
-            ) => true,
             _ => false,
         })
 }
