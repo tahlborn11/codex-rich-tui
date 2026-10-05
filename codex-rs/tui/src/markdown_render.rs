@@ -79,7 +79,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 mod code_panel;
-mod file_citations;
 mod inline_directives;
 mod list_spacing;
 mod local_links;
@@ -94,7 +93,6 @@ mod task_lists;
 mod web_links;
 
 pub(crate) use code_panel::hard_wrap_code_line;
-use file_citations::FileCitations;
 use inline_directives::InlineDirectives;
 pub(crate) use inline_directives::followup_labels;
 pub(crate) use list_spacing::ListSpacing;
@@ -1354,7 +1352,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
     }
 
     fn end_codeblock(&mut self, range: Range<usize>) {
-        let code = std::mem::take(&mut self.code_block_buffer);
+        let code: Arc<str> = std::mem::take(&mut self.code_block_buffer).into();
         // Completed Mermaid fences can replace source with a diagram; other blocks keep highlighting.
         if let Some(lang) = self.code_block_lang.take()
             && !code.is_empty()
@@ -1378,10 +1376,9 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 None => highlight_code_to_lines(&code, &lang),
             };
             self.resize_code_panel_for_rendered_lines(&lang, &highlighted);
-            let source: std::sync::Arc<str> = code.into();
             for hl_line in highlighted {
                 self.push_line(Line::default());
-                self.copy_line.code_source = Some(std::sync::Arc::clone(&source));
+                self.copy_line.code_source = Some(Arc::clone(&code));
                 for span in hl_line.spans {
                     self.push_span(span);
                 }
@@ -1418,7 +1415,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 .and_then(|line| line.source.as_mut())
                 .and_then(|source| source.control.as_mut())
             {
-                header.action = LineControlAction::CopyCode(Arc::from(code));
+                header.action = LineControlAction::CopyCode(Arc::clone(&code));
             }
             if has_closing_fence {
                 self.push_code_panel_line(self.code_panel_footer(), CodePanelLine::Footer);
