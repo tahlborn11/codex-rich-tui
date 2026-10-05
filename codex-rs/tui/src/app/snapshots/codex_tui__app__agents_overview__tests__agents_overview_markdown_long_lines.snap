@@ -20,11 +20,9 @@ expression: "normalize_agent_center_snapshot(render_bottom_popup(&app.chat_widge
                                                       │ ╭─ code ────────────────────────── ⎘ ╮
                                                       │ │ let explanation = "A long code li  │
                                                       │ │ ne should wrap inside the task de  │
-                                                      │ │ tails panel.";                     │
-                                                      │ ╰────────────────────────────────────╯
+                                                      │ …
                                                       │
                                                       │ Prompt
                                                       │ ╭─ code ────────────────────────── ⎘ ╮
                                                       │ …
-                                                      │
   ? help  esc back  ↑/↓ move  enter open  n new
