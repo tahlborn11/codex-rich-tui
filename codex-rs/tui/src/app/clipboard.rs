@@ -58,15 +58,12 @@ impl App {
 
     pub(super) fn finish_clipboard(&mut self, tui: &mut tui::Tui, event: &TuiEvent) {
         let current = tui.is_owned_screen() && self.overlay.is_none();
+        let mut redraw_after = None;
         if let Some(completion) = tui.clipboard.poll() {
-            if let Some(redraw_after) = self
+            redraw_after = self
                 .overlay
                 .as_mut()
-                .and_then(|overlay| overlay.finish_clipboard(completion))
-                && !redraw_after.is_zero()
-            {
-                tui.frame_requester().schedule_frame_in(redraw_after);
-            }
+                .and_then(|overlay| overlay.finish_clipboard(completion));
             if let Some(characters) = self.chat_widget.finish_clipboard(completion, current) {
                 self.transcript_view
                     .show_copy_feedback(&completion.1, characters);
@@ -91,7 +88,8 @@ impl App {
                     companion.view.jump_to_latest();
                 }
             }
-            let _ = self.transcript_view.finish_code_copy(completion, current);
+            let main_redraw_after = self.transcript_view.finish_code_copy(completion, current);
+            redraw_after = redraw_after.or(main_redraw_after);
             let follow =
                 self.transcript_view
                     .finish_copy(&self.transcript_cells, completion, current);
@@ -108,6 +106,9 @@ impl App {
                 self.transcript_view.jump_to_latest();
                 self.backtrack.select_exit_key = pending_exit_key;
             }
+        }
+        if let Some(redraw_after) = redraw_after.filter(|delay| !delay.is_zero()) {
+            tui.frame_requester().schedule_frame_in(redraw_after);
         }
         if !current || matches!(event, TuiEvent::FocusLost | TuiEvent::Resume) {
             self.transcript_view.cancel_primary();

@@ -8,7 +8,6 @@
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
-use codex_utils_home_dir::find_codex_home;
 use sha2::Digest;
 use sha2::Sha256;
 use std::fs;
@@ -33,7 +32,7 @@ pub(crate) struct RefreshCredentialLock {
 impl RefreshCredentialLock {
     pub(crate) async fn acquire_for_server(server_name: &str, url: &str) -> Result<Self> {
         let store_key = super::compute_store_key(server_name, url)?;
-        let codex_home = find_codex_home()?;
+        let codex_home = super::mcp_oauth_storage_home()?;
         Self::acquire_in(&codex_home, &store_key, REFRESH_LOCK_ACQUIRE_TIMEOUT)
             .await
             .with_context(|| format!("failed to acquire OAuth credential lock for {server_name}"))

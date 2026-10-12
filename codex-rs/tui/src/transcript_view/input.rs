@@ -106,6 +106,7 @@ impl TranscriptView {
             ViewAction::Changed
             | ViewAction::ExitSelectMode
             | ViewAction::Copy(_)
+            | ViewAction::CopyCode(_)
             | ViewAction::CopyAndFollow(_)
             | ViewAction::OpenLink(_) => SelectionCopy::EXPLICIT,
         }
