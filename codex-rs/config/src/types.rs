@@ -819,45 +819,6 @@ pub struct ModelAvailabilityNuxConfig {
     pub shown_count: HashMap<String, u32>,
 }
 
-/// Settings for the opt-in, local model router shown as `Auto` in the TUI.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
-#[schemars(deny_unknown_fields)]
-pub struct TuiAutoConfig {
-    /// Ollama model used to classify the next user turn. The model is never sent to OpenAI.
-    pub classifier_model: String,
-    /// Select `Auto` by default for chats without a persisted model selection.
-    #[serde(default)]
-    pub default_selected: bool,
-    /// Ollama generate endpoint. Defaults to the local Ollama endpoint.
-    #[serde(default = "default_local_auto_endpoint")]
-    pub endpoint: String,
-    /// Maximum time to wait for a classification response, in milliseconds.
-    #[serde(default = "default_local_auto_timeout_ms")]
-    pub timeout_ms: u64,
-    /// Scores below this value select the low-cost model.
-    #[serde(default = "default_local_auto_low_threshold")]
-    pub low_threshold: f64,
-    /// Scores below this value (and above `low_threshold`) select the medium model.
-    #[serde(default = "default_local_auto_medium_threshold")]
-    pub medium_threshold: f64,
-}
-
-fn default_local_auto_endpoint() -> String {
-    "http://localhost:11434/api/generate".to_string()
-}
-
-const fn default_local_auto_timeout_ms() -> u64 {
-    500
-}
-
-const fn default_local_auto_low_threshold() -> f64 {
-    0.4
-}
-
-const fn default_local_auto_medium_threshold() -> f64 {
-    0.7
-}
-
 /// Fallback resize-reflow row cap when Codex cannot identify a terminal-specific scrollback size.
 pub const DEFAULT_TERMINAL_RESIZE_REFLOW_FALLBACK_MAX_ROWS: usize = 1_000;
 
@@ -865,9 +826,6 @@ pub const DEFAULT_TERMINAL_RESIZE_REFLOW_FALLBACK_MAX_ROWS: usize = 1_000;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct Tui {
-    /// Enables the local Ollama-backed `Auto` model picker option.
-    #[serde(default, alias = "local_auto")]
-    pub auto: Option<TuiAutoConfig>,
     #[serde(default, flatten)]
     pub notification_settings: TuiNotificationSettings,
 

@@ -593,7 +593,6 @@ impl ChatWidget {
             current_collaboration_mode: self.current_collaboration_mode.clone(),
             active_collaboration_mask: self.active_collaboration_mask.clone(),
             plan_mode_reasoning_effort: self.config.plan_mode_reasoning_effort.clone(),
-            auto_selected: self.auto_selected,
             task_running: self.bottom_pane.is_task_running(),
             agent_turn_running: self.turn_lifecycle.agent_turn_running,
         })
@@ -613,7 +612,6 @@ impl ChatWidget {
             self.current_collaboration_mode = input_state.current_collaboration_mode;
             self.active_collaboration_mask = input_state.active_collaboration_mask;
             self.config.plan_mode_reasoning_effort = input_state.plan_mode_reasoning_effort;
-            self.set_auto_selected(input_state.auto_selected);
             self.safety_buffering_prompt = input_state.safety_buffering_prompt;
             self.safety_buffering_source = input_state.safety_buffering_source;
             self.turn_lifecycle.restore_running(

@@ -1,7 +1,6 @@
 //! User-message and shell-prompt submission behavior for `ChatWidget`.
 
 use super::*;
-use crate::app_command::RootModelRouting;
 use codex_app_server_protocol::ImageReference;
 use codex_utils_path_uri::LegacyAppPathString;
 
@@ -463,14 +462,6 @@ impl ChatWidget {
             service_tier,
             /*final_output_json_schema*/ None,
             collaboration_mode,
-            if self.auto_selected() {
-                RootModelRouting::Auto {
-                    force_sol: self.active_mode_kind() == ModeKind::Plan,
-                    user_prompt: text.clone(),
-                }
-            } else {
-                RootModelRouting::Manual
-            },
         );
         let submitted_message = UserMessage {
             text,
