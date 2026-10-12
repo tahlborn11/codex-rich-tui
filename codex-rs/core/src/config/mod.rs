@@ -54,7 +54,6 @@ use codex_config::types::SessionPickerViewMode;
 use codex_config::types::ToolSuggestConfig;
 use codex_config::types::ToolSuggestDisabledTool;
 use codex_config::types::ToolSuggestDiscoverable;
-use codex_config::types::TuiAutoConfig;
 use codex_config::types::TuiKeymap;
 use codex_config::types::TuiNotificationSettings;
 use codex_config::types::TuiPetAnchor;
@@ -802,7 +801,6 @@ pub struct Config {
     pub tui_notifications: TuiNotificationSettings,
 
     /// Optional local TUI root-model router configuration.
-    pub tui_auto: Option<TuiAutoConfig>,
 
     /// Enable ASCII animations and shimmer effects in the TUI.
     pub animations: bool,
@@ -4710,7 +4708,6 @@ impl Config {
                 .as_ref()
                 .map(|t| t.notification_settings.clone())
                 .unwrap_or_default(),
-            tui_auto: cfg.tui.as_ref().and_then(|t| t.auto.clone()),
             animations: cfg.tui.as_ref().map(|t| t.animations).unwrap_or(true),
             tui_effects: cfg.tui.as_ref().map(|t| t.effects).unwrap_or_default(),
             tui_rendering: cfg.tui.as_ref().map(|t| t.rendering).unwrap_or_default(),

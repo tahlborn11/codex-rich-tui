@@ -214,7 +214,6 @@ mod app_server_event_targets;
 mod app_server_events;
 pub(crate) mod app_server_requests;
 mod app_server_thread_ownership;
-mod auto_model;
 mod backend_banner_fallback;
 mod backend_events;
 pub(crate) mod backend_sessions;
