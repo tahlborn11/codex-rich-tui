@@ -117,19 +117,21 @@ async fn lost_mutation_reply_preserves_work_without_resubmitting() -> Result<()>
         (history.session_id, history.text),
         (id.to_string(), "only once".into())
     );
-    assert_snapshot!(
-        "offline_draft",
-        format!(
-            "{}\n{}",
-            lines_to_single_string(
-                &app.transcript_cells
-                    .last()
-                    .unwrap()
-                    .display_lines(/*width*/ 80)
-            ),
-            render_bottom_popup(&app.chat_widget, /*width*/ 80)
-        )
-    );
+    let offline_draft = format!(
+        "{}\n{}",
+        lines_to_single_string(
+            &app.transcript_cells
+                .last()
+                .unwrap()
+                .display_lines(/*width*/ 80)
+        ),
+        render_bottom_popup(&app.chat_widget, /*width*/ 80)
+    )
+    .replace("◦ Reconnect", "• Reconnect");
+    let offline_draft = regex_lite::Regex::new(r"\([0-9]+s\)")?
+        .replace_all(&offline_draft, "(0s)")
+        .into_owned();
+    assert_snapshot!("offline_draft", offline_draft);
     let mut keymap = codex_config::types::TuiKeymap::default();
     keymap.chat.edit_queued_message = Some(codex_config::types::KeybindingsSpec::One(
         codex_config::types::KeybindingSpec("ctrl-x up".into()),

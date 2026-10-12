@@ -60,6 +60,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1103,11 +1104,23 @@ fn compute_secret_name(server_name: &str, server_url: &str) -> Result<SecretName
 }
 
 fn mcp_oauth_storage_home() -> Result<PathBuf> {
+    Ok(mcp_oauth_storage_home_io()?)
+}
+
+fn mcp_oauth_storage_home_io() -> std::io::Result<PathBuf> {
     let codex_home = find_codex_home()?;
-    Ok(match option_env!("CODEX_RICH_VERSION") {
-        Some(_) => codex_home.join(RICH_OAUTH_HOME_DIR).to_path_buf(),
-        None => codex_home.to_path_buf(),
-    })
+    Ok(mcp_oauth_storage_home_for_build(
+        &codex_home,
+        option_env!("CODEX_RICH_VERSION").is_some(),
+    ))
+}
+
+fn mcp_oauth_storage_home_for_build(codex_home: &Path, rich_build: bool) -> PathBuf {
+    if rich_build {
+        codex_home.join(RICH_OAUTH_HOME_DIR)
+    } else {
+        codex_home.to_path_buf()
+    }
 }
 
 fn fallback_file_path() -> Result<PathBuf> {
@@ -1216,6 +1229,16 @@ mod tests {
     mod telemetry_tests;
 
     use super::test_support::TempCodexHome;
+
+    #[test]
+    fn rich_oauth_coordination_has_a_separate_home() {
+        let home = std::path::Path::new("/codex-home");
+        assert_eq!(mcp_oauth_storage_home_for_build(home, false), home);
+        assert_eq!(
+            mcp_oauth_storage_home_for_build(home, true),
+            home.join("codex-rich")
+        );
+    }
 
     #[test]
     fn stored_oauth_credentials_ignore_derived_expiration_and_track_token_changes() -> Result<()> {
