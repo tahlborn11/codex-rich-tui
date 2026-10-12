@@ -1257,7 +1257,6 @@ fn config_toml_deserializes_model_availability_nux() {
     assert_eq!(
         cfg.tui.expect("tui config should deserialize"),
         Tui {
-            auto: None,
             notification_settings: TuiNotificationSettings::default(),
             animations: true,
             screen_reader_detection_done: None,
@@ -4498,7 +4497,6 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
     assert_eq!(
         tui,
         Tui {
-            auto: None,
             notification_settings: TuiNotificationSettings::default(),
             animations: true,
             screen_reader_detection_done: None,
@@ -4611,62 +4609,6 @@ async fn disable_paste_burst_preserves_layering_and_new_key_precedence() -> anyh
         );
     }
     Ok(())
-}
-
-#[tokio::test]
-async fn config_toml_deserializes_auto_defaults_and_runtime_config() {
-    let toml = r#"
-[tui.auto]
-classifier_model = "qwen2.5-coder:3b"
-default_selected = true
-"#;
-    let base: ConfigToml = toml::from_str(toml).expect("Auto config should deserialize");
-    let expected = TuiAutoConfig {
-        classifier_model: "qwen2.5-coder:3b".to_string(),
-        default_selected: true,
-        endpoint: "http://localhost:11434/api/generate".to_string(),
-        timeout_ms: 500,
-        low_threshold: 0.4,
-        medium_threshold: 0.7,
-    };
-
-    assert_eq!(
-        base.tui.as_ref().and_then(|tui| tui.auto.as_ref()),
-        Some(&expected)
-    );
-
-    let runtime = Config::load_from_base_config_with_overrides(
-        base,
-        ConfigOverrides::default(),
-        tempdir().expect("tempdir").abs(),
-    )
-    .await
-    .expect("Auto runtime config should load");
-
-    assert_eq!(runtime.tui_auto, Some(expected));
-}
-
-#[test]
-fn config_toml_accepts_legacy_local_auto_key() {
-    let base: ConfigToml = toml::from_str(
-        r#"
-[tui.local_auto]
-classifier_model = "legacy-router"
-"#,
-    )
-    .expect("legacy Local Auto config should deserialize");
-
-    assert_eq!(
-        base.tui.and_then(|tui| tui.auto),
-        Some(TuiAutoConfig {
-            classifier_model: "legacy-router".to_string(),
-            default_selected: false,
-            endpoint: "http://localhost:11434/api/generate".to_string(),
-            timeout_ms: 500,
-            low_threshold: 0.4,
-            medium_threshold: 0.7,
-        })
-    );
 }
 
 #[tokio::test]
