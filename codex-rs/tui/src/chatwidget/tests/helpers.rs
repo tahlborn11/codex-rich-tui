@@ -70,6 +70,18 @@ pub(crate) fn normalize_snapshot_paths(text: impl Into<String>) -> String {
     }
 }
 
+/// Status glyphs animate independently of snapshot fixture time.
+pub(crate) fn normalize_transient_status(text: impl Into<String>) -> String {
+    let text = text
+        .into()
+        .replace("◦ Working (", "• Working (")
+        .replace("◦ Reconnect", "• Reconnect");
+    regex_lite::Regex::new(r"• Working \([0-9]+s")
+        .expect("valid working status pattern")
+        .replace_all(&text, "• Working (0s")
+        .into_owned()
+}
+
 /// Normalize command-center fixture paths without moving fixed pane separators.
 /// Pad after each complete pane so group counts and destination hints keep their spacing.
 pub(crate) fn normalize_agent_center_snapshot(text: impl AsRef<str>) -> String {

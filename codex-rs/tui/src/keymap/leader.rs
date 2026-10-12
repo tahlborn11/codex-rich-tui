@@ -1,6 +1,7 @@
 //! Resolves and validates the shared shortcut prefix without assigning action bindings.
 //! The default yields to explicit shortcuts; active consumers determine whether a menu opens.
 
+use super::ConfiguredAliasMatch;
 use super::MAIN_RESERVED_BINDINGS;
 use super::chords::RuntimeChordKeymap;
 use super::chords::normalize_chord_binding;
@@ -15,11 +16,14 @@ use itertools::Itertools;
 pub(super) fn resolve(config: &TuiKeymap, chords: &mut RuntimeChordKeymap) -> Result<(), String> {
     let default = key_hint::ctrl(KeyCode::Char('x'));
     let shadowed = config.global.leader.is_none()
-        && (configured_context_alias_is_used(config, "ctrl-x")
-            || chords
-                .bindings
-                .iter()
-                .any(|binding| binding.chord.prefix == default));
+        && (configured_context_alias_is_used(
+            config,
+            "ctrl-x",
+            ConfiguredAliasMatch::ExactOrChordPrefix,
+        ) || chords
+            .bindings
+            .iter()
+            .any(|binding| binding.chord.prefix == default));
     if config.global.leader.as_ref().is_some_and(|bindings| {
         bindings
             .specs()

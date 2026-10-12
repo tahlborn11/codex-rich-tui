@@ -678,11 +678,13 @@ impl App {
             return self.handle_owned_backtrack_event(tui, event);
         };
         if let ViewAction::CopyCode(text) = &action {
-            let result = tui
-                .copy_transcript_selection(text, crate::clipboard_copy::CopyFormat::PlainText);
+            let result =
+                tui.copy_transcript_selection(text, crate::clipboard_copy::CopyFormat::PlainText);
             self.transcript_view
                 .show_copy_feedback(&result, text.chars().count());
-            let _ = self.transcript_view.show_code_copy_result(&result);
+            if let Some(redraw_after) = self.transcript_view.show_code_copy_result(&result) {
+                tui.frame_requester().schedule_frame_in(redraw_after);
+            }
         } else if let Some((characters, result)) = self.transcript_view.copy_action(
             tui,
             &self.transcript_cells,

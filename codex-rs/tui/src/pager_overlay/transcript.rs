@@ -469,8 +469,8 @@ impl TranscriptOverlay {
     fn apply_action(&mut self, tui: &mut tui::Tui, action: ViewAction) {
         self.notice = None;
         if let ViewAction::CopyCode(text) = &action {
-            let result = tui
-                .copy_transcript_selection(text, crate::clipboard_copy::CopyFormat::PlainText);
+            let result =
+                tui.copy_transcript_selection(text, crate::clipboard_copy::CopyFormat::PlainText);
             if let Some(redraw_after) = self.view.show_code_copy_result(&result) {
                 tui.frame_requester().schedule_frame_in(redraw_after);
             }
