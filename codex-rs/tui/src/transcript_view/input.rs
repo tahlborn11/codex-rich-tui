@@ -120,6 +120,7 @@ impl TranscriptView {
             ViewAction::Changed
             | ViewAction::ExitSelectMode
             | ViewAction::Copy(_)
+            | ViewAction::CopyCode(_)
             | ViewAction::CopyAndFollow(_)
             | ViewAction::OpenAgent(_)
             | ViewAction::OpenDocument(_)
