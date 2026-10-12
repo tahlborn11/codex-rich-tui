@@ -666,12 +666,18 @@ impl RuntimeKeymap {
 
         // Voice mute yields to existing shortcuts and chord prefixes.
         let voice_mute_default_is_shadowed = keymap.chat.toggle_voice_mute.is_none()
-            && (configured_main_surface_alias_is_used(keymap, "f9", ConfiguredAliasMatch::ExactOrChordPrefix)
-                || configured_context_alias_is_used(&keymap.vim_search, "f9", ConfiguredAliasMatch::ExactOrChordPrefix)
-                || chords.bindings.iter().any(|binding| {
-                    binding.action.context.overlaps(KeymapContext::Voice)
-                        && binding.chord.prefix.parts() == key_hint::plain(KeyCode::F(9)).parts()
-                }));
+            && (configured_main_surface_alias_is_used(
+                keymap,
+                "f9",
+                ConfiguredAliasMatch::ExactOrChordPrefix,
+            ) || configured_context_alias_is_used(
+                &keymap.vim_search,
+                "f9",
+                ConfiguredAliasMatch::ExactOrChordPrefix,
+            ) || chords.bindings.iter().any(|binding| {
+                binding.action.context.overlaps(KeymapContext::Voice)
+                    && binding.chord.prefix.parts() == key_hint::plain(KeyCode::F(9)).parts()
+            }));
         let open_agents_default_is_shadowed = keymap.global.open_agents.is_none()
             && (configured_main_surface_alias_is_used(
                 keymap,

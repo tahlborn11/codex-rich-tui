@@ -99,6 +99,7 @@ impl TranscriptView {
             ViewAction::Changed
             | ViewAction::PrimarySelection(_)
             | ViewAction::Copy(_)
+            | ViewAction::CopyCode(_)
             | ViewAction::CopyAndFollow(_)
             | ViewAction::OpenLink(_) => SelectionCopy::Explicit,
         }

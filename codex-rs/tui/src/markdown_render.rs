@@ -516,6 +516,7 @@ struct Writer<'a, 'policy> {
     in_code_block: bool,
     code_block_lang: Option<String>,
     code_block_buffer: String,
+    code_block_copy_buffer: String,
     code_block_content_end: usize,
     code_block_chrome: CodeBlockChrome,
     code_panel_full_width: bool,
@@ -570,6 +571,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             in_code_block: false,
             code_block_lang: None,
             code_block_buffer: String::new(),
+            code_block_copy_buffer: String::new(),
             code_block_content_end: 0,
             code_block_chrome: CodeBlockChrome::Hidden,
             code_panel_full_width: false,
@@ -641,7 +643,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 if self.in_code_block {
                     self.code_block_content_end = range.end;
                 }
-                self.text(text);
+                self.text(text, range);
             }
             Event::Code(code) => self.code(code),
             Event::SoftBreak => self.soft_break(),
@@ -896,7 +898,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         self.needs_newline = true;
     }
 
-    fn text(&mut self, text: CowStr<'a>) {
+    fn text(&mut self, text: CowStr<'a>, range: Range<usize>) {
         if self.collecting_local_link_label() {
             let style = self.inline_styles.last().copied().unwrap_or_default();
             for (index, line) in text.lines().enumerate() {
@@ -934,6 +936,22 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         // original line breaks, so inserting separators would double them.
         if self.in_code_block {
             self.code_block_buffer.push_str(&text);
+            let source = self.input.get(range.clone()).unwrap_or_default();
+            let mut source_line_endings = source
+                .split_inclusive('\n')
+                .filter(|line| line.ends_with('\n'))
+                .map(|line| line.ends_with("\r\n"));
+            for (index, character) in text.chars().enumerate() {
+                if character == '\n'
+                    && (source_line_endings.next().unwrap_or(false)
+                        || (index == 0
+                            && range.start > 0
+                            && self.input.as_bytes()[range.start - 1] == b'\r'))
+                {
+                    self.code_block_copy_buffer.push('\r');
+                }
+                self.code_block_copy_buffer.push(character);
+            }
             if self.code_block_lang.is_some() {
                 return;
             }
@@ -1342,6 +1360,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             }
         };
         self.code_block_buffer.clear();
+        self.code_block_copy_buffer.clear();
 
         self.indent_stack.push(IndentContext::new(
             vec![indent],
@@ -1353,6 +1372,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
 
     fn end_codeblock(&mut self, range: Range<usize>) {
         let code: Arc<str> = std::mem::take(&mut self.code_block_buffer).into();
+        let copy_code: Arc<str> = std::mem::take(&mut self.code_block_copy_buffer).into();
         // Completed Mermaid fences can replace source with a diagram; other blocks keep highlighting.
         if let Some(lang) = self.code_block_lang.take()
             && !code.is_empty()
@@ -1378,7 +1398,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             self.resize_code_panel_for_rendered_lines(&lang, &highlighted);
             for hl_line in highlighted {
                 self.push_line(Line::default());
-                self.copy_line.code_source = Some(Arc::clone(&code));
+                self.copy_line.code_source = Some(Arc::clone(&copy_code));
                 for span in hl_line.spans {
                     self.push_span(span);
                 }
@@ -1415,7 +1435,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 .and_then(|line| line.source.as_mut())
                 .and_then(|source| source.control.as_mut())
             {
-                header.action = LineControlAction::CopyCode(Arc::clone(&code));
+                header.action = LineControlAction::CopyCode(Arc::clone(&copy_code));
             }
             if has_closing_fence {
                 self.push_code_panel_line(self.code_panel_footer(), CodePanelLine::Footer);
@@ -3300,6 +3320,17 @@ mod tests {
                 "╰─".to_string(),
             ],
             "CRLF code block should not produce extra blank lines: {lines:?}"
+        );
+        let semantic_lines = render_markdown_lines_with_width_and_cwd(markdown, None, None);
+        let action = &semantic_lines[0]
+            .source
+            .as_ref()
+            .and_then(|source| source.control.as_ref())
+            .expect("fenced code header should have a copy control")
+            .action;
+        assert_eq!(
+            action,
+            &LineControlAction::CopyCode(Arc::from("fn main() {}\r\n    line2\r\n"))
         );
     }
 

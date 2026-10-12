@@ -656,10 +656,14 @@ async fn reconnect_exhaustion_and_unknown_initial_thread_stay_offline() -> Resul
     assert_eq!(start.elapsed().as_secs(), 120);
     app.begin_reconnect();
     app.chat_widget.reconnect_failed();
-    assert_snapshot!(
-        "reconnect_failed",
-        render_bottom_popup(&app.chat_widget, /*width*/ 80)
-    );
+    let popup = crate::chatwidget::tests::helpers::normalize_transient_status(render_bottom_popup(
+        &app.chat_widget,
+        /*width*/ 80,
+    ));
+    let popup = regex_lite::Regex::new(r"\([0-9]+s\)")?
+        .replace_all(&popup, "(0s)")
+        .into_owned();
+    assert_snapshot!("reconnect_failed", popup);
     tokio::time::resume();
     Ok(())
 }

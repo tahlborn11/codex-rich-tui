@@ -14,4 +14,3 @@ Toggle Vim Mode | unbound | Global toggle_vim_mode Toggle Vim Mode Turn Vim comp
 Toggle Raw Output | alt-r | Global toggle_raw_output Toggle Raw Output Toggle raw scrollback mode. alt-r Default
 Toggle Side Conversation | ctrl-/ | Global toggle_side_conversation Toggle Side Conversation Switch between a side conversation and its parent. ctrl-/ Default
 Leader | ctrl-x | Global leader Leader Set the prefix used by shared leader shortcuts. ctrl-x Default
-Interrupt Turn | esc | Chat interrupt_turn Interrupt Turn Interrupt the active turn. esc Default

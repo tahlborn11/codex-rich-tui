@@ -10,7 +10,6 @@ use std::io::Write;
 
 use anyhow::Result;
 use anyhow::ensure;
-use codex_utils_home_dir::find_codex_home;
 use oauth2::CsrfToken;
 use sha2::Digest;
 use sha2::Sha256;
@@ -42,7 +41,9 @@ impl EnterpriseOAuthGenerationFile {
             EnterpriseOAuthGenerationKind::Credential => "enterprise-credential-version",
         };
         let name = format!("{:x}.{suffix}", Sha256::digest(key.as_bytes()));
-        let path = find_codex_home()?.join("mcp-oauth-locks").join(name);
+        let path = super::mcp_oauth_storage_home()?
+            .join("mcp-oauth-locks")
+            .join(name);
         let mut options = OpenOptions::new();
         options.read(true).write(true).create(true).truncate(false);
         #[cfg(unix)]
