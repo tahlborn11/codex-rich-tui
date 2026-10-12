@@ -2619,8 +2619,6 @@ impl App {
                 let model_changed = self.chat_widget.current_model() != model
                     || self.chat_widget.current_collaboration_mode().model() != model;
                 self.chat_widget.set_model(&model);
-                self.persist_active_auto_selection(crate::auto_selection::AutoSelection::Manual)
-                    .await;
                 if model_changed {
                     self.sync_active_thread_model_setting(app_server, model, /*effort*/ None)
                         .await;
@@ -2664,11 +2662,6 @@ impl App {
                 if let Some(owner) = self.voice_widget_for_thread(thread_id) {
                     owner.stop_if_session_locked();
                 }
-            }
-            AppEvent::SelectAuto => {
-                self.chat_widget.set_auto_selected(true);
-                self.persist_active_auto_selection(crate::auto_selection::AutoSelection::Auto)
-                    .await;
             }
             AppEvent::RealtimeWebrtcOfferCreated {
                 thread_id,
