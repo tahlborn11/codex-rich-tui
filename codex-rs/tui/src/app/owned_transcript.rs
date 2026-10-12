@@ -1174,7 +1174,9 @@ impl App {
                 );
                 self.transcript_view
                     .show_copy_feedback(&result, text.chars().count());
-                let _ = self.transcript_view.show_code_copy_result(&result);
+                if let Some(redraw_after) = self.transcript_view.show_code_copy_result(&result) {
+                    tui.frame_requester().schedule_frame_in(redraw_after);
+                }
             } else if let Some((characters, result)) = self.transcript_view.copy_action(
                 tui,
                 &self.transcript_cells,
