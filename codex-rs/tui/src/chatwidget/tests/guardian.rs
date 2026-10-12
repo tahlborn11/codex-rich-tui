@@ -2,6 +2,10 @@ use super::helpers::drain_insert_history_transcript;
 use super::*;
 use pretty_assertions::assert_eq;
 
+fn normalize_snapshot_paths(text: impl Into<String>) -> String {
+    super::helpers::normalize_transient_status(super::helpers::normalize_snapshot_paths(text))
+}
+
 fn auto_review_denial_event() -> GuardianAssessmentEvent {
     GuardianAssessmentEvent {
         review_reason: None,

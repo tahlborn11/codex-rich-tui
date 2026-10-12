@@ -14,8 +14,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
-use codex_utils_home_dir::find_codex_home;
-
 const OAUTH_LOCK_DIR: &str = "mcp-oauth-locks";
 const STORE_LOCK_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(60);
 const STORE_LOCK_RETRY_SLEEP: Duration = Duration::from_millis(50);
@@ -88,7 +86,7 @@ impl OAuthStoreLock {
         // the default home (`~/.codex`), and if an embedder has no local home/filesystem authority
         // those stores already cannot operate. A future provider-backed credential store should
         // provide its own matching lock authority instead of using this local path.
-        let codex_home = find_codex_home()
+        let codex_home = super::mcp_oauth_storage_home_io()
             .map_err(|source| OAuthStoreLockFailure::CodexHome { store, source })?;
         Self::acquire_in_with_mode(&codex_home, store, acquire_timeout, mode)
     }
