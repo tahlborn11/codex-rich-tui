@@ -106,16 +106,6 @@ pub(crate) enum CloudSubmissionIntent {
     QuestionAnswer { during_turn: bool },
 }
 
-/// Describes whether a user turn uses the manually selected model or the local router.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub(crate) enum RootModelRouting {
-    Manual,
-    Auto {
-        force_sol: bool,
-        user_prompt: String,
-    },
-}
-
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub(crate) enum AppCommand {
@@ -154,7 +144,6 @@ pub(crate) enum AppCommand {
         service_tier: Option<Option<String>>,
         final_output_json_schema: Option<Value>,
         collaboration_mode: Option<CollaborationMode>,
-        routing: RootModelRouting,
     },
     OverrideTurnContext {
         cwd: Option<PathBuf>,
@@ -263,7 +252,6 @@ impl AppCommand {
         service_tier: Option<Option<String>>,
         final_output_json_schema: Option<Value>,
         collaboration_mode: Option<CollaborationMode>,
-        routing: RootModelRouting,
     ) -> Self {
         Self::UserTurn {
             turn_trigger,
@@ -280,7 +268,6 @@ impl AppCommand {
             service_tier,
             final_output_json_schema,
             collaboration_mode,
-            routing,
         }
     }
 
