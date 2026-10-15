@@ -10,12 +10,21 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from codex_package.cli import main as build_codex_package
+from codex_package.cli import parse_args as parse_package_args
+from codex_rich_version import read_workspace_version
 from codex_rich_version import resolve_build_identity
+from codex_rich_version import resolve_runtime_client_version
 
 
 def main() -> int:
-    package_dir = _package_dir_from_args(sys.argv[1:])
-    identity = resolve_build_identity()
+    args = parse_package_args()
+    package_dir = getattr(args, "package_dir", None)
+    if package_dir is None:
+        raise RuntimeError("Codex Rich package builds require --package-dir")
+    runtime_client_version = resolve_runtime_client_version()
+    workspace_version = read_workspace_version()
+    _require_workspace_version(args.package_version, workspace_version)
+    identity = resolve_build_identity(upstream_client_version=runtime_client_version)
     os.environ["CODEX_RICH_VERSION"] = identity.cli_version
     result = build_codex_package()
     if result != 0:
@@ -33,13 +42,12 @@ def main() -> int:
     return 0
 
 
-def _package_dir_from_args(args: list[str]) -> Path:
-    for index, arg in enumerate(args):
-        if arg == "--package-dir" and index + 1 < len(args):
-            return Path(args[index + 1])
-        if arg.startswith("--package-dir="):
-            return Path(arg.partition("=")[2])
-    raise RuntimeError("Codex Rich package builds require --package-dir")
+def _require_workspace_version(package_version: str, workspace_version: str) -> None:
+    if package_version != workspace_version:
+        raise RuntimeError(
+            "Codex Rich --package-version must match the workspace version "
+            f"{workspace_version}"
+        )
 
 
 if __name__ == "__main__":
