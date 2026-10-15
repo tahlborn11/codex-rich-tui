@@ -11,6 +11,14 @@ from zoneinfo import ZoneInfo
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RELEASE_VERSION_PATTERN = re.compile(r"^\d{4}\.\d{2}\.\d{2}(?:\.\d+)?$")
+SEMVER_PATTERN = re.compile(
+    r"(?P<major>0|[1-9][0-9]*)\."
+    r"(?P<minor>0|[1-9][0-9]*)\."
+    r"(?P<patch>0|[1-9][0-9]*)"
+    r"(?:-(?P<prerelease>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+    r"(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+)
+WORKSPACE_VERSION_PATTERN = re.compile(r'^version\s*=\s*"([^"]+)"')
 
 
 @dataclass(frozen=True)
@@ -19,6 +27,7 @@ class RichBuildIdentity:
     fork_commit: str
     upstream_commit: str
     dirty: bool
+    upstream_client_version: str | None = None
 
     @property
     def cli_version(self) -> str:
@@ -31,13 +40,16 @@ class RichBuildIdentity:
         )
 
     def package_metadata(self) -> dict[str, object]:
-        return {
+        metadata: dict[str, object] = {
             "richVersion": self.release_version,
             "richBuildVersion": self.cli_version,
             "richForkCommit": self.fork_commit,
             "richUpstreamCommit": self.upstream_commit,
             "richWorkingTreeDirty": self.dirty,
         }
+        if self.upstream_client_version is not None:
+            metadata["richUpstreamClientVersion"] = self.upstream_client_version
+        return metadata
 
 
 def resolve_build_identity(
@@ -45,6 +57,7 @@ def resolve_build_identity(
     repo_root: Path = REPO_ROOT,
     environ: dict[str, str] | None = None,
     now: datetime | None = None,
+    upstream_client_version: str | None = None,
 ) -> RichBuildIdentity:
     environment = os.environ if environ is None else environ
     release_version = environment.get("CODEX_RICH_RELEASE_VERSION")
@@ -66,7 +79,7 @@ def resolve_build_identity(
         repo_root, "rev-parse", "HEAD"
     )
     upstream_commit = environment.get("CODEX_RICH_UPSTREAM_COMMIT") or _git_output(
-        repo_root, "rev-parse", "upstream/main"
+        repo_root, "merge-base", "HEAD", "upstream/main"
     )
     dirty_override = environment.get("CODEX_RICH_WORKING_TREE_DIRTY")
     if dirty_override is None:
@@ -83,7 +96,55 @@ def resolve_build_identity(
         fork_commit=fork_commit,
         upstream_commit=upstream_commit,
         dirty=dirty,
+        upstream_client_version=upstream_client_version,
     )
+
+
+def resolve_runtime_client_version(*, repo_root: Path = REPO_ROOT) -> str:
+    """Return the released upstream client version from the workspace version."""
+    workspace_version = read_workspace_version(repo_root=repo_root)
+    match = SEMVER_PATTERN.fullmatch(workspace_version)
+    if (
+        match is None
+        or any(
+            int(match.group(component)) > 2**64 - 1
+            for component in ("major", "minor", "patch")
+        )
+        or any(
+            part.isdigit() and len(part) > 1 and part.startswith("0")
+            for part in (match.group("prerelease") or "").split(".")
+        )
+    ):
+        raise RuntimeError(
+            "Codex Rich requires a semantic workspace version in codex-rs/Cargo.toml"
+        )
+    whole_version = ".".join(
+        match.group(component) for component in ("major", "minor", "patch")
+    )
+    if whole_version == "0.0.0":
+        raise RuntimeError(
+            "Codex Rich cannot package workspace version 0.0.0. Set a released upstream version in codex-rs/Cargo.toml."
+        )
+    return whole_version
+
+
+def read_workspace_version(*, repo_root: Path = REPO_ROOT) -> str:
+    """Read the exact version the package builder will record in metadata."""
+    cargo_toml = repo_root / "codex-rs" / "Cargo.toml"
+    in_workspace_package = False
+    with open(cargo_toml, encoding="utf-8") as manifest:
+        for line in manifest:
+            stripped = line.strip()
+            if stripped == "[workspace.package]":
+                in_workspace_package = True
+                continue
+            if in_workspace_package and stripped.startswith("["):
+                break
+            if in_workspace_package:
+                match = WORKSPACE_VERSION_PATTERN.match(stripped)
+                if match is not None:
+                    return match.group(1)
+    raise RuntimeError(f"Could not find [workspace.package].version in {cargo_toml}")
 
 
 def _git_output(repo_root: Path, *args: str) -> str:

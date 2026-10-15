@@ -143,17 +143,23 @@ test -x ~/.local/share/codex-rich-tui/bin/codex-code-mode-host
 codesign -d -r- ~/.local/share/codex-rich-tui/bin/codex 2>&1
 ```
 
-Successful fork builds use a calendar release version plus Git provenance without changing
-upstream's workspace crate version. A clean build reports an identity such as:
+Successful fork builds use a calendar release version plus Git provenance for the displayed Rich identity.
+A clean build reports an identity such as:
 
 ```text
 codex-rich 2026.08.10+74432be3 (upstream d1093932)
 ```
 
+The Cargo workspace uses `0.162.0+rich`, based on the verified upstream `rust-v0.162.0` release tag.
+Backend model discovery uses the numeric version `0.162.0`. The HTTP user agent uses the full Cargo version.
+Keep this compatibility version current when the fork adopts a newer upstream release baseline.
+The package helper rejects the upstream `0.0.0` development placeholder because it restricts the remote model catalog.
+
 The package records the full fork and upstream commit IDs in `codex-package.json`. Development
-builds from a modified checkout include `.dirty` after the fork commit abbreviation. Successful
-installed releases are tagged `codex-rich-YYYY.MM.DD`; if more than one release is needed on the
-same day, set `CODEX_RICH_RELEASE_VERSION=YYYY.MM.DD.N` and use the matching tag.
+builds from a modified checkout include `.dirty` after the fork commit abbreviation.
+The metadata also records the numeric discovery version as `richUpstreamClientVersion`.
+Tag successful installed releases as `codex-rich-YYYY.MM.DD`.
+For another release on the same day, set `CODEX_RICH_RELEASE_VERSION=YYYY.MM.DD.N` and use the matching tag.
 
 ### 5. Sign in to Codex
 
