@@ -281,6 +281,7 @@ async fn fresh_startup_uses_server_defaults_with_explicit_and_managed_precedence
             Some("low"),
             None,
         ),
+        ("saved_managed", true, None, None, None),
         ("managed", true, Some("managed-model"), Some("medium"), None),
     ] {
         let client_home = tempdir()?;
@@ -386,6 +387,13 @@ requires_openai_auth = false
             .await?
             .server_defaults_read
         );
+        if choice == "saved_managed" {
+            assert_eq!(config.model.as_deref(), Some("server-model"));
+            assert_eq!(
+                config.model_reasoning_effort,
+                Some(ReasoningEffortConfig::High)
+            );
+        }
         bootstrap_server_owned_start(
             &mut server,
             &mut config,
