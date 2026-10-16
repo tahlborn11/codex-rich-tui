@@ -305,6 +305,7 @@ async fn fresh_startup_uses_server_defaults_with_explicit_and_managed_precedence
             Some("low"),
             None,
         ),
+        ("saved_managed", true, None, None, None),
         ("managed", true, Some("managed-model"), Some("medium"), None),
     ]
     .into_iter()

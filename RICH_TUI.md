@@ -174,6 +174,24 @@ codex-rich
 
 See the official OpenAI documentation for [Codex authentication](https://developers.openai.com/codex/auth/).
 
+## Default model for new chats
+
+Set the model and reasoning effort in `~/.codex/config.toml`:
+
+```toml
+model = "gpt-6.1-sol"
+model_reasoning_effort = "medium"
+```
+
+New chats preserve these saved preferences before they apply managed model defaults.
+Managed model defaults apply when neither preference has a value.
+Launch flags and selected profiles keep their existing priority.
+Existing chats keep their own model settings.
+Restart an open CLI after installation to load this behavior.
+
+If a server cannot report its configuration, the CLI preserves its existing managed-default behavior.
+Explicit launch flags still override those defaults.
+
 ## MCP and Keychain-backed OAuth
 
 For local macOS builds, explicitly select Keychain storage at the top level of
