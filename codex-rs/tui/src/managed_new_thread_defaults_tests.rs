@@ -28,7 +28,29 @@ fn defaults() -> NewThreadModelDefaults {
 #[tokio::test]
 async fn applies_managed_defaults_to_a_new_thread_config() {
     let (_codex_home, mut actual) = test_config().await;
-    actual.model = Some("configured-model".to_string());
+    actual.model = None;
+    actual.model_reasoning_effort = None;
+    actual.service_tier = Some("flex".to_string());
+    let mut expected = actual.clone();
+    expected.model = Some("managed-model".to_string());
+    expected.model_reasoning_effort = Some(ReasoningEffort::High);
+    expected.service_tier = Some(ServiceTier::Fast.request_value().to_string());
+
+    apply_managed_new_thread_defaults(
+        &mut actual,
+        Some(&defaults()),
+        /*server_config_read*/ true,
+        &[],
+        &ConfigOverrides::default(),
+    );
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn without_server_config_read_managed_defaults_replace_stale_client_settings() {
+    let (_codex_home, mut actual) = test_config().await;
+    actual.model = Some("stale-client-model".to_string());
     actual.model_reasoning_effort = Some(ReasoningEffort::Low);
     actual.service_tier = Some("flex".to_string());
     let mut expected = actual.clone();
@@ -39,6 +61,47 @@ async fn applies_managed_defaults_to_a_new_thread_config() {
     apply_managed_new_thread_defaults(
         &mut actual,
         Some(&defaults()),
+        /*server_config_read*/ false,
+        &[],
+        &ConfigOverrides::default(),
+    );
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn saved_model_skips_managed_model_and_reasoning_effort() {
+    let (_codex_home, mut actual) = test_config().await;
+    actual.model = Some("saved-model".to_string());
+    actual.model_reasoning_effort = None;
+    actual.service_tier = Some("flex".to_string());
+    let mut expected = actual.clone();
+    expected.service_tier = Some(ServiceTier::Fast.request_value().to_string());
+
+    apply_managed_new_thread_defaults(
+        &mut actual,
+        Some(&defaults()),
+        /*server_config_read*/ true,
+        &[],
+        &ConfigOverrides::default(),
+    );
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn saved_reasoning_effort_skips_managed_model_and_reasoning_effort() {
+    let (_codex_home, mut actual) = test_config().await;
+    actual.model = None;
+    actual.model_reasoning_effort = Some(ReasoningEffort::Low);
+    actual.service_tier = Some("flex".to_string());
+    let mut expected = actual.clone();
+    expected.service_tier = Some(ServiceTier::Fast.request_value().to_string());
+
+    apply_managed_new_thread_defaults(
+        &mut actual,
+        Some(&defaults()),
+        /*server_config_read*/ true,
         &[],
         &ConfigOverrides::default(),
     );
@@ -59,7 +122,13 @@ async fn explicit_model_skips_managed_model_and_reasoning_effort() {
         ..ConfigOverrides::default()
     };
 
-    apply_managed_new_thread_defaults(&mut actual, Some(&defaults()), &[], &harness_overrides);
+    apply_managed_new_thread_defaults(
+        &mut actual,
+        Some(&defaults()),
+        /*server_config_read*/ false,
+        &[],
+        &harness_overrides,
+    );
 
     assert_eq!(actual, expected);
 }
@@ -80,6 +149,7 @@ async fn explicit_reasoning_effort_skips_managed_model_and_reasoning_effort() {
     apply_managed_new_thread_defaults(
         &mut actual,
         Some(&defaults()),
+        /*server_config_read*/ false,
         &cli_kv_overrides,
         &ConfigOverrides::default(),
     );
@@ -107,6 +177,7 @@ async fn explicit_launch_overrides_take_precedence() {
     apply_managed_new_thread_defaults(
         &mut actual,
         Some(&defaults()),
+        /*server_config_read*/ false,
         &cli_kv_overrides,
         &harness_overrides,
     );
@@ -142,6 +213,7 @@ async fn selected_custom_provider_and_service_tier_preserve_the_profile_model() 
     apply_managed_new_thread_defaults(
         &mut actual,
         Some(&defaults()),
+        /*server_config_read*/ false,
         &[],
         &ConfigOverrides::default(),
     );
@@ -202,6 +274,7 @@ async fn managed_defaults_win_when_a_project_setting_shadows_the_selected_profil
     apply_managed_new_thread_defaults(
         &mut actual,
         Some(&defaults()),
+        /*server_config_read*/ false,
         &[],
         &ConfigOverrides::default(),
     );

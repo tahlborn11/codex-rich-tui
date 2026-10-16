@@ -96,6 +96,13 @@ impl App {
                 &self.harness_overrides,
             );
         }
+        apply_managed_new_thread_defaults(
+            &mut config,
+            app_server.managed_new_thread_defaults(),
+            defaults.is_some(),
+            &self.cli_kv_overrides,
+            &self.harness_overrides,
+        );
         Ok((config, local_settings))
     }
 }
