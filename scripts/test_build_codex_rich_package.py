@@ -34,7 +34,7 @@ class BuildCodexRichPackageTests(unittest.TestCase):
                 build_codex_rich_package.main()
         builder.assert_not_called()
 
-    def test_workspace_version_builds_and_records_runtime_provenance(self) -> None:
+    def test_success_records_provenance_and_protects_requested_archive(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             package_dir = Path(directory)
             (package_dir / "codex-package.json").write_text(
@@ -49,6 +49,8 @@ class BuildCodexRichPackageTests(unittest.TestCase):
                         "--package-dir",
                         str(package_dir),
                         "--package-version=0.162.0+rich",
+                        "--archive-output",
+                        str(package_dir / "release.tar.gz"),
                     ],
                 ),
                 patch.object(
@@ -69,13 +71,97 @@ class BuildCodexRichPackageTests(unittest.TestCase):
                 patch.object(
                     build_codex_rich_package, "build_codex_package", return_value=0
                 ) as builder,
+                patch.object(
+                    build_codex_rich_package, "cleanup_after_build"
+                ) as cleanup,
             ):
                 self.assertEqual(build_codex_rich_package.main(), 0)
             metadata = (package_dir / "codex-package.json").read_text()
 
         builder.assert_called_once_with()
+        cleanup.assert_called_once_with(
+            package_dir.resolve(),
+            "dev-small",
+            protected_paths=((package_dir / "release.tar.gz").resolve(),),
+        )
         self.assertIn('"version": "0.162.0+rich"', metadata)
         self.assertIn('"richUpstreamClientVersion": "0.162.0"', metadata)
+
+    def test_failed_build_does_not_clean_caches(self) -> None:
+        with (
+            patch.object(
+                sys, "argv", ["build_codex_rich_package.py", "--package-dir", "unused"]
+            ),
+            patch.object(
+                build_codex_rich_package,
+                "resolve_runtime_client_version",
+                return_value="0.162.0",
+            ),
+            patch.object(
+                build_codex_rich_package,
+                "read_workspace_version",
+                return_value="0.162.0+rich",
+            ),
+            patch.object(
+                build_codex_rich_package,
+                "resolve_build_identity",
+                return_value=self._identity(),
+            ),
+            patch.object(
+                build_codex_rich_package, "build_codex_package", return_value=7
+            ),
+            patch.object(build_codex_rich_package, "cleanup_after_build") as cleanup,
+        ):
+            self.assertEqual(build_codex_rich_package.main(), 7)
+        cleanup.assert_not_called()
+
+    def test_cleanup_failure_does_not_hide_successful_release_package(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            package_dir = Path(directory)
+            (package_dir / "codex-package.json").write_text("{}\n", encoding="utf-8")
+            with (
+                patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "build_codex_rich_package.py",
+                        "--package-dir",
+                        directory,
+                        "--cargo-profile",
+                        "release",
+                    ],
+                ),
+                patch.object(
+                    build_codex_rich_package,
+                    "resolve_runtime_client_version",
+                    return_value="0.162.0",
+                ),
+                patch.object(
+                    build_codex_rich_package,
+                    "read_workspace_version",
+                    return_value="0.162.0+rich",
+                ),
+                patch.object(
+                    build_codex_rich_package,
+                    "resolve_build_identity",
+                    return_value=self._identity(),
+                ),
+                patch.object(
+                    build_codex_rich_package, "build_codex_package", return_value=0
+                ),
+                patch.object(
+                    build_codex_rich_package,
+                    "cleanup_after_build",
+                    side_effect=OSError("cache is busy"),
+                ) as cleanup,
+                patch("sys.stderr") as stderr,
+            ):
+                self.assertEqual(build_codex_rich_package.main(), 0)
+                cleanup.assert_called_once_with(package_dir.resolve(), "release")
+                self.assertTrue(stderr.write.called)
+            self.assertIn(
+                "richForkCommit", (package_dir / "codex-package.json").read_text()
+            )
 
     def test_mismatched_package_versions_are_rejected_before_builder(self) -> None:
         for package_args in (

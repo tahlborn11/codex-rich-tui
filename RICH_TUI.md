@@ -286,6 +286,53 @@ just fmt
 
 Follow `AGENTS.md` for the complete validation requirements of whichever crates were changed.
 
+### Automatic build-cache cleanup
+
+The Rich package builder runs cache cleanup after each successful package build.
+This includes `just codex`, `just package-rich-tui`, and `just install-rich-tui-local`.
+You do not need a scheduled task or a separate cleanup command.
+Direct `cargo` commands do not run this helper.
+
+The default policy keeps a 50 GiB cache budget and a 100 GiB free-space reserve.
+It removes inactive build profiles and old package copies after 14 days.
+Under disk pressure, it removes other package copies and incremental caches before complete build profiles.
+
+It preserves the current package, requested archives, installed executables, and source files.
+It also protects other package copies for one hour after their last change.
+Only packages with the builder's staging marker qualify for automatic removal.
+The installer excludes this marker and identifies installation directories separately.
+The installer rejects destinations inside this repository's disposable Cargo target directory.
+
+If the remaining build cache exceeds the budget, cleanup can discard it and require a cold rebuild next time.
+This fallback preserves the current profile's top-level executables.
+
+Cleanup uses Cargo locks on macOS and Linux to avoid active builds.
+If a lock is busy, cleanup skips the run.
+Unsupported platforms and external build directories also skip cleanup.
+
+Protected or unrecognized files can leave the cache above the budget.
+Mounted directories also prevent cleanup.
+The helper reports retained space and any unmet limits.
+Cleanup errors do not fail a successful package build.
+
+Use these environment variables to change the policy:
+
+```bash
+CODEX_RICH_CACHE_MAX_GIB=50 \
+CODEX_RICH_CACHE_KEEP_DAYS=14 \
+CODEX_RICH_MIN_FREE_GIB=100 \
+just install-rich-tui-local
+```
+
+Set `CODEX_RICH_CLEANUP=0` to disable automatic cleanup.
+To preview cleanup without changes, run:
+
+```bash
+python3 scripts/codex_rich_cleanup.py \
+  --package-dir codex-rs/target/codex-rich-tui-dev \
+  --cargo-profile dev-small --dry-run
+```
+
 ## Keep the fork current
 
 The safe manual update flow is:
@@ -305,16 +352,8 @@ just install-rich-tui-local
 codex-rich --version
 ```
 
-After the installed build passes its smoke test, inspect the generated artifacts:
-
-```bash
-du -sh codex-rs/target/* codex-rs/target/aarch64-apple-darwin/* 2>/dev/null | sort -h
-```
-
-Remove stale release profiles, large incremental directories, and `codex-rs/target/codex-rich-*`
-package directories. Keep the signed package in `~/.local/share/codex-rich-tui`. Keep current
-dependency caches when faster future builds are worth their disk use. Report the removed paths and
-the reclaimed space after the sweep.
+The package build automatically applies the cache policy described above.
+Review its cleanup report if disk pressure requires a cold rebuild.
 
 After validation, push the merged `main` branch:
 
