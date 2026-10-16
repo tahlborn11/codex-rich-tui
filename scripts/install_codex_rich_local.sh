@@ -28,6 +28,12 @@ done
 package_directory="${package_directory:A}"
 install_directory="${install_directory:A}"
 launcher_directory="${launcher_directory:A}"
+build_cache_directory="$repository_root/codex-rs/target"
+if [[ "$install_directory" == "$build_cache_directory" \
+  || "$install_directory" == "$build_cache_directory/"* ]]; then
+  print -u2 "refusing to install inside the disposable Cargo target directory: $install_directory"
+  exit 2
+fi
 
 if [[ ! -f "$package_directory/codex-package.json" ]]; then
   print -u2 "invalid Codex package (missing codex-package.json): $package_directory"
@@ -100,7 +106,9 @@ staged_code_mode_host="$REPLY"
 # executables are signed and validated. Keeping the binaries out of rsync avoids
 # in-place Mach-O writes, which would invalidate their signatures and destabilize
 # Keychain ACL matching.
+touch "$install_directory/.codex-rich-installed"
 rsync -a \
+  --exclude '/.codex-rich-staging' \
   --exclude '/bin/codex' \
   --exclude '/bin/codex-code-mode-host' \
   "$package_directory/" \
