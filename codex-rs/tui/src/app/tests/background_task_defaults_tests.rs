@@ -423,7 +423,10 @@ async fn command_center_new_preserves_explicit_choices_and_managed_defaults() ->
         ("cli_effort", "server-model", "low"),
         ("profile_model", "profile-model", "high"),
         ("profile_managed", "profile-model", "low"),
+        ("saved_managed", "server-model", "high"),
         ("managed", "managed-model", "medium"),
+        ("managed_unsupported_32601", "managed-model", "medium"),
+        ("managed_unsupported_32600", "managed-model", "medium"),
     ] {
         let client_home = tempdir()?;
         let server_home = tempdir()?;
@@ -433,9 +436,18 @@ async fn command_center_new_preserves_explicit_choices_and_managed_defaults() ->
         )?;
         std::fs::write(
             server_home.path().join("config.toml"),
-            "model = \"server-model\"\nmodel_reasoning_effort = \"high\"\n",
+            if choice == "managed" || choice.starts_with("managed_unsupported") {
+                ""
+            } else {
+                "model = \"server-model\"\nmodel_reasoning_effort = \"high\"\n"
+            },
         )?;
-        if choice == "managed" || choice == "profile_managed" || choice.starts_with("cli_") {
+        if choice == "managed"
+            || choice.starts_with("managed_unsupported")
+            || choice == "saved_managed"
+            || choice == "profile_managed"
+            || choice.starts_with("cli_")
+        {
             std::fs::write(
                 server_home.path().join("requirements.toml"),
                 "[models.new_thread]\nmodel = \"managed-model\"\nmodel_reasoning_effort = \"medium\"\n",
@@ -471,6 +483,14 @@ async fn command_center_new_preserves_explicit_choices_and_managed_defaults() ->
             .build()
             .await?;
         trust_launch_folder(&mut app);
+        if choice.starts_with("managed_unsupported") {
+            app.app_server_target = AppServerTarget::Remote {
+                endpoint: crate::RemoteAppServerEndpoint::WebSocket {
+                    websocket_url: "ws://127.0.0.1:1".into(),
+                    auth_token: None,
+                },
+            };
+        }
         for cwd in [
             app.config.cwd.as_path(),
             app.chat_widget.config_ref().cwd.as_path(),
@@ -487,7 +507,13 @@ async fn command_center_new_preserves_explicit_choices_and_managed_defaults() ->
         server_config.sqlite = SqliteConfig::new_for_testing(server_home.path().abs());
         let (mut server, requests, proxy) = start_recording_app_server_with_history(
             &server_config,
-            HistoryCapabilities::Current,
+            if choice == "managed_unsupported_32601" {
+                HistoryCapabilities::ConfigReadUnsupported(-32601)
+            } else if choice == "managed_unsupported_32600" {
+                HistoryCapabilities::ConfigReadUnsupported(-32600)
+            } else {
+                HistoryCapabilities::Current
+            },
             /*blocked_thread_list*/ None,
             /*failed_thread_name*/ None,
             crate::app_server_session::ThreadParamsMode::Remote,

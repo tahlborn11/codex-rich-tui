@@ -303,6 +303,7 @@ impl App {
                 checkout.root.display()
             ));
         }
+        let mut server_config_read = false;
         if !has_rollout
             || is_new_worktree
             || (self.runtime_permission_profile_override.is_none()
@@ -321,6 +322,15 @@ impl App {
             .await
             {
                 Ok(Some(defaults)) => {
+                    if is_new_worktree {
+                        super::new_session::overlay_new_session_defaults(
+                            &mut config,
+                            &defaults.config,
+                            &self.cli_kv_overrides,
+                            &self.harness_overrides,
+                        );
+                        server_config_read = true;
+                    }
                     crate::projectless::apply_defaults(
                         &mut config,
                         &self.harness_overrides,
@@ -402,6 +412,7 @@ impl App {
             apply_managed_new_thread_defaults(
                 &mut config,
                 app_server.managed_new_thread_defaults(),
+                server_config_read,
                 &self.cli_kv_overrides,
                 &self.harness_overrides,
             );

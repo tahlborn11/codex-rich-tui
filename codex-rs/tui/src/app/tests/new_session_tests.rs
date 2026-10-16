@@ -797,3 +797,68 @@ async fn provider_continuation_starts_current_provider_and_drafts_saved_referenc
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn replacement_uses_managed_defaults_when_config_read_is_unsupported() -> Result<()> {
+    for capabilities in [
+        HistoryCapabilities::ConfigReadUnsupported(-32601),
+        HistoryCapabilities::ConfigReadUnsupported(-32600),
+    ] {
+        let (mut app, _events, _ops) = make_test_app_with_channels().await;
+        let home = tempdir()?;
+        app.config.codex_home = home.path().to_path_buf().abs();
+        app.config.sqlite = SqliteConfig::new_for_testing(home.path().abs());
+        std::fs::write(
+            home.path().join("config.toml"),
+            "model = \"stale-client-model\"\nmodel_reasoning_effort = \"low\"\n",
+        )?;
+        std::fs::write(
+            home.path().join("requirements.toml"),
+            "[models.new_thread]\nmodel = \"managed-model\"\nmodel_reasoning_effort = \"medium\"\n",
+        )?;
+        let (mut server, requests, proxy) = start_recording_app_server_with_history(
+            &app.config,
+            capabilities,
+            /*blocked_thread_list*/ None,
+            /*failed_thread_name*/ None,
+            crate::app_server_session::ThreadParamsMode::Remote,
+            LoaderOverrides {
+                system_requirements_path: Some(home.path().join("requirements.toml")),
+                ..LoaderOverrides::default()
+            },
+        )
+        .await?;
+        server.bootstrap(&app.config).await?;
+        assert_eq!(
+            server
+                .managed_new_thread_defaults()
+                .and_then(|defaults| defaults.model.as_deref()),
+            Some("managed-model")
+        );
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        for _ in 0..2 {
+            app.start_fresh_session(
+                &mut tui,
+                &mut server,
+                /*session_start_source*/ None,
+                /*initial_user_message*/ None,
+                /*new_thread_name*/ None,
+            )
+            .await;
+        }
+        let starts = recorded_params(&requests, "thread/start");
+        assert_eq!(starts.len(), 2);
+        for start in starts {
+            assert_eq!(
+                (&start["model"], &start["config"]["model_reasoning_effort"],),
+                (
+                    &serde_json::json!("managed-model"),
+                    &serde_json::json!("medium"),
+                )
+            );
+        }
+        server.shutdown().await?;
+        proxy.await??;
+    }
+    Ok(())
+}

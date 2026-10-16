@@ -1019,6 +1019,7 @@ impl App {
             );
         }
         let mut server_model_cleared = false;
+        let mut server_config_read = false;
         match StartupDraftPump::run_with_optional_draft(
             startup_draft,
             tui,
@@ -1030,6 +1031,7 @@ impl App {
         .await
         {
             Ok(Some(defaults)) => {
+                server_config_read = true;
                 crate::projectless::apply_defaults(
                     &mut config,
                     &self.harness_overrides,
@@ -1085,6 +1087,7 @@ impl App {
         apply_managed_new_thread_defaults(
             &mut config,
             app_server.managed_new_thread_defaults(),
+            server_config_read,
             &self.cli_kv_overrides,
             &self.harness_overrides,
         );
