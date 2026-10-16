@@ -11,6 +11,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from codex_package.cli import main as build_codex_package
 from codex_package.cli import parse_args as parse_package_args
+from codex_rich_cleanup import cleanup_after_build
+from codex_rich_cleanup import STAGING_MARKER
+from codex_rich_cleanup import STAGING_MARKER_TEXT
 from codex_rich_version import read_workspace_version
 from codex_rich_version import resolve_build_identity
 from codex_rich_version import resolve_runtime_client_version
@@ -37,8 +40,21 @@ def main() -> int:
     with open(metadata_path, "w", encoding="utf-8") as metadata_file:
         json.dump(metadata, metadata_file, indent=2, sort_keys=True)
         metadata_file.write("\n")
+    (package_dir / STAGING_MARKER).write_text(STAGING_MARKER_TEXT, encoding="utf-8")
 
     print(f"Codex Rich build identity: {identity.cli_version}")
+    try:
+        if args.archive_output:
+            cleanup_after_build(
+                package_dir.resolve(),
+                args.cargo_profile,
+                protected_paths=tuple(path.resolve() for path in args.archive_output),
+            )
+        else:
+            cleanup_after_build(package_dir.resolve(), args.cargo_profile)
+    except Exception as error:
+        # Cache maintenance must not hide a successful package build or prevent installation.
+        print(f"Codex Rich cache cleanup skipped: {error}", file=sys.stderr)
     return 0
 
 
