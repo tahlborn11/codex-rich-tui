@@ -8,21 +8,25 @@ use toml::Value as TomlValue;
 pub(crate) fn apply_managed_new_thread_defaults(
     config: &mut Config,
     defaults: Option<&NewThreadModelDefaults>,
+    server_config_read: bool,
     cli_kv_overrides: &[(String, TomlValue)],
     harness_overrides: &ConfigOverrides,
 ) {
     let Some(defaults) = defaults else {
         return;
     };
-    // Managed values are defaults rather than enforcement. Preserve explicit launch choices from
-    // dedicated flags such as `-m` (`harness_overrides`), generic `-c key=value` settings
-    // (`cli_kv_overrides`), and explicitly selected profiles.
+    // Managed values are defaults rather than enforcement. Preserve authoritative saved config and
+    // explicit launch choices from dedicated flags such as `-m` (`harness_overrides`), generic
+    // `-c key=value` settings (`cli_kv_overrides`), and explicitly selected profiles.
     // Model and reasoning effort are a compatibility-sensitive pair, so an explicit override of
     // either opts out of both managed values. For example, `codex -m gpt-5.4` keeps that model and
     // its existing/default effort, while `-c model_reasoning_effort=low` does not switch to the
     // managed model. Service tier remains independent and is resolved against the selected model
     // before the thread starts.
-    let has_explicit_model_settings = harness_overrides.model.is_some()
+    // Without config/read, populated fields may be stale client-side values for a remote server.
+    let has_explicit_model_settings = (server_config_read
+        && (config.model.is_some() || config.model_reasoning_effort.is_some()))
+        || harness_overrides.model.is_some()
         || has_launch_setting(config, cli_kv_overrides, "model")
         || has_launch_setting(config, cli_kv_overrides, "model_reasoning_effort");
 
