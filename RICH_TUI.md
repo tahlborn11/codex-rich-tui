@@ -30,7 +30,8 @@ macOS-specific.
   credentials. Packaged `codex-rich` builds add a separate Keychain service. This separation
   prevents refresh-token races with the Codex desktop app.
 
-The fork's `main` branch carries these changes on top of upstream Codex.
+The fork's `rich-markdown` branch carries these changes on top of upstream Codex.
+The `main` branch tracks `upstream/main`.
 
 ## Clean macOS setup
 
@@ -60,7 +61,7 @@ The first package build downloads managed Codex runtime resources, so it require
 
 ```bash
 mkdir -p ~/code
-git clone https://github.com/tahlborn11/codex-rich-tui.git ~/code/codex-rich-tui
+git clone --branch rich-markdown https://github.com/tahlborn11/codex-rich-tui.git ~/code/codex-rich-tui
 cd ~/code/codex-rich-tui
 git remote add upstream https://github.com/openai/codex.git
 git remote -v
@@ -150,8 +151,8 @@ A clean build reports an identity such as:
 codex-rich 2026.08.10+74432be3 (upstream d1093932)
 ```
 
-The Cargo workspace uses `0.162.0+rich`, based on the verified upstream `rust-v0.162.0` release tag.
-Backend model discovery uses the numeric version `0.162.0`. The HTTP user agent uses the full Cargo version.
+The Cargo workspace uses `0.163.0+rich`, based on the verified upstream `rust-v0.163.0` release tag.
+Backend model discovery uses the numeric version `0.163.0`. The HTTP user agent uses the full Cargo version.
 Keep this compatibility version current when the fork adopts a newer upstream release baseline.
 The package helper rejects the upstream `0.0.0` development placeholder because it restricts the remote model catalog.
 
@@ -338,14 +339,17 @@ python3 scripts/codex_rich_cleanup.py \
 The safe manual update flow is:
 
 ```bash
+git fetch origin --tags
+git fetch upstream --tags
 git switch main
-git pull --ff-only origin main
-git fetch upstream
-git merge upstream/main
+git merge --ff-only upstream/main
+git switch rich-markdown
+git rebase upstream/main
 ```
 
-Review renderer conflicts and snapshot changes rather than accepting them mechanically. Run the
-tests required by `AGENTS.md`, then rebuild the installed package:
+Review renderer conflicts and snapshot changes. If a conflict is ambiguous, abort the rebase.
+Run the tests required by `AGENTS.md`. Commit the validated result before the final package build
+so the package records a clean fork commit. Then rebuild the installed package:
 
 ```bash
 just install-rich-tui-local
@@ -355,15 +359,17 @@ codex-rich --version
 The package build automatically applies the cache policy described above.
 Review its cleanup report if disk pressure requires a cold rebuild.
 
-After validation, push the merged `main` branch:
+After validation and installation checks, push both branches:
 
 ```bash
 git push origin main
+git push --force-with-lease origin rich-markdown
 ```
 
-Scheduled Codex tasks can automate discovery and preparation of upstream updates, but their state
-lives outside this repository. Keep merges supervised so UI conflicts, OAuth behavior, and
-upstream protocol changes receive review.
+Stop if the lease fails. Inspect the remote changes before another push.
+
+Scheduled Codex tasks can maintain the fork, but their state lives outside this repository.
+Review UI conflicts, OAuth behavior, and upstream protocol changes before publication.
 
 ## Troubleshooting
 

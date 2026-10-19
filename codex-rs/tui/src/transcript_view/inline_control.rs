@@ -17,7 +17,7 @@ const COPY_CONFIRMED_DURATION: Duration = Duration::from_secs(5);
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ControlIdentity {
     key: EntryKey,
-    row: usize,
+    control: usize,
 }
 
 struct ControlTarget {
@@ -46,6 +46,9 @@ impl TranscriptView {
         let Some(columns) = layout.control_columns(row) else {
             return;
         };
+        let Some(control) = layout.control_identity(row) else {
+            return;
+        };
         let target = Rect::new(
             area.x + columns.start,
             area.y,
@@ -57,7 +60,7 @@ impl TranscriptView {
             .confirmed
             .as_ref()
             .is_some_and(|(confirmed, expiry)| {
-                confirmed == &ControlIdentity { key, row } && *expiry > Instant::now()
+                confirmed == &ControlIdentity { key, control } && *expiry > Instant::now()
             })
         {
             buf[(target.x, target.y)].set_symbol("✓");
@@ -70,7 +73,7 @@ impl TranscriptView {
             .inline_control
             .pressed
             .as_ref()
-            .is_some_and(|pressed| pressed.key == key && pressed.row == row && hovered);
+            .is_some_and(|pressed| pressed.key == key && pressed.control == control && hovered);
         let mut style = Style::default()
             .fg(crate::style::accent_color())
             .bold()
@@ -193,10 +196,11 @@ impl TranscriptView {
         let action = visible
             .layout
             .control_at(visible.row, point.x - self.area.x)?;
+        let control = visible.layout.control_identity(visible.row)?;
         Some(ControlTarget {
             identity: ControlIdentity {
                 key: visible.key,
-                row: visible.row,
+                control,
             },
             action,
         })

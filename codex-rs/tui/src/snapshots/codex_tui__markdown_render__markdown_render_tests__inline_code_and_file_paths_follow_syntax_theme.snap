@@ -7,10 +7,7 @@ expression: rendered
         "catppuccin-mocha",
         "dark",
         [
-            Line::from_iter([
-                Span::from("# ").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
-                Span::from("Heading").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
-            ]),
+            Line::from(Span::from("Heading").fg(Color::Rgb(243, 139, 168)).bold().underlined()),
             Line::default(),
             Line::from_iter([
                 Span::from("Bold").fg(Color::Rgb(243, 139, 168)).bold(),
@@ -26,12 +23,12 @@ expression: rendered
             ]),
             Line::default(),
             Line::from_iter([
-                Span::from("> "),
+                Span::from("│ ").green(),
                 Span::from("Quote"),
-            ]).fg(Color::Rgb(245, 194, 231)),
+            ]),
             Line::default(),
             Line::from_iter([
-                Span::from("1. ").light_blue(),
+                Span::from("1. ").fg(Color::Rgb(99, 168, 248)),
                 Span::from("Ordered"),
             ]),
             Line::default(),
@@ -56,10 +53,7 @@ expression: rendered
         "catppuccin-mocha",
         "light",
         [
-            Line::from_iter([
-                Span::from("# ").fg(Color::Rgb(169, 97, 117)).bold().underlined(),
-                Span::from("Heading").fg(Color::Rgb(169, 97, 117)).bold().underlined(),
-            ]),
+            Line::from(Span::from("Heading").fg(Color::Rgb(169, 97, 117)).bold().underlined()),
             Line::default(),
             Line::from_iter([
                 Span::from("Bold").fg(Color::Rgb(169, 97, 117)).bold(),
@@ -75,12 +69,12 @@ expression: rendered
             ]),
             Line::default(),
             Line::from_iter([
-                Span::from("> "),
+                Span::from("│ ").green(),
                 Span::from("Quote"),
-            ]).fg(Color::Rgb(139, 110, 131)),
+            ]),
             Line::default(),
             Line::from_iter([
-                Span::from("1. ").light_blue(),
+                Span::from("1. ").fg(Color::Rgb(28, 100, 200)),
                 Span::from("Ordered"),
             ]),
             Line::default(),
@@ -105,10 +99,7 @@ expression: rendered
         "catppuccin-latte",
         "light",
         [
-            Line::from_iter([
-                Span::from("# ").fg(Color::Rgb(210, 15, 57)).bold().underlined(),
-                Span::from("Heading").fg(Color::Rgb(210, 15, 57)).bold().underlined(),
-            ]),
+            Line::from(Span::from("Heading").fg(Color::Rgb(210, 15, 57)).bold().underlined()),
             Line::default(),
             Line::from_iter([
                 Span::from("Bold").fg(Color::Rgb(210, 15, 57)).bold(),
@@ -124,12 +115,12 @@ expression: rendered
             ]),
             Line::default(),
             Line::from_iter([
-                Span::from("> "),
+                Span::from("│ ").green(),
                 Span::from("Quote"),
-            ]).fg(Color::Rgb(174, 87, 151)),
+            ]),
             Line::default(),
             Line::from_iter([
-                Span::from("1. ").light_blue(),
+                Span::from("1. ").fg(Color::Rgb(28, 100, 200)),
                 Span::from("Ordered"),
             ]),
             Line::default(),
@@ -154,10 +145,7 @@ expression: rendered
         "nord",
         "dark",
         [
-            Line::from_iter([
-                Span::from("# ").fg(Color::Rgb(136, 192, 208)).bold().underlined(),
-                Span::from("Heading").fg(Color::Rgb(136, 192, 208)).bold().underlined(),
-            ]),
+            Line::from(Span::from("Heading").fg(Color::Rgb(136, 192, 208)).bold().underlined()),
             Line::default(),
             Line::from_iter([
                 Span::from("Bold").bold(),
@@ -173,9 +161,9 @@ expression: rendered
             ]),
             Line::default(),
             Line::from_iter([
-                Span::from("> "),
+                Span::from("│ ").green(),
                 Span::from("Quote"),
-            ]).fg(Color::Rgb(114, 126, 149)),
+            ]),
             Line::default(),
             Line::from_iter([
                 Span::from("1. ").fg(Color::Rgb(216, 222, 233)),
@@ -203,10 +191,7 @@ expression: rendered
         "ansi",
         "dark",
         [
-            Line::from_iter([
-                Span::from("# ").blue().bold().underlined(),
-                Span::from("Heading").blue().bold().underlined(),
-            ]),
+            Line::from(Span::from("Heading").blue().bold().underlined()),
             Line::default(),
             Line::from_iter([
                 Span::from("Bold").yellow().bold(),
@@ -222,12 +207,12 @@ expression: rendered
             ]),
             Line::default(),
             Line::from_iter([
-                Span::from("> "),
+                Span::from("│ ").green(),
                 Span::from("Quote"),
-            ]).yellow(),
+            ]),
             Line::default(),
             Line::from_iter([
-                Span::from("1. ").light_blue(),
+                Span::from("1. ").fg(Color::Rgb(99, 168, 248)),
                 Span::from("Ordered"),
             ]),
             Line::default(),
