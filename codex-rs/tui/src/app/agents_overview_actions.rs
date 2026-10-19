@@ -64,6 +64,9 @@ async fn run_lifecycle_modal<T>(
             biased;
             result = &mut operation => break result,
             Some(event) = events.next() => {
+                if matches!(&event, tui::TuiEvent::Resume) {
+                    app.chat_widget.reassert_terminal_title();
+                }
                 let screen_size = tui.screen_size_for_event(&event)?;
                 if matches!(&event, tui::TuiEvent::Paste(_) | tui::TuiEvent::FocusLost) {
                     app.cancel_pending_key_chord();
