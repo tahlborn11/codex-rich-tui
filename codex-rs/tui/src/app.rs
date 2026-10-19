@@ -951,6 +951,9 @@ impl App {
             tui.frame_requester().schedule_frame();
             return Ok(AppRunControl::Continue);
         }
+        if matches!(&event, TuiEvent::Resume) {
+            self.chat_widget.reassert_terminal_title();
+        }
         self.observe_pointer(tui, &event);
         if Box::pin(sidebar_close::handle(self, tui, app_server, &event)).await {
             return Ok(AppRunControl::Continue);
