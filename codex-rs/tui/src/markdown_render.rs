@@ -43,6 +43,7 @@
 //! Inline code and local file paths share the active syntax theme's raw-markup foreground.
 
 use crate::line_truncation::span_width;
+use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use crate::markdown_text_merge::DecodedTextMerge;
 use crate::render::highlight::current_syntax_theme;
 use crate::render::highlight::foreground_style_for_scopes;
@@ -1383,7 +1384,8 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                     let pending_marker_line = self.pending_marker_line;
                     let (header, columns) = self.code_panel_header(&label);
                     self.push_code_panel_line(header, CodePanelLine::Header);
-                    self.current_line_control = Some(LineControl {
+                    self.current_line_control = columns.map(|columns| LineControl {
+                        identity: source_range.start,
                         columns,
                         action: LineControlAction::CopyCode(Arc::from("")),
                     });
@@ -2952,25 +2954,46 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             if let Some(line) = self.current_line_content.as_mut() {
                 line.line = header;
             }
-            if let Some(control) = self.current_line_control.as_mut() {
+            if let Some(control) = self.current_line_control.as_mut()
+                && let Some(columns) = columns
+            {
                 control.columns = columns;
             }
         }
     }
 
-    fn code_panel_header(&self, label: &str) -> (Line<'static>, Range<usize>) {
+    fn code_panel_header(&self, label: &str) -> (Line<'static>, Option<Range<usize>>) {
         if !self.code_panel_full_width {
+            let Some(width) = self.code_panel_available_width() else {
+                let prefix = format!("╭─ {label} · ");
+                let start = display_width(&prefix);
+                return (
+                    vec![
+                        "╭─ ".dim(),
+                        label.to_string().bold(),
+                        " · ".dim(),
+                        CODE_BLOCK_COPY_ICON.dim(),
+                    ]
+                    .into(),
+                    Some(start..start + display_width(CODE_BLOCK_COPY_ICON)),
+                );
+            };
+            let fixed_width = display_width("╭─  · ⎘");
+            let label = self.code_panel_label(label, width.saturating_sub(fixed_width));
+            if width < fixed_width {
+                return (Line::from("╭─".dim()), None);
+            }
             let prefix = format!("╭─ {label} · ");
             let start = display_width(&prefix);
             return (
                 vec![
                     "╭─ ".dim(),
-                    label.to_string().bold(),
+                    label.bold(),
                     " · ".dim(),
                     CODE_BLOCK_COPY_ICON.dim(),
                 ]
                 .into(),
-                start..start + display_width(CODE_BLOCK_COPY_ICON),
+                Some(start..start + display_width(CODE_BLOCK_COPY_ICON)),
             );
         }
         let width = self.code_panel_width().unwrap_or_default();
@@ -2988,8 +3011,16 @@ impl<'a, 'policy> Writer<'a, 'policy> {
                 right.dim(),
             ]
             .into(),
-            start..start + display_width(CODE_BLOCK_COPY_ICON),
+            Some(start..start + display_width(CODE_BLOCK_COPY_ICON)),
         )
+    }
+
+    fn code_panel_label(&self, label: &str, max_width: usize) -> String {
+        truncate_line_with_ellipsis_if_overflow(Line::from(label.to_string()), max_width)
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
     }
 
     fn code_panel_footer(&self) -> Line<'static> {
@@ -3336,7 +3367,7 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "╭─ code · ⎘".to_string(),
+                "╭─ co… · ⎘".to_string(),
                 "│ fn main(".to_string(),
                 "│ ) { prin".to_string(),
                 "│ tln!(\"hi".to_string(),
@@ -3346,6 +3377,20 @@ mod tests {
                 "╰─".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn narrow_code_headers_keep_copy_controls_on_the_first_row() {
+        for (width, language) in [(7, "typescript"), (8, "typescript"), (10, "👩‍💻language")]
+        {
+            let rendered = render_markdown_text_with_width(
+                &format!("```{language}\ncontent\n```"),
+                Some(width),
+            );
+            let header = lines_to_strings(&rendered).remove(0);
+            assert!(header.contains(CODE_BLOCK_COPY_ICON));
+            assert!(display_width(&header) <= width);
+        }
     }
 
     #[test]

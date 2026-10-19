@@ -875,6 +875,9 @@ impl App {
             return Ok(AppRunControl::Continue);
         }
         let previous = tui.link_hover.position();
+        if matches!(&event, TuiEvent::Resume) {
+            self.chat_widget.reassert_terminal_title();
+        }
         tui.link_hover.observe(&event);
         let current = tui.link_hover.position();
         if previous != current

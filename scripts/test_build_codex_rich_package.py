@@ -90,7 +90,14 @@ class BuildCodexRichPackageTests(unittest.TestCase):
     def test_failed_build_does_not_clean_caches(self) -> None:
         with (
             patch.object(
-                sys, "argv", ["build_codex_rich_package.py", "--package-dir", "unused"]
+                sys,
+                "argv",
+                [
+                    "build_codex_rich_package.py",
+                    "--package-dir",
+                    "unused",
+                    "--package-version=0.162.0+rich",
+                ],
             ),
             patch.object(
                 build_codex_rich_package,
@@ -129,6 +136,7 @@ class BuildCodexRichPackageTests(unittest.TestCase):
                         directory,
                         "--cargo-profile",
                         "release",
+                        "--package-version=0.162.0+rich",
                     ],
                 ),
                 patch.object(
