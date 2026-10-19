@@ -330,6 +330,11 @@ impl TextLayout {
         (start < end).then_some(start..end)
     }
 
+    /// Stable source identity for a control, independent of display wrapping.
+    pub(super) fn control_identity(&self, row: usize) -> Option<usize> {
+        Some(self.rows.get(row)?.control.as_ref()?.identity)
+    }
+
     /// Paint visible rows, including inherited styles on empty rows and trailing columns.
     pub(super) fn render(&self, area: Rect, buf: &mut Buffer, start_row: usize) {
         for (screen_row, row) in self.visible_rows(area, start_row) {

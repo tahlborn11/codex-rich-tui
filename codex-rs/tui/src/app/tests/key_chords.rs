@@ -1027,3 +1027,49 @@ async fn key_capture_receives_voice_shortcut_and_chord_prefix() -> Result<()> {
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn external_editor_reset_reasserts_the_managed_title() -> Result<()> {
+    let mut app = make_test_app().await;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    app.chat_widget.local_settings.tui.terminal_title = Some(vec!["project".to_string()]);
+    app.chat_widget.refresh_terminal_title();
+    crate::terminal_title::take_terminal_title_writes();
+
+    for _ in 0..2 {
+        app.request_external_editor_launch(&mut tui);
+        app.reset_external_editor_state(&mut tui);
+        assert_eq!(
+            crate::terminal_title::take_terminal_title_writes(),
+            vec!["project".to_string()]
+        );
+        assert_eq!(
+            app.chat_widget.external_editor_state(),
+            crate::chatwidget::ExternalEditorState::Closed
+        );
+    }
+
+    app.chat_widget.local_settings.tui.terminal_title = Some(Vec::new());
+    app.chat_widget.refresh_terminal_title();
+    crate::terminal_title::take_terminal_title_writes();
+    app.reset_external_editor_state(&mut tui);
+    assert!(crate::terminal_title::take_terminal_title_writes().is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn resume_reasserts_the_managed_title() -> Result<()> {
+    let (mut app, mut tui, mut app_server) = chord_app().await?;
+    app.chat_widget.local_settings.tui.terminal_title = Some(vec!["project".to_string()]);
+    app.chat_widget.refresh_terminal_title();
+    crate::terminal_title::take_terminal_title_writes();
+
+    app.handle_tui_event(&mut tui, &mut app_server, TuiEvent::Resume)
+        .await?;
+    assert_eq!(
+        crate::terminal_title::take_terminal_title_writes(),
+        vec!["project".to_string()]
+    );
+    app_server.shutdown().await?;
+    Ok(())
+}

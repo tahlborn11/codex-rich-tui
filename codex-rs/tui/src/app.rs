@@ -862,6 +862,9 @@ impl App {
         app_server: &mut AppServerSession,
         event: TuiEvent,
     ) -> Result<AppRunControl> {
+        if matches!(&event, TuiEvent::Resume) {
+            self.chat_widget.reassert_terminal_title();
+        }
         tui.link_hover.observe(&event);
         self.refresh_link_hover(tui)?;
         self.invalidate_right_click_paste(&event);

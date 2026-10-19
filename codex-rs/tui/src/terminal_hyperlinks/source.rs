@@ -15,6 +15,8 @@ pub(crate) enum LineControlAction {
 /// Display columns and action for a control that stays outside selectable source text.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct LineControl {
+    /// Stable source identity for this control within its transcript entry.
+    pub(crate) identity: usize,
     pub(crate) columns: Range<usize>,
     pub(crate) action: LineControlAction,
 }
