@@ -349,6 +349,7 @@ impl App {
         self.chat_widget
             .set_external_editor_state(ExternalEditorState::Closed);
         self.chat_widget.set_footer_hint_override(/*items*/ None);
+        self.chat_widget.reassert_terminal_title();
         tui.frame_requester().schedule_frame();
     }
 

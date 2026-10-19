@@ -163,7 +163,11 @@ fn mermaid_controller_keeps_diagram_mutable_and_returns_original_source() {
         .map(|line| line.line.to_string())
         .collect::<Vec<_>>();
     assert!(narrow.iter().any(|line| line.contains("A[Requ")));
-    assert!(narrow.iter().any(|line| line.contains("eply]")));
+    let narrow_source = narrow
+        .iter()
+        .map(|line| line.strip_prefix("│ ").unwrap_or(line))
+        .collect::<String>();
+    assert!(narrow_source.contains("B[Reply]"));
     controller.set_width(Some(80));
     assert_eq!(controller.current_tail_lines(), diagram);
     assert_eq!(
@@ -202,7 +206,11 @@ fn mermaid_controller_keeps_diagram_mutable_and_returns_original_source() {
         .map(|line| line.line.to_string())
         .collect::<Vec<_>>();
     assert!(narrow.iter().any(|line| line.contains("A[Requ")));
-    assert!(narrow.iter().any(|line| line.contains("eply]")));
+    let narrow_source = narrow
+        .iter()
+        .map(|line| line.strip_prefix("│ ").unwrap_or(line))
+        .collect::<String>();
+    assert!(narrow_source.contains("B[Reply]"));
     controller.set_width(Some(80));
     assert_eq!(controller.current_tail_lines(), second_diagram);
     controller.set_render_mode(HistoryRenderMode::Raw);

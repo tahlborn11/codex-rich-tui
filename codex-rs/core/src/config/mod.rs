@@ -800,8 +800,6 @@ pub struct Config {
     /// TUI notification settings, including enabled events, delivery method, and focus condition.
     pub tui_notifications: TuiNotificationSettings,
 
-    /// Optional local TUI root-model router configuration.
-
     /// Enable ASCII animations and shimmer effects in the TUI.
     pub animations: bool,
 

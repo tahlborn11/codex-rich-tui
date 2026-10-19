@@ -225,8 +225,8 @@ pub(crate) fn simulate_stream_markdown_for_tests(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
     use crate::style::accent_color;
+    use pretty_assertions::assert_eq;
     use ratatui::style::Color;
 
     #[tokio::test]

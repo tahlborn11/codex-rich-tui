@@ -533,6 +533,11 @@ async fn replacement_uses_managed_defaults_when_config_read_is_unsupported() -> 
             home.path().join("requirements.toml"),
             "[models.new_thread]\nmodel = \"managed-model\"\nmodel_reasoning_effort = \"medium\"\n",
         )?;
+        app.enqueue_primary_thread_session(
+            test_thread_session(ThreadId::new(), app.config.cwd.to_path_buf()),
+            Vec::new(),
+        )
+        .await?;
         let (mut server, requests, proxy) = start_recording_app_server_with_history(
             &app.config,
             capabilities,
