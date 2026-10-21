@@ -210,9 +210,13 @@ impl App {
                 self.history_line_wrap_policy(),
             );
         }
-        if let Some(Overlay::Analytics(mut view)) = self.overlay.take() {
-            view.cancel_loads();
-            self.retained_analytics = Some(view);
+        match self.overlay.take() {
+            Some(Overlay::Analytics(mut view)) => {
+                view.cancel_loads();
+                self.retained_analytics = Some(view);
+            }
+            Some(Overlay::Outputs(mut view)) => view.cancel_loads(),
+            _ => {}
         }
         if self.pending_thread_usage_history_refresh
             && let Err(err) = self.refresh_thread_usage_history_tail(tui)

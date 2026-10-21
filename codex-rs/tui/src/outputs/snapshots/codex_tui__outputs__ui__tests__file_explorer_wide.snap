@@ -1,0 +1,25 @@
+---
+source: tui/src/outputs/ui_tests.rs
+assertion_line: 870
+expression: buffer_text(&wide)
+---
+ OUTPUTS  current chat                                                                                                  
+ Plans [ Files ] Changes  Agents                                                                                        
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+project · Enter expand/open · ←/→ folders · Alt+←/→ screens                                                             
+                                                                                                                        
+Files                                   │ Preview  c copies source                                                      
+  ▸ .config/                            │fn main() {                                                                    
+  ▾ src/                                │    println!("Hello");                                                         
+    ▸ nested/                           │}                                                                              
+›     main.rs                           │                                                                               
+    README                              │                                                                               
+                                        │                                                                               
+                                        │                                                                               
+                                        │                                                                               
+                                        │                                                                               
+                                        │                                                                               
+                                        │                                                                               
+                                        │                                                                               
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←/→ folders · Enter open · Alt+←/→ screens · Tab focus · / search · r refresh · c copy · Esc back · o path · s source

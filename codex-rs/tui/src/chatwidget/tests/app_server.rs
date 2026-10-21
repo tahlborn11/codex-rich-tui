@@ -2232,3 +2232,12 @@ async fn sqlite_log_write_warning_is_visible_in_warnings() {
         super::helpers::render_bottom_popup(&chat, /*width*/ 80)
     );
 }
+
+#[tokio::test]
+async fn new_turn_clears_previous_output_patch() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(None).await;
+    chat.on_turn_diff("old patch".into());
+    assert_eq!(chat.output_turn_patch(), Some("old patch"));
+    start_safety_buffering_test_turn(&mut chat, &mut op_rx);
+    assert_eq!(chat.output_turn_patch(), Some(""));
+}

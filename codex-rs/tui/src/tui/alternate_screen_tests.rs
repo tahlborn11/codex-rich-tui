@@ -35,6 +35,7 @@ fn refreshed_mouse_policy_applies_to_fullscreen_and_overlays() {
             for next in [
                 OverlayInput::Transcript,
                 OverlayInput::Usage,
+                OverlayInput::Outputs,
                 OverlayInput::Onboarding,
                 OverlayInput::Default,
                 OverlayInput::StaticPager,
@@ -43,7 +44,7 @@ fn refreshed_mouse_policy_applies_to_fullscreen_and_overlays() {
                 terminal.process(&std::mem::take(&mut output));
                 let capture = match next {
                     OverlayInput::Default => owned,
-                    OverlayInput::Transcript | OverlayInput::Usage => true,
+                    OverlayInput::Transcript | OverlayInput::Usage | OverlayInput::Outputs => true,
                     OverlayInput::StaticPager | OverlayInput::Onboarding => false,
                 };
                 let expected = if !disabled && capture {

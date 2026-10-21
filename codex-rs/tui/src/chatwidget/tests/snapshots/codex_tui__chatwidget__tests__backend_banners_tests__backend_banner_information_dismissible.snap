@@ -1,7 +1,7 @@
 ---
 source: tui/src/chatwidget/tests/backend_banners_tests.rs
-assertion_line: 66
-expression: rendered
+assertion_line: 123
+expression: normalize_snapshot_paths(rendered)
 ---
   Selected model usage exhausted
   Ask your owner for credits or switch to another model.
@@ -11,4 +11,4 @@ expression: rendered
 
 › Ask Codex to do anything
 
-  test-model-a default · /tmp/project
+  test-model-a default · /tmp/project · → for outputs

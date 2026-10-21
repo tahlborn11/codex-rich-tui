@@ -503,6 +503,9 @@ impl ChatWidget {
                 self.emit_raw_output_mode_changed(enabled);
             }
             SlashCommand::Tui => self.show_tui_mode_picker(),
+            SlashCommand::Outputs => {
+                self.app_event_tx.send(AppEvent::OpenOutputs);
+            }
             SlashCommand::Diff => {
                 self.add_diff_in_progress();
                 let tx = self.app_event_tx.clone();
@@ -1312,6 +1315,7 @@ impl ChatWidget {
             | SlashCommand::Vim
             | SlashCommand::Daybreak
             | SlashCommand::Diff
+            | SlashCommand::Outputs
             | SlashCommand::App
             | SlashCommand::Rename
             | SlashCommand::Voice

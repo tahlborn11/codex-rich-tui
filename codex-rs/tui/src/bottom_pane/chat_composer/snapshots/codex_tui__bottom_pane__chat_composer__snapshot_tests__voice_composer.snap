@@ -1,5 +1,6 @@
 ---
 source: tui/src/bottom_pane/chat_composer/snapshot_tests.rs
+assertion_line: 153
 expression: rows
 ---
                                                             
@@ -7,4 +8,4 @@ expression: rows
                                                             
 › Ask Codex to do anything                                  
                                                             
-  ? for shortcuts                        100% context left
+  → for outputs · ? for shortcuts        100% context left

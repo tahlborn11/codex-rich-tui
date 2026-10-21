@@ -362,12 +362,15 @@ async fn replacement_uses_server_defaults_and_preserves_explicit_launch_settings
             ],
         );
         if explicit == "saved" {
-            let rendered = render_bottom_popup(&app.chat_widget, /*width*/ 80)
-                .replace(&server_config.cwd.display().to_string(), "<PROJECT>");
+            // Keep the temporary path intact until it can be normalized.
+            let project_path = server_config.cwd.display().to_string();
+            let width = u16::try_from(project_path.len().saturating_add(120)).unwrap_or(u16::MAX);
+            let rendered =
+                render_bottom_popup(&app.chat_widget, width).replace(&project_path, "<PROJECT>");
             insta::assert_snapshot!(rendered, @r"
             › Ask Codex to do anything
 
-              server-model high · <PROJECT>
+              server-model high · <PROJECT> · → for outputs
             ");
         }
         if explicit.starts_with("profile_summary") {

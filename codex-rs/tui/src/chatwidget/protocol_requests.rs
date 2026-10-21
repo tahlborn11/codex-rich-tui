@@ -167,6 +167,17 @@ impl ChatWidget {
 
     pub(super) fn on_turn_diff(&mut self, unified_diff: String) {
         debug!("TurnDiffEvent: {unified_diff}");
+        let mut patch = unified_diff;
+        if patch.len() > 512 * 1024 {
+            let mut end = 512 * 1024;
+            while !patch.is_char_boundary(end) {
+                end -= 1;
+            }
+            patch.truncate(end);
+            patch.push_str("\n[Turn patch truncated at 512 KiB]");
+        }
+        self.transcript.last_turn_patch = Some(patch);
+        self.request_redraw();
         self.refresh_status_line();
     }
 

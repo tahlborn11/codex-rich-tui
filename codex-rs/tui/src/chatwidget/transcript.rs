@@ -62,6 +62,7 @@ pub(super) struct TranscriptState {
     /// later steer.
     pub(super) saw_plan_item_this_turn: bool,
     /// Latest `update_plan` checklist task counts for terminal-title rendering.
+    pub(super) last_turn_patch: Option<String>,
     pub(super) last_plan_progress: Option<(usize, usize)>,
     /// Incremental buffer for streamed plan content.
     pub(super) plan_delta_buffer: String,

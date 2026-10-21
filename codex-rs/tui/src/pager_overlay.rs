@@ -45,6 +45,7 @@ pub(crate) enum Overlay {
     Transcript(TranscriptOverlay),
     Static(StaticOverlay),
     Analytics(Box<crate::analytics::AnalyticsView>),
+    Outputs(Box<crate::outputs::OutputsView>),
 }
 
 impl Overlay {
@@ -89,12 +90,14 @@ impl Overlay {
             Overlay::Transcript(_) => tui::OverlayInput::Transcript,
             Overlay::Static(_) => tui::OverlayInput::StaticPager,
             Overlay::Analytics(_) => tui::OverlayInput::Usage,
+            Overlay::Outputs(_) => tui::OverlayInput::Outputs,
         };
         tui.set_overlay_input(input)?;
         let result = match self {
             Overlay::Transcript(o) => o.handle_event(tui, event),
             Overlay::Static(o) => o.handle_event(tui, event),
             Overlay::Analytics(o) => o.handle_event(tui, event),
+            Overlay::Outputs(o) => o.handle_event(tui, event),
         };
         if result.is_err() || self.is_done() {
             let restore = tui.set_overlay_input(tui::OverlayInput::Default);
@@ -109,6 +112,7 @@ impl Overlay {
     ) -> Option<std::time::Duration> {
         match self {
             Self::Transcript(overlay) => overlay.finish_clipboard(completion),
+            Self::Outputs(view) => view.finish_clipboard(completion),
             Self::Static(_) | Self::Analytics(_) => None,
         }
     }
@@ -118,6 +122,7 @@ impl Overlay {
             Overlay::Transcript(o) => o.is_done(),
             Overlay::Static(o) => o.is_done(),
             Overlay::Analytics(o) => o.is_done,
+            Overlay::Outputs(o) => o.is_done,
         }
     }
 }

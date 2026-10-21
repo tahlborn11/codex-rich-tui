@@ -137,6 +137,8 @@ pub struct TuiGlobalKeymap {
     pub leader: Option<KeybindingsSpec>,
     /// Open the shared agent-session overview.
     pub open_agents: Option<KeybindingsSpec>,
+    /// Open the current conversation output browser.
+    pub open_outputs: Option<KeybindingsSpec>,
     /// Open the transcript overlay.
     pub open_transcript: Option<KeybindingsSpec>,
     /// Find text in the full transcript.
@@ -561,6 +563,8 @@ pub struct TuiKeymap {
     pub pager: TuiPagerKeymap,
     #[serde(default)]
     pub list: TuiListKeymap,
+    #[serde(default)]
+    pub outputs: TuiListKeymap,
     #[serde(default)]
     pub agents: TuiAgentsKeymap,
     #[serde(default)]

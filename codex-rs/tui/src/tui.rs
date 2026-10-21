@@ -647,6 +647,7 @@ pub(crate) enum OverlayInput {
     Transcript,
     StaticPager,
     Usage,
+    Outputs,
 }
 
 impl OverlayInput {
@@ -654,7 +655,7 @@ impl OverlayInput {
         match self {
             Self::Default => owned_screen,
             Self::Onboarding | Self::StaticPager => false,
-            Self::Transcript | Self::Usage => true,
+            Self::Transcript | Self::Usage | Self::Outputs => true,
         }
     }
 }

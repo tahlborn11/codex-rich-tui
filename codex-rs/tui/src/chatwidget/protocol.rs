@@ -90,6 +90,8 @@ impl ChatWidget {
                 if from_replay {
                     self.restore_realtime_transcripts_before_turn(&notification.turn.id);
                 } else {
+                    // An empty value suppresses a persisted patch from an older turn.
+                    self.transcript.last_turn_patch = Some(String::new());
                     self.anchor_realtime_transcripts_before_turn(&notification.turn.id);
                 }
                 if replay_kind.is_none() {
