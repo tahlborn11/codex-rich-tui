@@ -372,6 +372,7 @@ pub(crate) enum AppEvent {
     CloseMisalignmentReview,
     /// Open the live command center for recent and locally retained root sessions.
     OpenAgentsOverview,
+    OpenOutputs,
     ShowMoreAgentsOverview,
     SearchAgentsOverview(Uuid, usize),
     AgentsOverviewSearchPage {

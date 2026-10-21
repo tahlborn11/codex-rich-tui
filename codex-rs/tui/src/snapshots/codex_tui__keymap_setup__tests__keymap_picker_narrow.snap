@@ -1,17 +1,19 @@
 ---
 source: tui/src/keymap_setup.rs
+assertion_line: 1309
 expression: "render_picker(params, 78)"
 ---
 
   Keymap
   All configurable shortcuts.
-  154 actions, 0 customized, 5 unbound.
+  165 actions, 0 customized, 6 unbound.
 
-   All   Common   Customized (0)   Unbound (5)   App   Composer   Editor   ›
+   All   Common   Customized (0)   Unbound (6)   App   Composer   Editor   ›
 
   Type to search shortcuts
 
 › Global       - Open Agents                unbound
+  Global       - Open Outputs               unbound
   Global         Open Transcript            ctrl-t
   Global         Find Transcript            f3
   Global         Focus Activity             f4
@@ -34,6 +36,5 @@ expression: "render_picker(params, 78)"
   Chat           Toggle Voice               f8
   Chat           Open Presets               leader p (ctrl-x p)
   Chat           Toggle Voice Mute          f9
-  Composer       Submit                     enter
 ↓
   left/right group · enter edit shortcut · * custom · - unbound · esc close

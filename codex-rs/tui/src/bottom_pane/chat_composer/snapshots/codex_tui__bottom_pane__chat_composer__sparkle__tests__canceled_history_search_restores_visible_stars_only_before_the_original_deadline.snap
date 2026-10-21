@@ -1,5 +1,6 @@
 ---
 source: tui/src/bottom_pane/chat_composer/sparkle_tests.rs
+assertion_line: 696
 expression: "snapshots.join(\"\\n\\n\")"
 ---
 expires while open: false
@@ -7,7 +8,7 @@ initial:
                             ⠈     ⢀     ⠁                 ⠂
 ›⠁Ask Codex to do anything         ⠈      ⠁
        ⢀            ⠠     ⠄         ⠠          ⢀    ⠠     ⡀
-  ? for shortcuts                                            100% context left
+  → for outputs · ? for shortcuts                            100% context left
 searching:
 
 › stored draft
@@ -17,14 +18,14 @@ after escape:
                                         ⠁               ⡀   ⠄           ⠄   ⠄
 › Ask Codex to do anything                                   ⠈
       ⠠                             ⠠        ⢀ ⢀     ⡀                         ⠄
-  ? for shortcuts                                            100% context left
+  → for outputs · ? for shortcuts                            100% context left
 
 expires while open: true
 initial:
                             ⠈     ⢀     ⠁                 ⠂
 ›⠁Ask Codex to do anything         ⠈      ⠁
        ⢀            ⠠     ⠄         ⠠          ⢀    ⠠     ⡀
-  ? for shortcuts                                            100% context left
+  → for outputs · ? for shortcuts                            100% context left
 searching:
 
 › stored draft
@@ -34,4 +35,4 @@ after escape:
 
 › Ask Codex to do anything
 
-  ? for shortcuts                                            100% context left
+  → for outputs · ? for shortcuts                            100% context left

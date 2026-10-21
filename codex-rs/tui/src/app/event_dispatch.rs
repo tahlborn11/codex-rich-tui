@@ -3201,6 +3201,7 @@ impl App {
             AppEvent::AgentsOverviewSearchPage { id, rows, cursor, ok } => {
                 self.apply_agents_overview_search_page(id, rows, cursor, ok);
             }
+            AppEvent::OpenOutputs => self.open_outputs(tui, app_server)?,
             AppEvent::ShowMoreAgentsOverview => self.show_more_agents_overview(app_server),
             AppEvent::RefreshViewedThread { backend_id, thread_id, revision } => {
                 if app_server.backend_id() == backend_id {
