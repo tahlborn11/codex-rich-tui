@@ -141,6 +141,7 @@ mod device_login;
 mod experimental_features;
 mod image_decode;
 mod markdown_copy;
+mod outputs;
 mod permission_discovery;
 mod pets;
 mod realtime_call;

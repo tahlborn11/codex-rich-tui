@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
+assertion_line: 5359
 expression: "format!(\"80 columns:\\n{}\\n120 columns:\\n{}\", hook_status_frame(&chat, 80),\nhook_status_frame(&chat, 120),)"
 ---
 80 columns:

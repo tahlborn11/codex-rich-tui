@@ -1,0 +1,25 @@
+---
+source: tui/src/outputs/ui_tests.rs
+assertion_line: 873
+expression: buffer_text(&narrow)
+---
+ OUTPUTS  current chat                                      
+ Plans [ Files ] Changes  Agents                            
+────────────────────────────────────────────────────────────
+project · Enter expand/open · ←/→ folders · Alt+←/→ screens 
+                                                            
+Files                                                      │
+  ▸ .config/                                               │
+  ▾ src/                                                   │
+    ▸ nested/                                              │
+›     main.rs                                              │
+    README                                                 │
+                                                           │
+                                                           │
+                                                           │
+                                                           │
+                                                           │
+                                                           │
+                                                           │
+────────────────────────────────────────────────────────────
+←/→ folders · Enter open · Tab focus · / filter · Esc back

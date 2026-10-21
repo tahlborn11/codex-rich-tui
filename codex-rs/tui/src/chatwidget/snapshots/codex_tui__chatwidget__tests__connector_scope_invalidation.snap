@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/popups_and_settings.rs
+assertion_line: 4416
 expression: "format!(\"Before account change:\\n{before}\\n\\nAfter account change:\\n{after}\")"
 ---
 Before account change:

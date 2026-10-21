@@ -330,6 +330,13 @@ impl App {
         use crate::keymap::KeymapContext;
         use crate::keymap::KeymapContextSet;
 
+        if let Some(Overlay::Outputs(view)) = &self.overlay {
+            return if view.is_editing() {
+                KeymapContextSet::raw_key_capture()
+            } else {
+                KeymapContextSet::new(KeymapContext::Outputs)
+            };
+        }
         if let Some(overlay) = &self.overlay {
             let contexts = match overlay.input_transcript() {
                 Some(view) if view.is_search_editing() => {
@@ -898,6 +905,11 @@ impl App {
         if self.keymap.app.toggle_raw_output.is_pressed(key_event) {
             let enabled = !self.chat_widget.raw_output_mode();
             self.apply_raw_output_mode(tui, enabled, /*notify*/ false);
+            return true;
+        }
+
+        if self.keymap.app.open_outputs.is_pressed(key_event) {
+            self.app_event_tx.send(AppEvent::OpenOutputs);
             return true;
         }
 

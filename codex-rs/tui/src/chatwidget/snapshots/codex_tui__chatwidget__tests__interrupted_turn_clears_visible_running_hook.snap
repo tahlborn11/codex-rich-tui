@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
+assertion_line: 3982
 expression: "format!(\"before interrupt:\\n{before_interrupt}\\nafter interrupt:\\n{}\",\nhook_status_frame(&chat, 80))"
 ---
 before interrupt:

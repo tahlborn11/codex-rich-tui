@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
+assertion_line: 5415
 expression: "format!(\"before reveal:\\n{hidden}\\nrunning:\\n{running}\\ncompleted:\\n{}\",\nhook_status_frame(&chat, 80),)"
 ---
 before reveal:

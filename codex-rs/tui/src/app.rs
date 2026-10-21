@@ -279,6 +279,7 @@ mod status_line_settings;
 mod statusline_picker;
 pub(crate) use right_click_paste::PasteEnvironment;
 mod pane_motion;
+mod outputs;
 mod safety_buffering;
 mod safety_recourse;
 mod server_version_notice;
@@ -950,6 +951,13 @@ impl App {
             }
             tui.frame_requester().schedule_frame();
             return Ok(AppRunControl::Continue);
+        }
+        if self.invalidate_outputs_if_needed(tui) {
+            // Do not let a navigation key answer an approval revealed by closing the viewer.
+            return Ok(AppRunControl::Continue);
+        }
+        if matches!(&event, TuiEvent::Draw) {
+            self.sync_outputs_local_plans();
         }
         if matches!(&event, TuiEvent::Resume) {
             self.chat_widget.reassert_terminal_title();

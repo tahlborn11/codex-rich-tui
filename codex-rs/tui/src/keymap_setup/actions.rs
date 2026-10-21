@@ -135,6 +135,7 @@ define_keymap_actions! {
         move_divider_right [Workspace] => "Move the divider right when the side pane has focus.",
         toggle_pane_zoom [Workspace] => "Zoom or restore the focused pane.",
         open_agents => "Open and focus Command Center. A matching Agents binding takes priority there.",
+        open_outputs => "Open documents, changes and subagents for this conversation.",
         open_transcript => "Open the transcript overlay.",
         find_transcript => "Find text in the full transcript.",
         // Keep the new warnings action out of shared-config writes until older strict readers
@@ -283,6 +284,18 @@ define_keymap_actions! {
         mark_markdown => "Mark Markdown blocks in transcript selection mode.",
     }
     list "List" {
+        move_up => "Move list selection up.",
+        move_down => "Move list selection down.",
+        move_left => "Move horizontally left in list pickers.",
+        move_right => "Move horizontally right in list pickers.",
+        page_up => "Move list selection up by one page.",
+        page_down => "Move list selection down by one page.",
+        jump_top => "Jump to the first list item.",
+        jump_bottom => "Jump to the last list item.",
+        accept => "Accept the current list selection.",
+        cancel => "Cancel and close selection views.",
+    }
+    outputs "Outputs" {
         move_up => "Move list selection up.",
         move_down => "Move list selection down.",
         move_left => "Move horizontally left in list pickers.",
