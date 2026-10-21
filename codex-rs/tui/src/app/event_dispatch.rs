@@ -2981,6 +2981,7 @@ impl App {
                 }
             }
             AppEvent::OpenAgentsOverview => self.open_agents_overview(app_server),
+            AppEvent::OpenOutputs => self.open_outputs(tui, app_server)?,
             AppEvent::ShowMoreAgentsOverview => self.show_more_agents_overview(app_server),
             AppEvent::RefreshViewedThread { backend_id, thread_id, revision } => {
                 if app_server.backend_id() == backend_id {

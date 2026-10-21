@@ -1,12 +1,13 @@
 ---
 source: tui/src/bottom_pane/chat_composer/sparkle_tests.rs
+assertion_line: 171
 expression: "snapshots.join(\"\\n\\n\")"
 ---
 40 columns, cursor Some((2, 1))
                             ⠈     ⢀
 ›⠁Ask Codex to do anything         ⠈
        ⢀            ⠠     ⠄         ⠠
-  ? for shortcuts    100% context left
+  → for outputs      100% context left
 first input:
 
 › x
@@ -17,7 +18,7 @@ first input:
                             ⠈     ⢀     ⠁                 ⠂
 ›⠁Ask Codex to do anything         ⠈      ⠁
        ⢀            ⠠     ⠄         ⠠          ⢀    ⠠     ⡀
-  ? for shortcuts                                            100% context left
+  → for outputs · ? for shortcuts                            100% context left
 first input:
 
 › x

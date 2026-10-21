@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/realtime/recording_controls_tests.rs
+assertion_line: 346
 expression: "states.join(\"\\n\\n\")"
 ---
 connecting:
@@ -7,7 +8,7 @@ connecting:
 
 › Ask Codex to do anything
 
-  status line stays visible
+  status line stays visible · → for outputs
 
 listening:
  voice ● listening                                      f9 mute     /voice stop
@@ -15,7 +16,7 @@ listening:
 
 › Ask Codex to do anything
 
-  status line stays visible
+  status line stays visible · → for outputs
 
 speaking:
  voice ● speaking                                       f9 mute     /voice stop
@@ -23,7 +24,7 @@ speaking:
 
 › Ask Codex to do anything
 
-  status line stays visible
+  status line stays visible · → for outputs
 
 muted:
  voice ◌ muted                                          f9 unmute   /voice stop
@@ -31,7 +32,7 @@ muted:
 
 › Ask Codex to do anything
 
-  status line stays visible
+  status line stays visible · → for outputs
 
 transcript:
  voice ● speaking                                       f9 mute     /voice stop
@@ -39,7 +40,7 @@ transcript:
 
 › Ask Codex to do anything
 
-  status line stays visible
+  status line stays visible · → for outputs
 
 interrupted:
  voice ● heard                                          f9 mute     /voice stop
@@ -47,4 +48,4 @@ interrupted:
 
 › Ask Codex to do anything
 
-  status line stays visible
+  status line stays visible · → for outputs

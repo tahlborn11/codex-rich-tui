@@ -53,6 +53,7 @@ pub enum SlashCommand {
     Raw,
     Tui,
     Diff,
+    Outputs,
     Mention,
     Status,
     Daemon,
@@ -115,6 +116,7 @@ impl SlashCommand {
             SlashCommand::Raw => "toggle raw scrollback mode for copy-friendly terminal selection",
             SlashCommand::Tui => "choose the TUI mode for the next launch",
             SlashCommand::Diff => "show git diff (including untracked files)",
+            SlashCommand::Outputs => "view plans, files, repository changes and subagents",
             SlashCommand::Mention => "mention a file",
             SlashCommand::Skills => "use skills to improve how Codex performs specific tasks",
             SlashCommand::Import => "import setup, this project, and recent chats from Claude Code",
@@ -211,6 +213,7 @@ impl SlashCommand {
                 | SlashCommand::CopyCode
                 | SlashCommand::Raw
                 | SlashCommand::Diff
+                | SlashCommand::Outputs
                 | SlashCommand::Mention
                 | SlashCommand::Status
                 | SlashCommand::Daemon
@@ -274,6 +277,7 @@ impl SlashCommand {
             | SlashCommand::MemoryDrop
             | SlashCommand::MemoryUpdate => false,
             SlashCommand::Diff
+            | SlashCommand::Outputs
             | SlashCommand::Archive
             | SlashCommand::Resume
             | SlashCommand::Model

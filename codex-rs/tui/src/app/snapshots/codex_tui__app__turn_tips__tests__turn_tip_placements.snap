@@ -15,7 +15,7 @@ Response row 0
 › Ask Codex to do anything
 
   gpt-test default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts
 
 working=true, response rows=1, 80x6
 • Working (0s • esc to interrupt)
@@ -23,7 +23,7 @@ working=true, response rows=1, 80x6
 › Ask Codex to do anything
 
   gpt-test default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts
 
 working=false, response rows=1, 80x12
 › Show a response.
@@ -37,7 +37,7 @@ working=false, response rows=1, 80x12
 › Ask Codex to do anything
 
   gpt-test default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts
 
 working=false, response rows=1, 80x24
 
@@ -63,7 +63,7 @@ Response row 0
 › Ask Codex to do anything
 
   gpt-test default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts
 
 Completion tip selected, 80x24
 
@@ -89,7 +89,7 @@ Response row 0
 › Ask Codex to do anything
 
   gpt-test default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts
 
 working=false, response rows=30, 80x12
 › Show a response.
@@ -103,7 +103,7 @@ working=false, response rows=30, 80x12
 › Ask Codex to do anything
 
   gpt-test default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts
 
 working=false, response rows=1, 80x9
 • Done.
@@ -114,7 +114,7 @@ working=false, response rows=1, 80x9
 › Ask Codex to do anything
 
   gpt-test default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts
 
 working=false, response rows=1, 80x10
 › Show a response.
@@ -126,7 +126,7 @@ working=false, response rows=1, 80x10
 › Ask Codex to do anything
 
   gpt-test default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts
 
 working=false, response rows=1, 80x11
 › Show a response.
@@ -139,7 +139,7 @@ working=false, response rows=1, 80x11
 › Ask Codex to do anything
 
   gpt-test default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts
 
 working=false, response rows=1, 12x12
 
@@ -153,10 +153,10 @@ working=false, response rows=1, 12x12
 › Ask Codex
 
   gpt-test …
-  ? for shor
+
 
 working=false, response rows=1, 80x4
 
 › Ask Codex to do anything
 
-  ? for shortcuts
+  → for outputs · ? for shortcuts

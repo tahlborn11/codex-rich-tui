@@ -96,6 +96,7 @@ pub(crate) struct RuntimeKeymap {
     pub(crate) vim_text_object: VimTextObjectKeymap,
     pub(crate) pager: PagerKeymap,
     pub(crate) list: ListKeymap,
+    pub(crate) outputs: ListKeymap,
     pub(crate) agents: AgentsKeymap,
     pub(crate) approval: ApprovalKeymap,
 }
@@ -104,6 +105,8 @@ pub(crate) struct RuntimeKeymap {
 pub(crate) struct AppKeymap {
     /// Open the agent command center.
     pub(crate) open_agents: Vec<KeyBinding>,
+    /// Open documents, changes and agents for the displayed conversation.
+    pub(crate) open_outputs: Vec<KeyBinding>,
     /// Open transcript overlay.
     pub(crate) open_transcript: Vec<KeyBinding>,
     /// Find text in the full transcript.
@@ -380,6 +383,7 @@ impl ListAction {
 /// configured `j`, `k`, `h`, or `l` does not steal query input.
 #[derive(Clone, Debug)]
 pub(crate) struct ListKeymap {
+    context: KeymapContext,
     pub(crate) move_up: Vec<KeyBinding>,
     pub(crate) move_down: Vec<KeyBinding>,
     pub(crate) move_left: Vec<KeyBinding>,
@@ -442,13 +446,12 @@ impl ListKeymap {
 
     pub(crate) fn has_chord_prefix(&self, event: KeyEvent) -> bool {
         self.chord_hints.bindings.iter().any(|binding| {
-            binding.action.context.overlaps(KeymapContext::List)
-                && binding.chord.prefix.is_press(event)
+            binding.action.context.overlaps(self.context) && binding.chord.prefix.is_press(event)
         })
     }
 
     pub(crate) fn primary_hint(&self, action: ListAction) -> Option<ShortcutHint> {
-        let action_id = keymap_action_id(KeymapContext::List.config_name(), action.config_name())?;
+        let action_id = keymap_action_id(self.context.config_name(), action.config_name())?;
         self.chord_hints
             .primary_hint(action_id, self.bindings_for(action))
     }
@@ -770,6 +773,11 @@ impl RuntimeKeymap {
             .collect();
 
         let app = AppKeymap {
+            open_outputs: resolve_bindings(
+                keymap.global.open_outputs.as_ref(),
+                &defaults.app.open_outputs,
+                "tui.keymap.global.open_outputs",
+            )?,
             open_agents: if open_agents_default_is_shadowed {
                 Vec::new()
             } else {
@@ -1644,6 +1652,7 @@ impl RuntimeKeymap {
         ]);
 
         let list = ListKeymap {
+            context: KeymapContext::List,
             move_up: list_move_up,
             move_down: list_move_down,
             move_left: resolve_new_default_bindings(
@@ -1717,6 +1726,21 @@ impl RuntimeKeymap {
             }
         }
 
+        let outputs = ListKeymap {
+            context: KeymapContext::Outputs,
+            move_up: resolve_local!(keymap, defaults, outputs, move_up),
+            move_down: resolve_local!(keymap, defaults, outputs, move_down),
+            move_left: resolve_local!(keymap, defaults, outputs, move_left),
+            move_right: resolve_local!(keymap, defaults, outputs, move_right),
+            page_up: resolve_local!(keymap, defaults, outputs, page_up),
+            page_down: resolve_local!(keymap, defaults, outputs, page_down),
+            jump_top: resolve_local!(keymap, defaults, outputs, jump_top),
+            jump_bottom: resolve_local!(keymap, defaults, outputs, jump_bottom),
+            accept: resolve_local!(keymap, defaults, outputs, accept),
+            cancel: resolve_local!(keymap, defaults, outputs, cancel),
+            chord_hints: Arc::clone(&chords),
+        };
+
         let mut resolved = Self {
             app,
             chords,
@@ -1734,6 +1758,7 @@ impl RuntimeKeymap {
             vim_text_object,
             pager,
             list,
+            outputs,
             agents,
             approval,
         };
@@ -1800,6 +1825,7 @@ impl RuntimeKeymap {
         Self {
             app: AppKeymap {
                 open_agents: default_bindings![],
+                open_outputs: default_bindings![],
                 open_transcript: default_bindings![ctrl(KeyCode::Char('t'))],
                 find_transcript: default_bindings![plain(KeyCode::F(3))],
                 select_transcript: default_bindings![],
@@ -2058,6 +2084,31 @@ impl RuntimeKeymap {
                 chord_hints: Arc::default(),
             },
             list: ListKeymap {
+                context: KeymapContext::List,
+                move_up: default_bindings![
+                    plain(KeyCode::Up),
+                    ctrl(KeyCode::Char('p')),
+                    ctrl(KeyCode::Char('k')),
+                    plain(KeyCode::Char('k'))
+                ],
+                move_down: default_bindings![
+                    plain(KeyCode::Down),
+                    ctrl(KeyCode::Char('n')),
+                    ctrl(KeyCode::Char('j')),
+                    plain(KeyCode::Char('j'))
+                ],
+                move_left: default_bindings![plain(KeyCode::Left), ctrl(KeyCode::Char('h'))],
+                move_right: default_bindings![plain(KeyCode::Right), ctrl(KeyCode::Char('l'))],
+                page_up: default_bindings![plain(KeyCode::PageUp), ctrl(KeyCode::Char('b'))],
+                page_down: default_bindings![plain(KeyCode::PageDown), ctrl(KeyCode::Char('f'))],
+                jump_top: default_bindings![plain(KeyCode::Home)],
+                jump_bottom: default_bindings![plain(KeyCode::End)],
+                accept: default_bindings![plain(KeyCode::Enter)],
+                cancel: default_bindings![plain(KeyCode::Esc)],
+                chord_hints: Arc::default(),
+            },
+            outputs: ListKeymap {
+                context: KeymapContext::Outputs,
                 move_up: default_bindings![
                     plain(KeyCode::Up),
                     ctrl(KeyCode::Char('p')),
@@ -2149,6 +2200,7 @@ impl RuntimeKeymap {
         #[cfg(unix)]
         for (action, bindings) in [
             ("global.open_agents", &self.app.open_agents),
+            ("global.open_outputs", &self.app.open_outputs),
             ("chat.open_presets", &self.chat.open_presets),
             ("chat.toggle_voice", &self.chat.toggle_voice),
         ] {
@@ -2167,6 +2219,16 @@ impl RuntimeKeymap {
                     .to_string(),
             );
         }
+        if self.app.open_outputs.iter().any(|binding| {
+            let (code, modifiers) = binding.parts();
+            crate::key_hint::is_plain_text_key_event(KeyEvent::new(code, modifiers))
+                || matches!(code, KeyCode::Char(_)) && crate::key_hint::is_altgr(modifiers)
+        }) {
+            return Err(
+                "tui.keymap.global.open_outputs: printable keys are reserved for text input"
+                    .to_string(),
+            );
+        }
         let mut side_toggle_bindings = self.app.toggle_side_conversation.clone();
         let slash_binding = key_hint::ctrl(KeyCode::Char('/'));
         let legacy_slash_binding = key_hint::ctrl(KeyCode::Char('7'));
@@ -2178,6 +2240,7 @@ impl RuntimeKeymap {
 
         let main_bindings = [
             ("open_agents", self.app.open_agents.as_slice()),
+            ("open_outputs", self.app.open_outputs.as_slice()),
             ("open_transcript", self.app.open_transcript.as_slice()),
             ("find_transcript", self.app.find_transcript.as_slice()),
             ("select_transcript", self.app.select_transcript.as_slice()),
@@ -2287,6 +2350,7 @@ impl RuntimeKeymap {
             "app",
             [
                 ("open_agents", self.app.open_agents.as_slice()),
+                ("open_outputs", self.app.open_outputs.as_slice()),
                 ("open_transcript", self.app.open_transcript.as_slice()),
                 ("find_transcript", self.app.find_transcript.as_slice()),
                 ("select_transcript", self.app.select_transcript.as_slice()),
@@ -2348,6 +2412,7 @@ impl RuntimeKeymap {
             "main",
             [
                 ("open_agents", self.app.open_agents.as_slice()),
+                ("open_outputs", self.app.open_outputs.as_slice()),
                 ("open_transcript", self.app.open_transcript.as_slice()),
                 ("find_transcript", self.app.find_transcript.as_slice()),
                 ("select_transcript", self.app.select_transcript.as_slice()),
@@ -2549,6 +2614,28 @@ impl RuntimeKeymap {
         }
 
         validate_unique("approval", context_bindings(KeymapContext::Approval))?;
+        validate_unique("outputs", context_bindings(KeymapContext::Outputs))?;
+        for action in runtime_action_bindings(self)
+            .filter(|action| action.id.context == KeymapContext::Outputs)
+        {
+            for (reserved_action, reserved) in OUTPUTS_RESERVED_BINDINGS {
+                if action.id.action == "cancel"
+                    && [
+                        key_hint::ctrl(KeyCode::Char('c')),
+                        key_hint::plain(KeyCode::Esc),
+                    ]
+                    .contains(reserved)
+                {
+                    continue;
+                }
+                if action.bindings.contains(reserved) {
+                    return Err(format!(
+                        "{}: binding is reserved by {reserved_action}",
+                        action.id.config_path()
+                    ));
+                }
+            }
+        }
 
         let mut seen: HashMap<(KeyCode, KeyModifiers), &'static str> = HashMap::new();
         for (action, bindings) in approval_overlay_bindings {
@@ -2692,6 +2779,37 @@ const MAIN_RESERVED_BINDINGS: &[(&str, KeyBinding)] = &[
         "fixed.connector_mentions",
         key_hint::plain(KeyCode::Char('$')),
     ),
+];
+
+/// Controls owned by the Outputs browser rather than its list navigation.
+const OUTPUTS_RESERVED_BINDINGS: &[(&str, KeyBinding)] = &[
+    ("outputs.previous_screen", key_hint::alt(KeyCode::Left)),
+    ("outputs.next_screen", key_hint::alt(KeyCode::Right)),
+    ("outputs.focus", key_hint::plain(KeyCode::Tab)),
+    ("outputs.search", key_hint::plain(KeyCode::Char('/'))),
+    ("outputs.open_path", key_hint::plain(KeyCode::Char('o'))),
+    ("outputs.refresh", key_hint::plain(KeyCode::Char('r'))),
+    ("outputs.source", key_hint::plain(KeyCode::Char('s'))),
+    ("outputs.copy", key_hint::plain(KeyCode::Char('c'))),
+    (
+        "outputs.previous_repository",
+        key_hint::plain(KeyCode::Char('[')),
+    ),
+    (
+        "outputs.next_repository",
+        key_hint::plain(KeyCode::Char(']')),
+    ),
+    ("outputs.change_view", key_hint::plain(KeyCode::Char('v'))),
+    ("outputs.change_view", key_hint::plain(KeyCode::Char('1'))),
+    ("outputs.change_view", key_hint::plain(KeyCode::Char('2'))),
+    ("outputs.change_view", key_hint::plain(KeyCode::Char('3'))),
+    ("outputs.change_view", key_hint::plain(KeyCode::Char('4'))),
+    ("outputs.change_view", key_hint::plain(KeyCode::Char('5'))),
+    ("outputs.show_clean", key_hint::plain(KeyCode::Char('a'))),
+    ("outputs.target", key_hint::plain(KeyCode::Char('t'))),
+    ("outputs.base", key_hint::plain(KeyCode::Char('b'))),
+    ("outputs.close", key_hint::ctrl(KeyCode::Char('c'))),
+    ("outputs.close", key_hint::plain(KeyCode::Esc)),
 ];
 
 const TRANSCRIPT_BACKTRACK_RESERVED_BINDINGS: &[(&str, KeyBinding)] = &[

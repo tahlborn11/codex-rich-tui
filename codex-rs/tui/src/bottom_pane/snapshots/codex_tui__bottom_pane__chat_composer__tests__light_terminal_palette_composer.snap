@@ -1,5 +1,6 @@
 ---
 source: tui/src/bottom_pane/chat_composer.rs
+assertion_line: 5115
 expression: "format!(\"{buffer:?}\")"
 ---
 Buffer {
@@ -10,7 +11,7 @@ Buffer {
         "                                                ",
         "                                                ",
         "                                                ",
-        "  ? for shortcuts            100% context left  ",
+        "  → for outputs              100% context left  ",
     ],
     styles: [
         x: 0, y: 0, fg: Reset, bg: Rgb(244, 244, 244), underline: Reset, modifier: NONE,
@@ -21,7 +22,7 @@ Buffer {
         x: 0, y: 5, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 2, y: 5, fg: Rgb(110, 112, 108), bg: Reset, underline: Reset, modifier: BOLD,
         x: 3, y: 5, fg: Rgb(118, 119, 117), bg: Reset, underline: Reset, modifier: NONE,
-        x: 17, y: 5, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 15, y: 5, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 29, y: 5, fg: Rgb(118, 119, 117), bg: Reset, underline: Reset, modifier: NONE,
         x: 46, y: 5, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
     ]

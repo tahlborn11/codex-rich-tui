@@ -45,6 +45,7 @@ pub(crate) enum Overlay {
     Transcript(TranscriptOverlay),
     Static(StaticOverlay),
     Analytics(Box<crate::analytics::AnalyticsView>),
+    Outputs(Box<crate::outputs::OutputsView>),
 }
 
 impl Overlay {
@@ -86,7 +87,7 @@ impl Overlay {
 
     pub(crate) fn handle_event(&mut self, tui: &mut tui::Tui, event: TuiEvent) -> Result<()> {
         let mouse_capture = match self {
-            Overlay::Transcript(_) | Overlay::Analytics(_) => tui::MouseCapture::Enabled,
+            Overlay::Transcript(_) | Overlay::Analytics(_) | Overlay::Outputs(_) => tui::MouseCapture::Enabled,
             Overlay::Static(_) => tui::MouseCapture::Disabled,
         };
         tui.set_mouse_capture(mouse_capture)?;
@@ -94,6 +95,7 @@ impl Overlay {
             Overlay::Transcript(o) => o.handle_event(tui, event).map(drop),
             Overlay::Static(o) => o.handle_event(tui, event),
             Overlay::Analytics(o) => o.handle_event(tui, event),
+            Overlay::Outputs(o) => o.handle_event(tui, event),
         };
         if result.is_err() || self.is_done() {
             let restore = tui.set_mouse_capture(tui::MouseCapture::Inherit);
@@ -108,6 +110,7 @@ impl Overlay {
     ) -> Option<std::time::Duration> {
         match self {
             Self::Transcript(overlay) => overlay.finish_clipboard(completion),
+            Self::Outputs(view) => view.finish_clipboard(completion),
             Self::Static(_) | Self::Analytics(_) => None,
         }
     }
@@ -117,6 +120,7 @@ impl Overlay {
             Overlay::Transcript(o) => o.is_done(),
             Overlay::Static(o) => o.is_done(),
             Overlay::Analytics(o) => o.is_done,
+            Overlay::Outputs(o) => o.is_done,
         }
     }
 }

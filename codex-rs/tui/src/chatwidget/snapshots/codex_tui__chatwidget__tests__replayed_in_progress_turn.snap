@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/history_replay.rs
+assertion_line: 1715
 expression: "timer.replace_all(&normalize_snapshot_paths(render_bottom_popup(&chat, 80)),\n\"(<elapsed> •\")"
 ---
 • Working (<elapsed> • esc to interrupt)
@@ -7,4 +8,4 @@ expression: "timer.replace_all(&normalize_snapshot_paths(render_bottom_popup(&ch
 
 › Ask Codex to do anything
 
-  GPT-5.6-Sol default · /tmp/project
+  GPT-5.6-Sol default · /tmp/project · → for outputs

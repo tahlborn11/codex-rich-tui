@@ -157,3 +157,90 @@ fn left_respects_editor_and_vim_history_remaps() {
         assert!(events.try_recv().is_err());
     }
 }
+
+#[test]
+fn right_opens_outputs_only_from_an_empty_prompt() {
+    let (mut composer, mut events) = new_test_composer();
+    composer.insert_str("ab");
+    composer.handle_key_event(KeyCode::Left.into());
+    composer.handle_key_event(KeyCode::Right.into());
+    composer.insert_str("!");
+    assert_eq!(composer.current_text(), "ab!");
+    assert!(events.try_recv().is_err());
+    composer.clear_for_ctrl_c();
+    for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
+        composer.handle_key_event(KeyEvent::new_with_kind(
+            KeyCode::Right,
+            KeyModifiers::NONE,
+            kind,
+        ));
+    }
+    assert!(events.try_recv().is_err());
+    composer.handle_key_event(KeyCode::Right.into());
+    assert_matches!(events.try_recv(), Ok(AppEvent::OpenOutputs));
+}
+
+#[test]
+fn right_outputs_respects_attachments_and_editor_and_vim_remaps() {
+    let (mut composer, mut events) = new_test_composer();
+    composer.set_remote_image_urls(vec!["https://example.com/image.png".into()]);
+    composer.handle_key_event(KeyCode::Right.into());
+    assert!(events.try_recv().is_err());
+
+    use codex_config::types::KeybindingSpec;
+    use codex_config::types::KeybindingsSpec;
+    use codex_config::types::TuiKeymap;
+
+    for vim in [false, true] {
+        let (mut composer, mut events) = new_test_composer();
+        let mut config = TuiKeymap::default();
+        if vim {
+            config.vim_normal.move_right =
+                Some(KeybindingsSpec::One(KeybindingSpec("ctrl-f".into())));
+        } else {
+            config.editor.move_right = Some(KeybindingsSpec::One(KeybindingSpec("ctrl-f".into())));
+        }
+        composer.set_keymap_bindings(&RuntimeKeymap::from_config(&config).unwrap());
+        composer.set_vim_enabled(vim);
+        assert!(composer.footer_props().key_hints.outputs.is_none());
+        composer.handle_key_event(KeyCode::Right.into());
+        assert!(events.try_recv().is_err());
+    }
+}
+
+#[test]
+fn right_dismisses_shortcut_help_before_opening_outputs() {
+    let (mut composer, mut events) = new_test_composer();
+    composer.handle_key_event(KeyCode::Char('?').into());
+    assert!(composer.shortcut_overlay_visible());
+    composer.handle_key_event(KeyCode::Right.into());
+    assert!(!composer.shortcut_overlay_visible());
+    assert!(events.try_recv().is_err());
+    composer.handle_key_event(KeyCode::Right.into());
+    assert_matches!(events.try_recv(), Ok(AppEvent::OpenOutputs));
+}
+
+#[test]
+fn outputs_hint_matches_navigation_availability() {
+    let (mut composer, _events) = new_test_composer();
+    assert!(composer.footer_props().key_hints.outputs.is_some());
+
+    composer.insert_str("draft");
+    assert!(composer.footer_props().key_hints.outputs.is_none());
+    composer.clear_for_ctrl_c();
+
+    composer.set_remote_image_urls(vec!["https://example.com/image.png".into()]);
+    assert!(composer.footer_props().key_hints.outputs.is_none());
+    composer.set_remote_image_urls(Vec::new());
+
+    composer.handle_key_event(KeyCode::Char('?').into());
+    assert!(composer.footer_props().key_hints.outputs.is_none());
+    composer.handle_key_event(KeyCode::Right.into());
+    assert!(!composer.shortcut_overlay_visible());
+
+    let config: codex_config::types::TuiKeymap =
+        toml::from_str("[editor]\nmove_right = 'ctrl-f'").unwrap();
+    let runtime = crate::keymap::RuntimeKeymap::from_config(&config).unwrap();
+    composer.set_keymap_bindings(&runtime);
+    assert!(composer.footer_props().key_hints.outputs.is_none());
+}
