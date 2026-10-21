@@ -181,6 +181,7 @@ impl App {
                 {
                     return;
                 }
+                self.cancel_outputs();
                 if self.begin_reconnect() {
                     return;
                 }
@@ -645,6 +646,19 @@ impl App {
     ) {
         let request = &buffered_request.request;
         let thread_id = server_request_thread_id(request);
+        if thread_id == self.current_displayed_thread_id()
+            && matches!(
+                request,
+                ServerRequest::CommandExecutionRequestApproval { .. }
+                    | ServerRequest::FileChangeRequestApproval { .. }
+                    | ServerRequest::PermissionsRequestApproval { .. }
+                    | ServerRequest::ToolRequestUserInput { .. }
+                    | ServerRequest::McpServerElicitationRequest { .. }
+            )
+        {
+            self.cancel_outputs();
+        }
+
         if let Some((kind, _)) =
             thread_id.and_then(|id| self.temporary_structured_requests.get(&id))
         {

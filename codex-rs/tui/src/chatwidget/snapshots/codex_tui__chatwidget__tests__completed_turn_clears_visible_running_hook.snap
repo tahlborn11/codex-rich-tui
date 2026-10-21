@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
+assertion_line: 4009
 expression: "format!(\"before completion:\\n{before_completion}\\nafter completion:\\n{}\",\nhook_status_frame(&chat, 80))"
 ---
 before completion:

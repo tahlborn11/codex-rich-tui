@@ -166,3 +166,66 @@ fn agents_search_keeps_unshadowed_fallbacks() {
         assert_eq!(runtime.agents.search, vec![key_hint::plain(remaining)]);
     }
 }
+
+#[test]
+fn outputs_actions_have_an_independent_remappable_context() {
+    let config: codex_config::types::TuiKeymap =
+        toml::from_str("[global]\nopen_outputs = 'f12'\n[outputs]\nmove_down = 'ctrl-j'\n")
+            .unwrap();
+    let runtime = super::RuntimeKeymap::from_config(&config).unwrap();
+    assert_eq!(
+        runtime.app.open_outputs,
+        vec![crate::key_hint::plain(crossterm::event::KeyCode::F(12))]
+    );
+    assert_eq!(
+        runtime.outputs.move_down,
+        vec![crate::key_hint::ctrl(crossterm::event::KeyCode::Char('j'))]
+    );
+    assert_ne!(runtime.outputs.move_down, runtime.list.move_down);
+}
+
+#[test]
+fn outputs_global_binding_cannot_steal_editor_input() {
+    for binding in ["right", "ctrl-t", "a"] {
+        let config: codex_config::types::TuiKeymap =
+            toml::from_str(&format!("[global]\nopen_outputs = '{binding}'\n",)).unwrap();
+        assert!(
+            super::RuntimeKeymap::from_config(&config).is_err(),
+            "{binding}"
+        );
+    }
+}
+
+#[test]
+fn outputs_navigation_cannot_shadow_document_controls() {
+    let config: codex_config::types::TuiKeymap =
+        toml::from_str("[outputs]\nmove_down = 'r'").unwrap();
+    let error = super::RuntimeKeymap::from_config(&config).unwrap_err();
+    assert!(error.contains("outputs.refresh"));
+}
+
+#[test]
+fn outputs_fixed_controls_reject_navigation_bindings_and_chords() {
+    for key in ["alt-left", "alt-right", "a", "1", "2", "3", "4", "5", "esc"] {
+        for binding in [
+            key.to_owned(),
+            format!("ctrl-x {key}"),
+            format!("{key} f12"),
+        ] {
+            let config: TuiKeymap = serde_json::from_value(json!({
+                "outputs": {"move_down": binding, "cancel": []}
+            }))
+            .unwrap();
+            assert!(RuntimeKeymap::from_config(&config).is_err(), "{binding}");
+        }
+    }
+}
+
+#[test]
+fn outputs_cancel_can_use_fixed_close_keys() {
+    let config: TuiKeymap = serde_json::from_value(json!({
+        "outputs": {"cancel": ["esc", "ctrl-c"]}
+    }))
+    .unwrap();
+    assert!(RuntimeKeymap::from_config(&config).is_ok());
+}

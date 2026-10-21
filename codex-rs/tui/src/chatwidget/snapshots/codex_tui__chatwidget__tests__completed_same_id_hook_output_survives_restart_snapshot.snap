@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
+assertion_line: 5311
 expression: "hook_status_and_history_snapshot(&chat, \"restarted\", &history)"
 ---
 restarted

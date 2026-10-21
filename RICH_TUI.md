@@ -33,6 +33,76 @@ macOS-specific.
 The fork's `rich-markdown` branch carries these changes on top of upstream Codex.
 The `main` branch tracks `upstream/main`.
 
+## Outputs viewer
+
+Press Right from an empty, focused composer, or run `/outputs`, to open the Outputs
+viewer for the displayed chat. The Right shortcut respects composer key remaps,
+attachments, popups, paste, and Vim navigation. `global.open_outputs` can also bind
+an explicit shortcut. The footer shows `→ for outputs` between the Agents and
+shortcuts hints when Right is available. The `outputs` keymap section controls
+list navigation.
+
+The top tabs show Plans, Files, Changes, and Agents, with the current screen
+highlighted. Click a tab or use Alt+Left and Alt+Right to select a screen. Left and
+Right also switch screens in the Plans and Agents lists. Use Tab to focus the preview.
+Enter opens a selected file or document. Wide terminals show the list and preview together.
+Narrow terminals show one at a time. Escape returns from the preview, then closes
+the viewer. The viewer preserves the composer draft. Single-click an item in any
+Outputs list to select it; double-click it to focus its preview. Folder clicks
+toggle expansion. The mouse wheel always scrolls the preview, leaving the list
+selection unchanged. In split view, arrow keys still follow keyboard focus;
+use Tab to switch panes. In narrow view, the wheel reveals the preview.
+
+- Files shows an expandable directory tree. Enter or Right expands a folder;
+  Left collapses it or selects its parent. Click a folder to toggle it. Directories
+  load as you expand them, including empty and hidden folders. The tree includes
+  all regular files; binary and large files remain subject to preview limits.
+  Names and paths are relative to the file root.
+- `/` filters the list or finds text in the preview. Enter applies the search.
+  The Files filter searches directories that have already loaded.
+- `c` copies the complete source document. `s` switches Plans and Files between
+  rendered text and source. Code blocks use the document copy action.
+- `o` opens a file path in Files. Paths must stay within the selected file root.
+- `r` refreshes the data. Agent previews do not attach to or resume the agent.
+- In Changes, `[` and `]` select a repository, `t` selects the target branch, `b`
+  selects the base, and `v` cycles the change views. Repository tabs show each
+  available checkout. Click a repo to select it; overflow pages have clickable
+  arrows. The Changed repos filter hides checkouts confirmed clean in the current
+  view. The selected checkout and repos with unknown status stay visible. Click
+  the filter or press `a` to show all repos. Availability checks repeat ten seconds
+  after each scan while Changes is open. Press `r` to reload the file patches.
+  A second tab row shows Branch,
+  Unstaged, Staged, Untracked, and Turn patch. Click a tab or press `1` through `5`
+  to select it. The list groups changed files into expandable folders, with paths
+  relative to the selected repository. Select a file with Up or Down, then use Enter or Tab to
+  scroll its patch. Wide previews show old and new lines side by side. Source
+  code uses syntax highlighting, with red backgrounds for deletions and green
+  backgrounds for additions. Narrow previews use the same styling in a unified
+  diff. Colors follow the terminal palette and syntax theme.
+  Line numbers identify each side. Previews hide routine Git patch headers and
+  keep rename, permission, and binary-file details. `c` copies the selected file's
+  complete original patch, including headers.
+
+A chat inside a repository uses that checkout. A chat in a parent project folder
+uses bounded repository discovery below that folder. Linked worktrees have separate
+identities. Repository, target, and base choices are saved per chat and checkout.
+An unavailable remembered checkout requires an explicit repository selection.
+
+Branch changes compare the target against its merge base with the selected base.
+Viewing a branch does not check it out. The header shows the base and target,
+plus the checkout branch when it differs from the target. Staged, unstaged, and untracked changes belong to the
+checkout. They are shared by chats that use that checkout. Latest turn patch shows
+the chat's recorded tool edits across repositories, rather than its checkout state.
+
+File and Git reads require a verified local execution context. Remote or unknown
+contexts show an unavailable message. Discovery requires Python 3 and Git. File
+previews reject binary files and paths outside the root, and read at most 512 KiB.
+History and repository discovery are bounded. Each file directory lists at most
+2,000 entries. The open viewer caches at most 128 directories and 20,000 entries until refresh.
+Closing the viewer or switching chats releases its cache. Separate CLI windows
+keep independent caches.
+Refresh updates the catalog and agent status.
+
 ## Clean macOS setup
 
 ### 1. Install prerequisites

@@ -232,6 +232,103 @@ pub(crate) fn current_diff_render_style_context() -> DiffRenderStyleContext {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn test_output_diff_style_context(
+    background: (u8, u8, u8),
+    rich: bool,
+) -> DiffRenderStyleContext {
+    let theme = diff_theme_for_bg(Some(background));
+    let color_level = if rich {
+        DiffColorLevel::TrueColor
+    } else {
+        DiffColorLevel::Ansi16
+    };
+    DiffRenderStyleContext {
+        theme,
+        color_level,
+        diff_backgrounds: fallback_diff_backgrounds(theme, color_level),
+    }
+}
+
+/// Apply the diff surface and syntax-contrast rules to a content span list.
+///
+/// This is shared with Outputs' file-oriented renderer so its side-by-side
+/// view uses the same theme-aware fills as transcript diffs without teaching
+/// another module about terminal palette depth.
+pub(crate) fn style_output_diff_spans(
+    kind: DiffLineType,
+    syntax_spans: Option<&[RtSpan<'static>]>,
+    fallback: &str,
+    context: DiffRenderStyleContext,
+) -> Vec<RtSpan<'static>> {
+    let line_style = style_line_bg_for(kind, context.diff_backgrounds);
+    match syntax_spans {
+        Some(spans) => spans
+            .iter()
+            .map(|span| {
+                let style = span
+                    .style
+                    .fg(crate::style::readable_color_on(
+                        span.style.fg.unwrap_or(Color::Reset),
+                        line_style.bg,
+                    ))
+                    .remove_modifier(Modifier::DIM)
+                    .patch(line_style);
+                RtSpan::styled(span.content.clone().into_owned(), style)
+            })
+            .collect(),
+        None => vec![RtSpan::styled(
+            fallback.to_owned(),
+            line_style.fg(crate::style::readable_color_on(Color::Reset, line_style.bg)),
+        )],
+    }
+}
+
+/// The fill for a changed Outputs pane. Context has no fill.
+pub(crate) fn output_diff_line_style(
+    kind: DiffLineType,
+    style_context: DiffRenderStyleContext,
+) -> Style {
+    style_line_bg_for(kind, style_context.diff_backgrounds)
+}
+
+/// The number/sign gutter style used by Outputs' file-oriented renderer.
+pub(crate) fn output_diff_gutter_style(
+    kind: DiffLineType,
+    style_context: DiffRenderStyleContext,
+) -> Style {
+    let mut style = style_gutter_for(kind, style_context.theme, style_context.color_level);
+    let line_style = style_line_bg_for(kind, style_context.diff_backgrounds);
+    if line_style.bg.is_none() {
+        style.bg = None;
+        if !matches!(kind, DiffLineType::Context) {
+            // ANSI-16 has no safe tint fill. Keep source syntax neutral, but
+            // color the split-view line-number gutter so each pane still has
+            // a visible add/delete cue.
+            style = style.patch(output_diff_sign_style(kind, style_context));
+        }
+    } else if style.bg.is_none() {
+        // Dark themes normally use a dim gutter rather than a distinct
+        // saturated one.  Outputs paints each pane independently, so carry
+        // the row fill into that gutter instead of relying on line-level bg.
+        style = style.patch(line_style);
+    }
+    style
+}
+
+/// The add/delete marker style used by Outputs' unified renderer.
+pub(crate) fn output_diff_sign_style(kind: DiffLineType, context: DiffRenderStyleContext) -> Style {
+    match kind {
+        DiffLineType::Insert => {
+            style_sign_add(context.theme, context.color_level, context.diff_backgrounds)
+        }
+        DiffLineType::Delete => {
+            style_sign_del(context.theme, context.color_level, context.diff_backgrounds)
+        }
+        DiffLineType::Context => style_context(),
+    }
+}
+
 /// Core background-resolution logic, kept pure for testability.
 ///
 /// Starts from the hardcoded fallback palette and then overrides with theme

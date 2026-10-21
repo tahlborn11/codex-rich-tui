@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
+assertion_line: 5492
 expression: "format!(\"{first_running_snapshot}\\n\\n{second_running_snapshot}\\n\\n{older_completed_snapshot}\\n\\n{all_completed_snapshot}\")"
 ---
 pre running
