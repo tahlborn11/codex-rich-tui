@@ -112,6 +112,7 @@ macro_rules! define_keymap_actions {
 define_keymap_actions! {
     global "Global" {
         open_agents => "Open the shared agent-session overview.",
+        open_outputs => "Open documents, changes and subagents for this conversation.",
         open_transcript => "Open the transcript overlay.",
         find_transcript => "Find text in the full transcript.",
         // Keep the new warnings action out of shared-config writes until older strict readers
@@ -257,6 +258,18 @@ define_keymap_actions! {
         find => "Find text in a transcript pager.",
     }
     list "List" {
+        move_up => "Move list selection up.",
+        move_down => "Move list selection down.",
+        move_left => "Move horizontally left in list pickers.",
+        move_right => "Move horizontally right in list pickers.",
+        page_up => "Move list selection up by one page.",
+        page_down => "Move list selection down by one page.",
+        jump_top => "Jump to the first list item.",
+        jump_bottom => "Jump to the last list item.",
+        accept => "Accept the current list selection.",
+        cancel => "Cancel and close selection views.",
+    }
+    outputs "Outputs" {
         move_up => "Move list selection up.",
         move_down => "Move list selection down.",
         move_left => "Move horizontally left in list pickers.",

@@ -345,6 +345,7 @@ mod tests {
                 SlashCommand::CopyCode,
                 SlashCommand::Raw,
                 SlashCommand::Diff,
+                SlashCommand::Outputs,
                 SlashCommand::Mention,
                 SlashCommand::Status,
                 SlashCommand::Daemon,

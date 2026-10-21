@@ -4854,6 +4854,7 @@
               "leader": null,
               "open_agents": null,
               "open_external_editor": null,
+              "open_outputs": null,
               "open_transcript": null,
               "queue": null,
               "submit": null,
@@ -4864,6 +4865,18 @@
               "toggle_vim_mode": null
             },
             "list": {
+              "accept": null,
+              "cancel": null,
+              "jump_bottom": null,
+              "jump_top": null,
+              "move_down": null,
+              "move_left": null,
+              "move_right": null,
+              "move_up": null,
+              "page_down": null,
+              "page_up": null
+            },
+            "outputs": {
               "accept": null,
               "cancel": null,
               "jump_bottom": null,
@@ -5703,6 +5716,14 @@
           ],
           "description": "Open the external editor for the current draft."
         },
+        "open_outputs": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Open the current conversation output browser."
+        },
         "open_transcript": {
           "allOf": [
             {
@@ -5887,6 +5908,7 @@
             "leader": null,
             "open_agents": null,
             "open_external_editor": null,
+            "open_outputs": null,
             "open_transcript": null,
             "queue": null,
             "submit": null,
@@ -5898,6 +5920,25 @@
           }
         },
         "list": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/TuiListKeymap"
+            }
+          ],
+          "default": {
+            "accept": null,
+            "cancel": null,
+            "jump_bottom": null,
+            "jump_top": null,
+            "move_down": null,
+            "move_left": null,
+            "move_right": null,
+            "move_up": null,
+            "page_down": null,
+            "page_up": null
+          }
+        },
+        "outputs": {
           "allOf": [
             {
               "$ref": "#/definitions/TuiListKeymap"

@@ -24,6 +24,7 @@ pub(crate) enum KeymapContext {
     VimSearch,
     VimTextObject,
     Pager,
+    Outputs,
     List,
     Agents,
     Approval,
@@ -41,6 +42,7 @@ impl KeymapContext {
             Self::VimSearch => "vim_search",
             Self::VimTextObject => "vim_text_object",
             Self::Pager => "pager",
+            Self::Outputs => "outputs",
             Self::List => "list",
             Self::Agents => "agents",
             Self::Approval => "approval",
@@ -279,6 +281,7 @@ macro_rules! define_runtime_action_bindings {
 define_runtime_action_bindings! {
     "global" => Global, app, global [
         open_agents,
+        open_outputs,
         open_transcript,
         find_transcript,
         focus_activity,
@@ -415,6 +418,18 @@ define_runtime_action_bindings! {
         close,
         close_transcript,
         find,
+    ],
+    "outputs" => Outputs, outputs, outputs [
+        move_up,
+        move_down,
+        move_left,
+        move_right,
+        page_up,
+        page_down,
+        jump_top,
+        jump_bottom,
+        accept,
+        cancel,
     ],
     "list" => List, list, list [
         move_up,

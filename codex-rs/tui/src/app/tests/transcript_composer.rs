@@ -360,3 +360,65 @@ async fn assert_transcript_close_repaints_inline_draft(mut app: Box<App>) -> Res
 async fn transcript_viewer_close_repaints_preserved_inline_draft() -> Result<()> {
     assert_transcript_close_repaints_inline_draft(make_test_app().await).await
 }
+
+#[tokio::test]
+async fn outputs_preserves_draft_and_does_not_switch_threads() -> Result<()> {
+    let (mut app, _events, mut ops) = make_test_app_with_channels().await;
+    let mut server = start_config_write_test_app_server(&app).await?;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    let thread = ThreadId::new();
+    app.active_thread_id = Some(thread);
+    app.chat_widget
+        .apply_external_edit("keep this draft".into());
+    app.handle_event(&mut tui, &mut server, AppEvent::OpenOutputs)
+        .await?;
+    assert!(matches!(app.overlay, Some(Overlay::Outputs(_))));
+    assert_eq!(
+        app.active_keymap_contexts(),
+        crate::keymap::KeymapContextSet::new(crate::keymap::KeymapContext::Outputs)
+    );
+    press_key(&mut app, &mut tui, &mut server, KeyCode::Esc).await?;
+    assert!(app.overlay.is_none());
+    assert_eq!(app.current_displayed_thread_id(), Some(thread));
+    assert_eq!(
+        app.chat_widget.composer_text_with_pending(),
+        "keep this draft"
+    );
+    assert!(ops.try_recv().is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn outputs_closes_and_consumes_input_when_displayed_thread_changes() -> Result<()> {
+    let (mut app, _events, mut ops) = make_test_app_with_channels().await;
+    let mut server = start_config_write_test_app_server(&app).await?;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    app.active_thread_id = Some(ThreadId::new());
+    app.handle_event(&mut tui, &mut server, AppEvent::OpenOutputs)
+        .await?;
+    app.active_thread_id = Some(ThreadId::new());
+    press_key(&mut app, &mut tui, &mut server, KeyCode::Enter).await?;
+    assert!(app.overlay.is_none());
+    assert!(ops.try_recv().is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn outputs_closes_without_answering_a_new_modal() -> Result<()> {
+    let (mut app, _events, mut ops) = make_test_app_with_channels().await;
+    let mut server = start_config_write_test_app_server(&app).await?;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    app.active_thread_id = Some(ThreadId::new());
+    app.handle_event(&mut tui, &mut server, AppEvent::OpenOutputs)
+        .await?;
+    app.chat_widget
+        .show_selection_view(crate::bottom_pane::SelectionViewParams {
+            title: Some("Needs input".into()),
+            ..crate::bottom_pane::SelectionViewParams::picker()
+        });
+    press_key(&mut app, &mut tui, &mut server, KeyCode::Esc).await?;
+    assert!(app.overlay.is_none());
+    assert!(app.chat_widget.has_active_modal());
+    assert!(ops.try_recv().is_err());
+    Ok(())
+}

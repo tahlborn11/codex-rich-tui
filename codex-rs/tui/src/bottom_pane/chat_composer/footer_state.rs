@@ -111,6 +111,9 @@ impl super::ChatComposer {
                 agents: self
                     .agents_navigation_available()
                     .then_some(key_hint::plain(KeyCode::Left).into()),
+                outputs: self
+                    .outputs_navigation_available()
+                    .then_some(key_hint::plain(KeyCode::Right).into()),
                 toggle_shortcuts: self.footer.toggle_shortcuts_key,
                 queue: self.footer.queue_key,
                 insert_newline: self.footer.insert_newline_key,

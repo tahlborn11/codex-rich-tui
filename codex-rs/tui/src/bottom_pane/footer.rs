@@ -112,6 +112,7 @@ const FOOTER_CONTEXT_GAP_COLS: u16 = 1;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct FooterKeyHints {
     pub(crate) agents: Option<ShortcutHint>,
+    pub(crate) outputs: Option<ShortcutHint>,
     pub(crate) toggle_shortcuts: Option<ShortcutHint>,
     pub(crate) queue: Option<ShortcutHint>,
     pub(crate) insert_newline: Option<ShortcutHint>,
@@ -131,6 +132,7 @@ impl FooterKeyHints {
     pub(crate) fn default_bindings() -> Self {
         Self {
             agents: None,
+            outputs: None,
             toggle_shortcuts: Some(key_hint::plain(KeyCode::Char('?')).into()),
             queue: Some(key_hint::plain(KeyCode::Tab).into()),
             insert_newline: Some(key_hint::ctrl(KeyCode::Char('j')).into()),
@@ -339,16 +341,21 @@ fn left_side_line(
     match state.hint {
         SummaryHintKind::None => {}
         SummaryHintKind::Shortcuts => {
-            if let Some(key) = key_hints.agents {
-                line.extend(key.spans());
-                line.push_span(" for agents".set_style(secondary_text_style()));
-                if key_hints.toggle_shortcuts.is_some() {
+            let mut has_hint = false;
+            for (key, label) in [
+                (key_hints.agents, "agents"),
+                (key_hints.outputs, "outputs"),
+                (key_hints.toggle_shortcuts, "shortcuts"),
+            ]
+            .into_iter()
+            .filter_map(|(key, label)| key.map(|key| (key, label)))
+            {
+                if has_hint {
                     line.push_span(" · ".set_style(secondary_text_style()));
                 }
-            }
-            if let Some(key) = key_hints.toggle_shortcuts {
                 line.extend(key.spans());
-                line.push_span(" for shortcuts".set_style(secondary_text_style()));
+                line.push_span(format!(" for {label}").set_style(secondary_text_style()));
+                has_hint = true;
             }
         }
         SummaryHintKind::QueueMessage => {
@@ -421,17 +428,31 @@ pub(crate) fn single_line_footer_layout(
         }
     };
     let state_width = |state: LeftSideState| -> u16 { state_line(state).width() as u16 };
-    if show_shortcuts_hint && key_hints.agents.is_some() {
-        let compact_line = left_side_line(
-            collaboration_mode_indicator,
-            default_state,
+    if show_shortcuts_hint && (key_hints.agents.is_some() || key_hints.outputs.is_some()) {
+        let without_shortcuts = FooterKeyHints {
+            toggle_shortcuts: None,
+            ..key_hints
+        };
+        let compact_hints = [
+            without_shortcuts,
             FooterKeyHints {
-                toggle_shortcuts: None,
-                ..key_hints
+                outputs: None,
+                ..without_shortcuts
             },
-        );
-        if can_show_left_with_context(area, compact_line.width() as u16, context_width) {
-            return (SummaryLeft::Custom(compact_line), true);
+            FooterKeyHints {
+                agents: None,
+                ..without_shortcuts
+            },
+        ];
+        for compact_hints in compact_hints {
+            if compact_hints.agents.is_none() && compact_hints.outputs.is_none() {
+                continue;
+            }
+            let compact_line =
+                left_side_line(collaboration_mode_indicator, default_state, compact_hints);
+            if can_show_left_with_context(area, compact_line.width() as u16, context_width) {
+                return (SummaryLeft::Custom(compact_line), true);
+            }
         }
     }
     // When the mode cycle hint is applicable (idle, non-queue mode), only show
@@ -703,6 +724,9 @@ pub(crate) fn max_left_width_for_right(area: Rect, right_width: u16) -> Option<u
 }
 
 pub(crate) fn can_show_left_with_context(area: Rect, left_width: u16, context_width: u16) -> bool {
+    if left_width > inset_footer_hint_area(area).width {
+        return false;
+    }
     let Some(context_x) = right_aligned_x(area, context_width) else {
         return true;
     };
@@ -849,12 +873,19 @@ pub(crate) fn passive_footer_status_line(props: &FooterProps) -> Option<Line<'st
     }
 
     if props.mode == FooterMode::ComposerEmpty
-        && let Some(key) = props.key_hints.agents
         && let Some(line) = line.as_mut()
     {
-        line.push_span(" · ".set_style(secondary_text_style()));
-        line.extend(key.spans());
-        line.push_span(" for agents".set_style(secondary_text_style()));
+        for (key, label) in [
+            (props.key_hints.agents, "agents"),
+            (props.key_hints.outputs, "outputs"),
+        ]
+        .into_iter()
+        .filter_map(|(key, label)| key.map(|key| (key, label)))
+        {
+            line.push_span(" · ".set_style(secondary_text_style()));
+            line.extend(key.spans());
+            line.push_span(format!(" for {label}").set_style(secondary_text_style()));
+        }
     }
 
     line
@@ -1016,6 +1047,126 @@ mod tests {
         insta::assert_debug_snapshot!(
             "voice_footer_rendered_styles",
             (backend.to_string(), style_runs)
+        );
+    }
+
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    }
+
+    #[test]
+    fn navigation_hints_compact_without_context_instead_of_clipping() {
+        let hints = FooterKeyHints {
+            outputs: Some(key_hint::plain(KeyCode::Right).into()),
+            ..FooterKeyHints::default_bindings()
+        };
+        let (left, _) =
+            single_line_footer_layout(Rect::new(0, 0, 32, 1), 0, None, false, true, false, hints);
+        let SummaryLeft::Custom(line) = left else {
+            panic!("expected a compact hint");
+        };
+        assert_eq!(line_text(&line), "→ for outputs");
+        assert!(line.width() <= 30);
+    }
+
+    #[test]
+    fn shortcut_summary_orders_agents_outputs_and_shortcuts() {
+        let hints = FooterKeyHints {
+            agents: Some(key_hint::plain(KeyCode::Left).into()),
+            outputs: Some(key_hint::plain(KeyCode::Right).into()),
+            ..FooterKeyHints::default_bindings()
+        };
+        let line = left_side_line(
+            None,
+            LeftSideState {
+                hint: SummaryHintKind::Shortcuts,
+                show_cycle_hint: false,
+            },
+            hints,
+        );
+
+        assert_eq!(
+            line_text(&line),
+            "← for agents · → for outputs · ? for shortcuts"
+        );
+    }
+
+    #[test]
+    fn narrow_shortcut_summary_keeps_navigation_hints_before_context() {
+        let hints = FooterKeyHints {
+            agents: Some(key_hint::plain(KeyCode::Left).into()),
+            outputs: Some(key_hint::plain(KeyCode::Right).into()),
+            ..FooterKeyHints::default_bindings()
+        };
+        let (left, show_context) = single_line_footer_layout(
+            Rect::new(0, 0, 48, 1),
+            /*context_width*/ 12,
+            None,
+            /*show_cycle_hint*/ false,
+            /*show_shortcuts_hint*/ true,
+            /*show_queue_hint*/ false,
+            hints,
+        );
+
+        assert!(show_context);
+        let SummaryLeft::Custom(line) = left else {
+            panic!("narrow footer should render compact navigation hints");
+        };
+        assert_eq!(line_text(&line), "← for agents · → for outputs");
+    }
+
+    #[test]
+    fn narrow_shortcut_summary_keeps_one_navigation_hint_without_shortcuts() {
+        let hints = FooterKeyHints {
+            agents: Some(key_hint::plain(KeyCode::Left).into()),
+            outputs: Some(key_hint::plain(KeyCode::Right).into()),
+            toggle_shortcuts: None,
+            ..FooterKeyHints::default_bindings()
+        };
+        let (left, show_context) = single_line_footer_layout(
+            Rect::new(0, 0, 32, 1),
+            /*context_width*/ 12,
+            None,
+            /*show_cycle_hint*/ false,
+            /*show_shortcuts_hint*/ true,
+            /*show_queue_hint*/ false,
+            hints,
+        );
+
+        assert!(show_context);
+        let SummaryLeft::Custom(line) = left else {
+            panic!("narrow footer should retain one navigation hint");
+        };
+        assert_eq!(line_text(&line), "← for agents");
+    }
+
+    #[test]
+    fn contextual_footer_appends_outputs_after_agents() {
+        let props = FooterProps {
+            mode: FooterMode::ComposerEmpty,
+            esc_backtrack_hint: false,
+            is_task_running: false,
+            queue_submissions: false,
+            collaboration_modes_enabled: false,
+            is_wsl: false,
+            quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
+            status_line_value: None,
+            status_line_enabled: false,
+            key_hints: FooterKeyHints {
+                agents: Some(key_hint::plain(KeyCode::Left).into()),
+                outputs: Some(key_hint::plain(KeyCode::Right).into()),
+                ..FooterKeyHints::default_bindings()
+            },
+            active_agent_label: Some("Robie [explorer]".to_string()),
+        };
+
+        let line = passive_footer_status_line(&props).expect("contextual footer");
+        assert_eq!(
+            line_text(&line),
+            "Robie [explorer] · ← for agents · → for outputs"
         );
     }
 

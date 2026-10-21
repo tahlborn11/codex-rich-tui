@@ -1968,6 +1968,10 @@ impl ChatWidget {
         self.turn_lifecycle.last_turn_id.as_deref()
     }
 
+    pub(crate) fn output_turn_patch(&self) -> Option<&str> {
+        self.transcript.last_turn_patch.as_deref()
+    }
+
     pub(crate) fn thread_id(&self) -> Option<ThreadId> {
         self.thread_id
     }

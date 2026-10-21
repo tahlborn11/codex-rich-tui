@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/app_server.rs
+assertion_line: 266
 expression: "render_bottom_popup(&chat, 40)"
 ---
 •   Stop this attempt and retry?
@@ -12,7 +13,7 @@ expression: "render_bottom_popup(&chat, 40)"
 
 ›   Your message will be sent again
     using Faster Model, which may be
-    less capable on complex tasks.
+    less capable on complex tasks.     …
 
 
   › 1. Keep waiting

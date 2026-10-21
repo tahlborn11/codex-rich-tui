@@ -1,3 +1,4 @@
+//! Plain Right opens Outputs only from an empty, focused prompt; editor remaps and input popups take priority.
 //! The chat composer is the bottom-pane text input state machine.
 //!
 //! It edits [`TextArea`] and attachments, routes popup keys, makes completed slash commands atomic,
@@ -3835,6 +3836,9 @@ impl ChatComposer {
             return false;
         }
 
+        if self.handle_outputs_navigation(*key_event) {
+            return true;
+        }
         if self.handle_agents_navigation(*key_event) {
             return true;
         }
@@ -5139,7 +5143,7 @@ mod tests {
         let mut hint_row: Option<(u16, String)> = None;
         for y in 0..area.height {
             let row = row_to_string(y);
-            if row.contains("? for shortcuts") {
+            if row.contains("→ for outputs") {
                 hint_row = Some((y, row));
                 break;
             }
