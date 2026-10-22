@@ -1265,6 +1265,14 @@ impl App {
                     tracing::warn!("failed to sync thread git branch from directive: {err}");
                 }
             }
+            AppEvent::OutputBranchesRecorded { thread_id } => {
+                if let Some(Overlay::Outputs(view)) = &mut self.overlay
+                    && view.thread_id == thread_id.to_string()
+                {
+                    view.refresh_branch_associations();
+                    tui.frame_requester().schedule_frame();
+                }
+            }
             AppEvent::LookupMessageHistoryEntry {
                 thread_id,
                 offset,

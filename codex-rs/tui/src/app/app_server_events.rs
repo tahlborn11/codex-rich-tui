@@ -248,6 +248,9 @@ impl App {
             return;
         }
         self.handle_agent_picker_visibility_notification(app_server_client, &notification);
+        if let ServerNotification::ItemCompleted(completed) = &notification {
+            self.record_output_branch_creations(app_server_client, completed);
+        }
 
         if let ServerNotification::ThreadStarted(started) = &notification
             && let SessionSource::SubAgent(SubAgentSource::ThreadSpawn {

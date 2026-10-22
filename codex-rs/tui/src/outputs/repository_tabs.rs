@@ -25,16 +25,20 @@ impl OutputsView {
         let bookmark = self
             .preferences
             .bookmark(&self.bookmark_key(&repo.identity));
+        let inside = self.chat_is_inside(repo);
+        let association = self.preferences.association(&repo.identity);
         let target = bookmark
+            .filter(|mark| inside && mark.target_is_explicit)
             .and_then(|mark| mark.target.clone())
+            .or_else(|| association.map(|association| association.branch_ref.clone()))
             .or_else(|| {
-                self.cwd
-                    .starts_with(&repo.root)
-                    .then(|| self.associated_branch.clone())
+                inside
+                    .then(|| bookmark.and_then(|mark| mark.target.clone()))
                     .flatten()
             })
-            .or_else(|| repo.branch.clone())
-            .or_else(|| repo.head.clone());
+            .or_else(|| inside.then(|| self.associated_branch.clone()).flatten())
+            .or_else(|| inside.then(|| repo.branch.clone()).flatten())
+            .or_else(|| inside.then(|| repo.head.clone()).flatten());
         let base = bookmark
             .and_then(|mark| mark.base.clone())
             .or_else(|| repo.default_base.clone());
@@ -67,11 +71,35 @@ impl OutputsView {
             return;
         }
         let generation = self.repository_check_generation;
+        let catalog_generation = self.repository_load_generation;
+        let recorded = self.preferences.associations().cloned().collect::<Vec<_>>();
+        let preferences_path = self.preferences_path.clone();
         let kind = self.change_kind;
         let tx = self.load_tx.clone();
         let frame = self.frame.clone();
         self.repository_check_task = Some(tokio::spawn(async move {
             loop {
+                match crate::branch_association::prune_deleted_associations(
+                    runner.clone(),
+                    preferences_path.clone(),
+                    recorded.clone(),
+                )
+                .await
+                {
+                    Ok(removed) if !removed.is_empty() => {
+                        let _ = tx.send(LoadResult::BranchPruned(catalog_generation, removed));
+                        frame.schedule_frame();
+                        return;
+                    }
+                    Err(error) => {
+                        let _ = tx.send(LoadResult::BranchAssociationError(
+                            catalog_generation,
+                            error,
+                        ));
+                        frame.schedule_frame();
+                    }
+                    _ => {}
+                }
                 let mut probes = futures::stream::iter(requests.clone())
                     .map(|(repo, target, base)| {
                         let runner = runner.clone();
@@ -132,7 +160,7 @@ impl OutputsView {
         self.preferences
             .set_selected_repo(self.selected_repository().map(|repo| repo.identity.clone()));
         if let Some(path) = &self.preferences_path
-            && let Err(error) = self.preferences.save(path)
+            && let Err(error) = self.preferences.save_bookmarks(path)
         {
             self.notice = Some(format!("Couldn't remember repository: {error}"));
         }

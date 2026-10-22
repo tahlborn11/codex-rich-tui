@@ -2400,15 +2400,19 @@ async fn check_dynamic_tool_requests(
             }),
         },
     );
+    let followup_event =
+        tokio::time::timeout(std::time::Duration::from_secs(/*secs*/ 5), events.recv())
+            .await?
+            .expect("follow-up task registration event");
     let AppEvent::DynamicToolThreadStarted {
         thread,
         task_tools_available,
         registered,
-    } = tokio::time::timeout(std::time::Duration::from_secs(/*secs*/ 5), events.recv())
-        .await?
-        .expect("follow-up task registration event")
+    } = followup_event
     else {
-        panic!("expected follow-up task registration before its next turn")
+        panic!(
+            "expected follow-up task registration before its next turn: {followup_event:?}; {rollout_enabled:?} {auth_mode:?} {api_key_cyber_access_programs:?} {history_capabilities:?}"
+        )
     };
     assert_eq!(ThreadId::from_string(&thread.id)?, created_thread_id);
     assert_eq!(recorded_params(&requests, "turn/start").len(), 1);
