@@ -1,12 +1,11 @@
 ---
 source: tui/src/outputs/ui_tests.rs
-assertion_line: 511
 expression: buffer_text(&wide)
 ---
  OUTPUTS  current chat                                                                                                                                                              
  Plans  Files [ Changes ] Agents                                                                                                                                                    
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- VIEW   1 Branch  2 Unstaged  3 Staged  4 Untracked  5 Turn patch                                                                                                                   
+ VIEW   1 Branch  2 Changes  3 Staged  4 Turn patch                                                                                                                                 
  REPOSITORIES  Changed repos  0 hidden · a show all                                                                                                                                 
   [api]                                                                                                                                                                             
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
