@@ -72,7 +72,9 @@ use Tab to switch panes. In narrow view, the wheel reveals the preview.
   the filter or press `a` to show all repos. Availability checks repeat ten seconds
   after each scan while Changes is open. Press `r` to reload the file patches.
   A second tab row shows Branch,
-  Unstaged, Staged, Untracked, and Turn patch. Click a tab or press `1` through `5`
+  Changes, Staged, and Turn patch. Changes combines unstaged edits and untracked
+  files. New files have a `+` marker and green names in the file tree.
+  Click a tab or press `1` through `4`
   to select it. The list groups changed files into expandable folders, with paths
   relative to the selected repository. Select a file with Up or Down, then use Enter or Tab to
   scroll its patch. Wide previews show old and new lines side by side. Source
@@ -84,14 +86,39 @@ use Tab to switch panes. In narrow view, the wheel reveals the preview.
   complete original patch, including headers.
 
 A chat inside a repository uses that checkout. A chat in a parent project folder
-uses bounded repository discovery below that folder. Linked worktrees have separate
-identities. Repository, target, and base choices are saved per chat and checkout.
-An unavailable remembered checkout requires an explicit repository selection.
+shows only repositories with a recorded branch created by that chat. Its target
+follows the recorded branch; `t` cannot select an unrelated branch. The Show all
+filter reveals clean associated repositories, not unrelated checkouts. Explicit
+target choices remain available for chats opened inside a repository.
+
+Successful literal `git switch -c`, `git checkout -b`, and `git worktree add -b`
+commands in POSIX shells record the exact local branch ref and checkout for the chat.
+Quiet and tracking flags are supported. Commands
+may use `git -C`, a literal `cd` with an absolute or `./`/`../` path, or an `&&` chain. Failed or ambiguous commands,
+including pipelines and OR recovery, do not establish an association. A branch
+creation with `switch -c` or `checkout -b`, followed by `; git status` (or a
+newline and `git status`), is accepted
+only when the recorded output also contains Git’s explicit new-branch confirmation. Branches
+created through opaque scripts or aliases cannot be inferred automatically.
+Existing chats can recover evidence from the latest bounded history pages.
+Old viewer selections and the current checkout do not establish ownership.
+
+Associations persist per chat and checkout, including recorded worktrees outside
+the original project directory. Linked worktrees have separate identities.
+When a recorded branch is deleted, opening or refreshing Outputs removes its
+chat association. The ten-second repository checks also remove deleted branches
+while Changes is open. A temporarily unavailable checkout does not erase an
+association. Removed evidence is retained as a tombstone so old command history
+cannot restore the link; a newer branch-creation event can establish a new link.
+Repository, target, and base choices are saved per chat and checkout. An
+unavailable remembered checkout requires an explicit repository selection.
 
 Branch changes compare the target against its merge base with the selected base.
 Viewing a branch does not check it out. The header shows the base and target,
-plus the checkout branch when it differs from the target. Staged, unstaged, and untracked changes belong to the
-checkout. They are shared by chats that use that checkout. Latest turn patch shows
+plus the checkout branch when it differs from the target. Changes and Staged belong to the
+checkout and require the selected branch to remain checked out. If it differs,
+the viewer reports that working changes are unavailable; it does not switch branches.
+Working changes are shared by chats that use that checkout. Latest turn patch shows
 the chat's recorded tool edits across repositories, rather than its checkout state.
 
 File and Git reads require a verified local execution context. Remote or unknown

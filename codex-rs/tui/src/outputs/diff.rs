@@ -39,6 +39,17 @@ pub(super) struct FileDiff {
     pub source: String,
 }
 
+impl FileDiff {
+    pub(super) fn is_new(&self) -> bool {
+        let prelude = self.source.split("@@ ").next().unwrap_or(&self.source);
+        prelude.lines().any(|line| {
+            line == "--- /dev/null"
+                || line.starts_with("new file mode ")
+                || line.starts_with("Untracked empty file:")
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 enum PatchLine {
     Hunk(String),
@@ -804,6 +815,31 @@ mod tests {
         let rendered = render(&files[1], 120).to_string();
         assert!(rendered.contains("-- code"));
         assert!(rendered.contains("++ code"));
+    }
+
+    #[test]
+    fn new_file_marker_uses_metadata_instead_of_added_content() {
+        for (patch, expected) in [
+            (
+                "diff --git a/x b/x\nnew file mode 100644\nBinary files /dev/null and b/x differ\n",
+                true,
+            ),
+            (
+                "diff --git a/x b/x\n--- /dev/null\n+++ b/x\n@@ -0,0 +1 @@\n+new\n",
+                true,
+            ),
+            ("Untracked empty file: x\n", true),
+            (
+                "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new file mode 100644\n",
+                false,
+            ),
+            (
+                "diff --git a/x b/x\ndeleted file mode 100644\n--- a/x\n+++ /dev/null\n",
+                false,
+            ),
+        ] {
+            assert_eq!(parse(patch)[0].is_new(), expected, "{patch}");
+        }
     }
 
     #[test]

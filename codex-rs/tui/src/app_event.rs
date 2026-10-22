@@ -647,6 +647,10 @@ pub(crate) enum AppEvent {
         branch: String,
         cwd: PathBuf,
     },
+    /// Verified branch-creation evidence was persisted for this chat.
+    OutputBranchesRecorded {
+        thread_id: ThreadId,
+    },
 
     /// Fetch a persistent cross-session message history entry by offset.
     LookupMessageHistoryEntry {

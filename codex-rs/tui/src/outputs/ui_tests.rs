@@ -1,4 +1,5 @@
 use super::*;
+use std::path::Path;
 
 #[test]
 fn agent_preview_keeps_status_and_summary_as_literal_text() {
@@ -123,6 +124,23 @@ fn repo(branch: &str) -> Repository {
         default_base: Some("main".into()),
     }
 }
+fn seed_chat_association(view: &mut OutputsView, repo: &Repository) {
+    if view.preferences.association(&repo.identity).is_none() {
+        view.preferences
+            .record_association(super::super::preferences::BranchAssociation {
+                repo_root: repo.root.clone(),
+                branch_ref: format!("refs/heads/{}", repo.branch.as_deref().unwrap_or("main")),
+                evidence_id: "fixture-creation".into(),
+                completed_at_ms: Some(1),
+            });
+    }
+}
+fn set_chat_repositories(view: &mut OutputsView, repos: Vec<Repository>) {
+    for repo in &repos {
+        seed_chat_association(view, repo);
+    }
+    view.set_repositories(repos);
+}
 fn doc(id: &str, title: &str, markdown: &str) -> Document {
     Document {
         id: id.into(),
@@ -172,6 +190,7 @@ async fn filtered_plan_previews_follow_stable_identity() {
 async fn initial_catalog_survives_category_navigation_and_remembers_refs() {
     let mut f = fixture().await;
     let generation = f.view.generation();
+    seed_chat_association(&mut f.view, &repo("feature/auth"));
     f.view.cycle_category(1);
     f.view
         .load_tx
@@ -182,9 +201,15 @@ async fn initial_catalog_survives_category_navigation_and_remembers_refs() {
         .unwrap();
     f.view.drain_loads();
     assert_eq!(f.view.repositories.len(), 1);
-    assert_eq!(f.view.target_ref.as_deref(), Some("feature/auth"));
-    f.view.set_repositories(vec![repo("feature/billing")]);
-    assert_eq!(f.view.target_ref.as_deref(), Some("feature/auth"));
+    assert_eq!(
+        f.view.target_ref.as_deref(),
+        Some("refs/heads/feature/auth")
+    );
+    set_chat_repositories(&mut f.view, vec![repo("feature/billing")]);
+    assert_eq!(
+        f.view.target_ref.as_deref(),
+        Some("refs/heads/feature/auth")
+    );
     assert_eq!(
         f.view.selected_repository().unwrap().branch.as_deref(),
         Some("feature/billing")
@@ -253,7 +278,7 @@ async fn change_files_are_selected_without_reloading_or_changing_modes() {
     f.view.clamp_selection();
     assert!(f.view.preview().contains("+new"));
     f.view.cycle_change_kind(1);
-    assert_eq!(f.view.change_kind, ChangeKind::Unstaged);
+    assert_eq!(f.view.change_kind, ChangeKind::Working);
     assert!(f.view.change_files.is_empty());
     assert!(!f.view.preview().contains("+new"));
 }
@@ -440,7 +465,7 @@ async fn unavailable_remembered_checkout_requires_explicit_selection() {
     f.view
         .preferences
         .set_selected_repo(Some("/missing".into()));
-    f.view.set_repositories(vec![repo("main")]);
+    set_chat_repositories(&mut f.view, vec![repo("main")]);
     assert!(f.view.selected_repository().is_none());
     assert_eq!(f.view.preferences.selected_repo(), Some("/missing"));
     f.view.cycle_repository(1);
@@ -578,7 +603,7 @@ async fn changed_files_wide_and_narrow_layouts() {
     let mut f = fixture().await;
     f.view.category = Category::Changes;
     f.view.workspace_verified = true;
-    f.view.set_repositories(vec![repo("feature/viewer")]);
+    set_chat_repositories(&mut f.view, vec![repo("feature/viewer")]);
     f.view.set_change_text(Ok("diff --git a/src/main.rs b/src/main.rs\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1,3 +1,3 @@\n fn main() {\n-    println!(\"before\");\n+    println!(\"after\");\n }\ndiff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-Old heading\n+New heading\n".into()));
     // Expand the source folder, then select its file for the split preview.
     f.view.toggle_directory();
@@ -709,7 +734,7 @@ async fn file_tree_expands_collapses_and_preserves_relative_labels() {
 async fn change_tree_selection_keeps_file_patch_identity() {
     let mut f = fixture().await;
     f.view.category = Category::Changes;
-    f.view.set_repositories(vec![repo("feature/tree")]);
+    set_chat_repositories(&mut f.view, vec![repo("feature/tree")]);
     f.view.set_change_text(Ok("diff --git a/src/one.rs b/src/one.rs\n--- a/src/one.rs\n+++ b/src/one.rs\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/src/nested/two.rs b/src/nested/two.rs\n--- a/src/nested/two.rs\n+++ b/src/nested/two.rs\n@@ -1 +1 @@\n-before\n+after\n".into()));
     let generation = f.view.detail_generation;
     assert_eq!(f.view.items().len(), 1);
@@ -778,16 +803,10 @@ async fn change_mode_tabs_are_clickable_wrap_and_discard_stale_patches() {
     let mut f = fixture().await;
     f.view.category = Category::Changes;
     f.view.workspace_verified = true;
-    f.view.set_repositories(vec![repo("feature/tree")]);
+    set_chat_repositories(&mut f.view, vec![repo("feature/tree")]);
     let mut buf = Buffer::empty(Rect::new(0, 0, 50, 24));
     f.view.render(buf.area, &mut buf);
-    for label in [
-        "1 Branch",
-        "2 Unstaged",
-        "3 Staged",
-        "4 Untracked",
-        "5 Turn patch",
-    ] {
+    for label in ["1 Branch", "2 Changes", "3 Staged", "4 Turn patch"] {
         assert!(buffer_text(&buf).contains(label));
     }
     assert!(
@@ -904,9 +923,9 @@ async fn tree_keyboard_controls_keep_screen_switching_and_preview_focus_distinct
     assert_eq!(f.view.category, Category::Changes);
     f.view.handle_key(
         &mut tui,
-        KeyEvent::new(KeyCode::Char('4'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('3'), KeyModifiers::NONE),
     );
-    assert_eq!(f.view.change_kind, ChangeKind::Untracked);
+    assert_eq!(f.view.change_kind, ChangeKind::Staged);
     f.view.handle_key(
         &mut tui,
         KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE),
@@ -961,18 +980,22 @@ fn named_repo(name: &str) -> Repository {
 async fn repository_tabs_hide_only_confirmed_clean_and_select_bookmarked_checkout() {
     let mut f = fixture().await;
     f.view.category = Category::Changes;
-    f.view.set_repositories(vec![
-        named_repo("api"),
-        named_repo("clean-lib"),
-        named_repo("worker"),
-        named_repo("unknown"),
-        named_repo("error"),
-    ]);
+    set_chat_repositories(
+        &mut f.view,
+        vec![
+            named_repo("api"),
+            named_repo("clean-lib"),
+            named_repo("worker"),
+            named_repo("unknown"),
+            named_repo("error"),
+        ],
+    );
     f.view.preferences.set(
         f.view.bookmark_key("/project/worker"),
         RepoBookmark {
             target: Some("worker-target".into()),
             base: Some("worker-base".into()),
+            target_is_explicit: true,
         },
     );
     f.view
@@ -1008,7 +1031,10 @@ async fn repository_tabs_hide_only_confirmed_clean_and_select_bookmarked_checkou
         f.view.selected_repository().unwrap().identity,
         "/project/worker"
     );
-    assert_eq!(f.view.target_ref.as_deref(), Some("worker-target"));
+    assert_eq!(
+        f.view.target_ref.as_deref(),
+        Some("refs/heads/feature/tree")
+    );
     assert_eq!(f.view.base_ref.as_deref(), Some("worker-base"));
     assert_eq!(f.view.visible_repositories(), vec![2, 3, 4]);
     let (toggle, _) = f
@@ -1033,7 +1059,8 @@ async fn repository_tabs_hide_only_confirmed_clean_and_select_bookmarked_checkou
 async fn repository_tab_pagination_is_bounded_clickable_and_unicode_safe() {
     let mut f = fixture().await;
     f.view.category = Category::Changes;
-    f.view.set_repositories(
+    set_chat_repositories(
+        &mut f.view,
         (0..20)
             .map(|index| named_repo(&format!("项目-service-{index:02}")))
             .collect(),
@@ -1100,8 +1127,7 @@ async fn repository_tab_pagination_is_bounded_clickable_and_unicode_safe() {
 async fn repository_probe_results_reject_old_modes_and_scopes() {
     let mut f = fixture().await;
     f.view.category = Category::Changes;
-    f.view
-        .set_repositories(vec![named_repo("api"), named_repo("worker")]);
+    set_chat_repositories(&mut f.view, vec![named_repo("api"), named_repo("worker")]);
     let old_generation = f.view.repository_check_generation;
     f.view.select_change_kind(ChangeKind::Staged);
     let new_generation = f.view.repository_check_generation;
@@ -1166,10 +1192,20 @@ impl crate::workspace_command::WorkspaceCommandExecutor for AvailabilityRunner {
             Ok(crate::workspace_command::WorkspaceCommandOutput {
                 exit_code: if is_diff {
                     i32::from(self.changed.load(std::sync::atomic::Ordering::Relaxed))
+                } else if command
+                    .argv
+                    .iter()
+                    .any(|arg| matches!(arg.as_str(), "symbolic-ref" | "ls-files"))
+                {
+                    0
                 } else {
                     1
                 },
-                stdout: String::new(),
+                stdout: if command.argv.iter().any(|arg| arg == "symbolic-ref") {
+                    "refs/heads/feature/tree\n".into()
+                } else {
+                    String::new()
+                },
                 stderr: String::new(),
             })
         })
@@ -1183,9 +1219,8 @@ async fn periodic_repository_checks_reveal_new_changes_and_stop_when_leaving_cha
     let runner = std::sync::Arc::new(AvailabilityRunner::default());
     f.view.runner = Some(runner.clone());
     f.view.category = Category::Changes;
-    f.view.change_kind = ChangeKind::Unstaged;
-    f.view
-        .set_repositories(vec![named_repo("api"), named_repo("worker")]);
+    f.view.change_kind = ChangeKind::Working;
+    set_chat_repositories(&mut f.view, vec![named_repo("api"), named_repo("worker")]);
     f.view.start_repository_checks();
     for _ in 0..8 {
         tokio::task::yield_now().await;
@@ -1223,13 +1258,16 @@ async fn periodic_repository_checks_reveal_new_changes_and_stop_when_leaving_cha
 async fn repository_tabs_filtered_and_all_layouts() {
     let mut f = fixture().await;
     f.view.category = Category::Changes;
-    f.view.change_kind = ChangeKind::Unstaged;
-    f.view.set_repositories(vec![
-        named_repo("api"),
-        named_repo("clean-lib"),
-        named_repo("worker"),
-        named_repo("docs"),
-    ]);
+    f.view.change_kind = ChangeKind::Working;
+    set_chat_repositories(
+        &mut f.view,
+        vec![
+            named_repo("api"),
+            named_repo("clean-lib"),
+            named_repo("worker"),
+            named_repo("docs"),
+        ],
+    );
     for (name, changed) in [
         ("api", true),
         ("clean-lib", false),
@@ -1431,4 +1469,418 @@ async fn mouse_wheel_reveals_narrow_preview_and_ignores_open_prompts() {
     f.view.render(buf.area, &mut buf);
     assert!(f.view.list_hit_area.is_empty());
     assert!(buffer_text(&buf).contains("content"));
+}
+
+#[tokio::test]
+async fn parent_chat_hides_unassociated_checkouts_and_legacy_bookmarks() {
+    let mut f = fixture().await;
+    f.view.workspace_verified = true;
+    f.view.category = Category::Changes;
+    f.view.preferences.set(
+        f.view.bookmark_key("/project/api"),
+        RepoBookmark {
+            target: Some("some-other-chat".into()),
+            base: Some("main".into()),
+            target_is_explicit: true,
+        },
+    );
+    f.view
+        .set_repositories(vec![named_repo("api"), named_repo("worker")]);
+    assert!(f.view.repositories.is_empty());
+    assert!(
+        f.view
+            .context_text()
+            .contains("No branches created by this chat")
+    );
+    f.view.show_clean_repositories = true;
+    assert!(f.view.visible_repositories().is_empty());
+
+    seed_chat_association(&mut f.view, &named_repo("worker"));
+    f.view.set_repositories(f.view.all_repositories.clone());
+    // An old remembered, unrelated checkout is never silently selected.
+    assert_eq!(f.view.repositories.len(), 1);
+    f.view.select_repository(0);
+    assert_eq!(
+        f.view.selected_repository().unwrap().identity,
+        "/project/worker"
+    );
+    assert_eq!(
+        f.view.target_ref.as_deref(),
+        Some("refs/heads/feature/tree")
+    );
+    let target = f.view.target_ref.clone();
+    f.view.cycle_target(1);
+    assert_eq!(f.view.target_ref, target);
+    assert!(
+        f.view
+            .notice
+            .as_deref()
+            .unwrap()
+            .contains("branch created by this chat")
+    );
+}
+
+#[tokio::test]
+async fn chat_scoped_association_wins_over_an_old_automatic_target() {
+    let mut f = fixture().await;
+    f.view.cwd = PathBuf::from("/project/api");
+    f.view.preferences.set(
+        f.view.bookmark_key("/project/api"),
+        RepoBookmark {
+            target: Some("old-checkout".into()),
+            base: Some("main".into()),
+            target_is_explicit: false,
+        },
+    );
+    set_chat_repositories(&mut f.view, vec![repo("feature/tree")]);
+    assert_eq!(
+        f.view.target_ref.as_deref(),
+        Some("refs/heads/feature/tree")
+    );
+    f.view.cycle_target(1);
+    assert!(f.view.target_is_explicit);
+    let chosen = f.view.target_ref.clone();
+    f.view.reset_repo_refs();
+    assert_eq!(f.view.target_ref, chosen);
+}
+
+#[tokio::test]
+async fn association_history_reopens_only_the_matching_repository() {
+    let mut f = fixture().await;
+    f.view.category = Category::Changes;
+    f.view
+        .set_repositories(vec![named_repo("api"), named_repo("worker")]);
+    f.view
+        .load_tx
+        .send(LoadResult::BranchAssociations(
+            f.view.generation,
+            vec![super::super::preferences::BranchAssociation {
+                repo_root: PathBuf::from("/project/api"),
+                branch_ref: "refs/heads/chat-api".into(),
+                evidence_id: "successful-create".into(),
+                completed_at_ms: Some(10),
+            }],
+        ))
+        .unwrap();
+    f.view.drain_loads();
+    assert_eq!(f.view.repositories.len(), 1);
+    assert_eq!(f.view.target_ref.as_deref(), Some("refs/heads/chat-api"));
+    // Turn patches remain chat-wide even if there is no recorded branch.
+    f.view.select_change_kind(ChangeKind::TurnPatch);
+    f.view.set_turn_patch(Some("chat patch"));
+    assert_eq!(f.view.change_text.as_deref(), Some("chat patch"));
+}
+
+struct CatalogRunner {
+    chat_root: PathBuf,
+    containing: Option<PathBuf>,
+    roots: BTreeSet<PathBuf>,
+    calls: std::sync::Mutex<Vec<PathBuf>>,
+}
+impl crate::workspace_command::WorkspaceCommandExecutor for CatalogRunner {
+    fn run(
+        &self,
+        command: crate::workspace_command::WorkspaceCommand,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        crate::workspace_command::WorkspaceCommandOutput,
+                        crate::workspace_command::WorkspaceCommandError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push(command.cwd.clone());
+            let args = &command.argv;
+            let (exit_code, stdout) = if args.iter().any(|arg| arg == "--show-toplevel") {
+                let root = if command.cwd == self.chat_root {
+                    self.containing.as_ref()
+                } else {
+                    self.roots.get(&command.cwd)
+                };
+                match root {
+                    Some(root) => (0, format!("{}\n", root.display())),
+                    None => (128, String::new()),
+                }
+            } else if args.iter().any(|arg| arg == "for-each-ref") {
+                (0, "topic\nmain\n".into())
+            } else if args.iter().any(|arg| arg == "symbolic-ref") {
+                if args.iter().any(|arg| arg == "refs/remotes/origin/HEAD") {
+                    (1, String::new())
+                } else {
+                    (0, "topic\n".into())
+                }
+            } else if args.iter().any(|arg| arg == "rev-parse") {
+                (0, format!("{}\n", "a".repeat(40)))
+            } else {
+                (1, String::new())
+            };
+            Ok(crate::workspace_command::WorkspaceCommandOutput {
+                exit_code,
+                stdout,
+                stderr: String::new(),
+            })
+        })
+    }
+}
+
+async fn settle_catalog(view: &mut OutputsView) {
+    for _ in 0..40 {
+        tokio::task::yield_now().await;
+        view.drain_loads();
+        if view.repositories_loaded {
+            return;
+        }
+    }
+    panic!("repository catalog did not finish");
+}
+
+#[tokio::test]
+async fn parent_catalog_loads_recorded_worktrees_outside_discovery_scope() {
+    let mut f = fixture().await;
+    f.view.cancel_loads();
+    f.view.workspace_verified = true;
+    let outside = PathBuf::from("/elsewhere/deep/topic-worktree");
+    f.view
+        .preferences
+        .record_association(super::super::preferences::BranchAssociation {
+            repo_root: outside.clone(),
+            branch_ref: "refs/heads/topic".into(),
+            evidence_id: "created-outside".into(),
+            completed_at_ms: Some(10),
+        });
+    let runner = std::sync::Arc::new(CatalogRunner {
+        chat_root: f.view.cwd.clone(),
+        containing: None,
+        roots: BTreeSet::from([outside.clone(), PathBuf::from("/project/unrelated")]),
+        calls: Default::default(),
+    });
+    f.view.runner = Some(runner.clone());
+    f.view.start_workspace_load();
+    settle_catalog(&mut f.view).await;
+    assert_eq!(f.view.repositories.len(), 1);
+    assert_eq!(f.view.repositories[0].root, outside);
+    assert_eq!(f.view.target_ref.as_deref(), Some("refs/heads/topic"));
+    assert!(
+        !runner
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|path| path == Path::new("/project/unrelated"))
+    );
+}
+
+#[tokio::test]
+async fn direct_repo_catalog_retains_one_checkout_scope() {
+    let mut f = fixture().await;
+    f.view.cancel_loads();
+    f.view.cwd = PathBuf::from("/project/api");
+    f.view.workspace_verified = true;
+    let outside = PathBuf::from("/elsewhere/worktree");
+    f.view
+        .preferences
+        .record_association(super::super::preferences::BranchAssociation {
+            repo_root: outside.clone(),
+            branch_ref: "refs/heads/topic".into(),
+            evidence_id: "outside".into(),
+            completed_at_ms: Some(10),
+        });
+    f.view.runner = Some(std::sync::Arc::new(CatalogRunner {
+        chat_root: f.view.cwd.clone(),
+        containing: Some(f.view.cwd.clone()),
+        roots: BTreeSet::from([outside, f.view.cwd.clone()]),
+        calls: Default::default(),
+    }));
+    f.view.start_workspace_load();
+    settle_catalog(&mut f.view).await;
+    assert_eq!(f.view.repositories.len(), 1);
+    assert_eq!(f.view.repositories[0].root, Path::new("/project/api"));
+}
+
+#[tokio::test]
+async fn repository_scope_recognizes_canonical_cwd_aliases() {
+    let mut f = fixture().await;
+    f.view.cwd = PathBuf::from("/alias/api");
+    f.view.containing_checkout = Some("/project/api".into());
+    f.view.set_repositories(vec![repo("topic")]);
+    assert_eq!(f.view.repositories.len(), 1);
+    assert_eq!(f.view.target_ref.as_deref(), Some("topic"));
+}
+
+#[tokio::test]
+async fn selecting_a_repository_preserves_sidecar_provenance() {
+    let mut f = fixture().await;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("thread.json");
+    let association = super::super::preferences::BranchAssociation {
+        repo_root: PathBuf::from("/project/api"),
+        branch_ref: "refs/heads/topic".into(),
+        evidence_id: "creation".into(),
+        completed_at_ms: Some(10),
+    };
+    crate::branch_association::persist_associations(path.clone(), vec![association])
+        .await
+        .unwrap();
+    f.view.preferences_path = Some(path.clone());
+    f.view.preferences = Preferences::load_with_associations(&path);
+    f.view.set_repositories(vec![repo("other-checkout")]);
+    f.view.select_repository(0);
+    assert_eq!(f.view.target_ref.as_deref(), Some("refs/heads/topic"));
+    assert!(f.view.preferences.association("/project/api").is_some());
+    assert!(
+        Preferences::load_with_associations(&path)
+            .association("/project/api")
+            .is_some()
+    );
+}
+
+#[tokio::test]
+async fn change_tree_marks_new_files_green_without_changing_paths_or_patch_source() {
+    let mut f = fixture().await;
+    f.view.category = Category::Changes;
+    f.view.change_kind = ChangeKind::Working;
+    let patch = "diff --git a/edit.rs b/edit.rs\n--- a/edit.rs\n+++ b/edit.rs\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/new.rs b/new.rs\nnew file mode 100644\n--- /dev/null\n+++ b/new.rs\n@@ -0,0 +1 @@\n+fn main() {}\nUntracked empty file: empty.txt\n";
+    f.view.set_change_text(Ok(patch.into()));
+    let items = f.view.items();
+    assert_eq!(items.len(), 3);
+    assert!(items.iter().any(|(_, label)| label.ends_with("new.rs +")));
+    assert!(
+        items
+            .iter()
+            .any(|(_, label)| label.ends_with("empty.txt +"))
+    );
+    assert!(items.iter().any(|(_, label)| label.ends_with("edit.rs")));
+    f.view.selected = items
+        .iter()
+        .position(|(_, label)| label.ends_with("new.rs +"))
+        .unwrap();
+    assert!(f.view.selected_tree_row().unwrap().path.ends_with("new.rs"));
+    assert!(f.view.preview().contains("+++ b/new.rs"));
+    for focus in [Focus::List, Focus::Preview] {
+        f.view.focus = focus;
+        let area = Rect::new(0, 0, 40, 10);
+        let mut buf = Buffer::empty(area);
+        f.view.render_list(area, &mut buf);
+        for name in ["new.rs +", "empty.txt +"] {
+            let row = (0..area.height)
+                .find(|y| {
+                    (0..area.width)
+                        .map(|x| buf[(x, *y)].symbol())
+                        .collect::<String>()
+                        .contains(name)
+                })
+                .unwrap();
+            let column = (0..area.width)
+                .find(|x| buf[(*x, row)].symbol() == "+")
+                .unwrap();
+            assert_eq!(buf[(column, row)].fg, ratatui::style::Color::Green);
+            assert!(
+                !buf[(column, row)]
+                    .modifier
+                    .contains(ratatui::style::Modifier::REVERSED)
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn deleted_branch_removes_parent_repo_and_selection_but_not_newer_evidence() {
+    let mut f = fixture().await;
+    f.view.category = Category::Changes;
+    let repository = named_repo("api");
+    set_chat_repositories(&mut f.view, vec![repository.clone()]);
+    f.view
+        .preferences
+        .set_selected_repo(Some(repository.identity.clone()));
+    f.view.reset_repo_refs();
+    f.view.save_bookmark();
+    let removed = f
+        .view
+        .preferences
+        .association(&repository.identity)
+        .unwrap()
+        .clone();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("thread.json");
+    f.view.preferences_path = Some(path.clone());
+    f.view.preferences.save_bookmarks(&path).unwrap();
+    crate::branch_association::persist_associations(path.clone(), vec![removed.clone()])
+        .await
+        .unwrap();
+    let generation = f.view.repository_load_generation;
+    f.view
+        .load_tx
+        .send(LoadResult::BranchPruned(
+            generation.wrapping_add(1),
+            vec![removed.clone()],
+        ))
+        .unwrap();
+    f.view.drain_loads();
+    assert_eq!(f.view.repositories.len(), 1);
+    let sidecar = path.with_extension("branches.json");
+    let mut disk = Preferences::load(&sidecar);
+    disk.remove_association(&removed);
+    disk.save_waiting(&sidecar).unwrap();
+    f.view
+        .load_tx
+        .send(LoadResult::BranchPruned(generation, vec![removed.clone()]))
+        .unwrap();
+    f.view.drain_loads();
+    assert!(f.view.repositories.is_empty());
+    assert!(
+        f.view
+            .preferences
+            .association(&repository.identity)
+            .is_none()
+    );
+    assert!(f.view.preferences.selected_repo().is_none());
+    assert!(f.view.target_ref.is_none());
+    let reloaded = Preferences::load_with_associations(&path);
+    assert!(reloaded.selected_repo().is_none());
+    assert!(
+        reloaded
+            .bookmark(&f.view.bookmark_key(&repository.identity))
+            .unwrap()
+            .target
+            .is_none()
+    );
+    assert!(!f.view.preferences.record_association(removed.clone()));
+
+    let newer = super::super::preferences::BranchAssociation {
+        evidence_id: "new-creation".into(),
+        completed_at_ms: Some(100),
+        ..removed.clone()
+    };
+    crate::branch_association::persist_associations(path.clone(), vec![newer.clone()])
+        .await
+        .unwrap();
+    // This view still has the old association while a different view has
+    // already saved the new one. The event must refresh before clearing it.
+    f.view.preferences = Preferences::default();
+    assert!(f.view.preferences.record_association(removed.clone()));
+    f.view.set_repositories(vec![repository.clone()]);
+    f.view
+        .preferences
+        .set_selected_repo(Some(repository.identity.clone()));
+    f.view
+        .load_tx
+        .send(LoadResult::BranchPruned(
+            f.view.repository_load_generation,
+            vec![removed],
+        ))
+        .unwrap();
+    f.view.drain_loads();
+    assert_eq!(
+        f.view.preferences.association(&repository.identity),
+        Some(&newer)
+    );
+    assert_eq!(
+        f.view.preferences.selected_repo(),
+        Some(repository.identity.as_str())
+    );
+    assert_eq!(f.view.repositories.len(), 1);
 }
