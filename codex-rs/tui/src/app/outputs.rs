@@ -2,6 +2,74 @@
 use super::*;
 
 impl App {
+    pub(super) fn record_output_branch_creations(
+        &self,
+        server: &AppServerSession,
+        completed: &codex_app_server_protocol::ItemCompletedNotification,
+    ) {
+        let mut creations = crate::branch_association::creations_from_item(&completed.item);
+        if creations.is_empty() {
+            return;
+        }
+        let Ok(thread_id) = ThreadId::from_string(&completed.thread_id) else {
+            return;
+        };
+        let Some(runner) = self.workspace_command_runner.clone() else {
+            return;
+        };
+        for creation in &mut creations {
+            creation.completed_at_ms = Some(completed.completed_at_ms);
+        }
+        let local_environments = self
+            .environment_manager
+            .default_environment_ids()
+            .into_iter()
+            .filter(|id| {
+                self.environment_manager
+                    .get_environment(id)
+                    .is_some_and(|environment| !environment.is_remote())
+            })
+            .collect::<Vec<_>>();
+        let handle = server.request_handle();
+        let path = self
+            .config
+            .codex_home
+            .join("outputs")
+            .join(format!("{thread_id}.json"));
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            let Ok(thread) =
+                crate::outputs::data::load_workspace_metadata(&handle, &thread_id.to_string())
+                    .await
+            else {
+                return;
+            };
+            if thread.id != thread_id.to_string()
+                || !thread.environments.as_ref().is_some_and(|environments| {
+                    !environments.is_empty()
+                        && environments.iter().all(|environment| {
+                            local_environments.contains(&environment.environment_id)
+                        })
+                })
+            {
+                return;
+            }
+            let associations = crate::branch_association::verify_creations(runner, creations).await;
+            if associations.is_empty() {
+                return;
+            }
+            let saved =
+                crate::branch_association::persist_associations(path.to_path_buf(), associations)
+                    .await;
+            match saved {
+                Ok(()) => tx.send(AppEvent::OutputBranchesRecorded { thread_id }),
+                Err(error) => {
+                    tracing::warn!(%thread_id, %error, "failed to save chat branch associations")
+                }
+            }
+        });
+    }
+
     fn outputs_scope_key(&self) -> String {
         let runner = self
             .workspace_command_runner
