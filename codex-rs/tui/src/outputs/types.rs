@@ -40,6 +40,7 @@ pub(crate) struct ConversationData {
     pub(crate) agents: Vec<Agent>,
     pub(crate) notice: Option<String>,
     pub(crate) turn_patch: Option<String>,
+    pub(crate) branch_creations: Vec<crate::branch_association::CreatedBranch>,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Repository {
@@ -54,17 +55,10 @@ pub(crate) struct Repository {
 pub(crate) enum ChangeKind {
     #[default]
     Branch,
-    Unstaged,
+    Working,
     Staged,
-    Untracked,
     TurnPatch,
 }
 impl ChangeKind {
-    pub(crate) const ALL: [Self; 5] = [
-        Self::Branch,
-        Self::Unstaged,
-        Self::Staged,
-        Self::Untracked,
-        Self::TurnPatch,
-    ];
+    pub(crate) const ALL: [Self; 4] = [Self::Branch, Self::Working, Self::Staged, Self::TurnPatch];
 }

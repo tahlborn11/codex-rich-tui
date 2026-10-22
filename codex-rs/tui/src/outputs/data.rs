@@ -30,6 +30,8 @@ use crate::workspace_command::WorkspaceCommand;
 use crate::workspace_command::WorkspaceCommandExecutor;
 use crate::workspace_command::WorkspaceCommandOutput;
 
+const MAX_BRANCH_CREATIONS: usize = 128;
+
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(8);
 const DIFF_TIMEOUT: Duration = Duration::from_secs(20);
 /// A UI can display a truncation notice when discovery reaches this bound.
@@ -198,6 +200,16 @@ pub(crate) async fn discover_repositories(
     Ok(repositories)
 }
 
+/// Resolve the containing checkout on the workspace host, including cwd aliases.
+pub(crate) async fn containing_checkout(
+    runner: &dyn WorkspaceCommandExecutor,
+    cwd: &Path,
+) -> Result<Option<String>, String> {
+    Ok(git_stdout(runner, cwd, &["rev-parse", "--show-toplevel"])
+        .await?
+        .map(|root| root.strip_suffix('\n').unwrap_or(&root).to_owned()))
+}
+
 /// Lists only the immediate children of `directory` below the verified chat
 /// root.  Entries are directories-first then name-sorted, and symlinks and
 /// Git metadata are never exposed as explorer targets.
@@ -253,11 +265,34 @@ pub(crate) async fn load_change(
     target: &str,
     base: &str,
 ) -> Result<String, String> {
+    if matches!(kind, ChangeKind::Working | ChangeKind::Staged) {
+        ensure_working_branch_matches(runner, repo, target).await?;
+    }
     let args: Vec<String> = match kind {
-        ChangeKind::Unstaged => diff_args(&["diff"]),
+        ChangeKind::Working => {
+            let args = diff_args(&["diff"]);
+            let output = run(runner, safe_diff_command(runner, &repo.root, &args).await?).await?;
+            ensure_working_branch_matches(runner, repo, target).await?;
+            let tracked = if output.success() || output.exit_code == 1 {
+                output.stdout
+            } else {
+                return Err(git_error(&args, &output));
+            };
+            let untracked = untracked_diff(runner, &repo.root).await?;
+            ensure_working_branch_matches(runner, repo, target).await?;
+            let separator =
+                if !tracked.is_empty() && !tracked.ends_with('\n') && !untracked.is_empty() {
+                    "\n"
+                } else {
+                    ""
+                };
+            return Ok(truncate(
+                &format!("{tracked}{separator}{untracked}"),
+                MAX_OUTPUT_CHARS,
+            ));
+        }
         ChangeKind::Staged => diff_args(&["diff", "--cached"]),
         ChangeKind::TurnPatch => return Err("Turn patches come from conversation history.".into()),
-        ChangeKind::Untracked => return untracked_diff(runner, &repo.root).await,
         ChangeKind::Branch => {
             let target = resolve_commit(runner, &repo.root, target).await?;
             let base = resolve_commit(runner, &repo.root, base).await?;
@@ -269,6 +304,9 @@ pub(crate) async fn load_change(
         }
     };
     let output = run(runner, safe_diff_command(runner, &repo.root, &args).await?).await?;
+    if matches!(kind, ChangeKind::Staged) {
+        ensure_working_branch_matches(runner, repo, target).await?;
+    }
     if output.success() || output.exit_code == 1 {
         Ok(truncate(&output.stdout, MAX_OUTPUT_CHARS))
     } else {
@@ -290,20 +328,31 @@ pub(crate) async fn has_changes(
     target: &str,
     base: &str,
 ) -> Result<bool, String> {
+    if matches!(kind, ChangeKind::Working | ChangeKind::Staged) {
+        ensure_working_branch_matches(runner, repo, target).await?;
+    }
     let args: Vec<String> = match kind {
-        ChangeKind::Unstaged => quiet_diff_args(&["diff"]),
-        ChangeKind::Staged => quiet_diff_args(&["diff", "--cached"]),
-        ChangeKind::TurnPatch => {
-            return Err("Turn patches come from conversation history.".into());
-        }
-        ChangeKind::Untracked => {
+        ChangeKind::Working => {
+            let args = quiet_diff_args(&["diff"]);
+            let output = run(runner, safe_diff_command(runner, &repo.root, &args).await?).await?;
+            ensure_working_branch_matches(runner, repo, target).await?;
+            match output.exit_code {
+                1 => return Ok(true),
+                0 => {}
+                _ => return Err(git_error(&args, &output)),
+            }
             let files = git_required(
                 runner,
                 &repo.root,
                 &["ls-files", "--others", "--exclude-standard", "-z"],
             )
             .await?;
+            ensure_working_branch_matches(runner, repo, target).await?;
             return Ok(files.split('\0').any(|path| !path.is_empty()));
+        }
+        ChangeKind::Staged => quiet_diff_args(&["diff", "--cached"]),
+        ChangeKind::TurnPatch => {
+            return Err("Turn patches come from conversation history.".into());
         }
         ChangeKind::Branch => {
             let target = resolve_commit(runner, &repo.root, target).await?;
@@ -316,11 +365,48 @@ pub(crate) async fn has_changes(
         }
     };
     let output = run(runner, safe_diff_command(runner, &repo.root, &args).await?).await?;
+    if matches!(kind, ChangeKind::Staged) {
+        ensure_working_branch_matches(runner, repo, target).await?;
+    }
     match output.exit_code {
         0 => Ok(false),
         1 => Ok(true),
         _ => Err(git_error(&args, &output)),
     }
+}
+
+/// A full local ref is provenance for a particular checkout. Working-tree
+/// views must not silently render another branch after the user switches
+/// branches or detaches HEAD. Short branch targets obey the same rule.
+async fn ensure_working_branch_matches(
+    runner: &dyn WorkspaceCommandExecutor,
+    repo: &Repository,
+    target: &str,
+) -> Result<(), String> {
+    if target.is_empty() || target == "HEAD" {
+        return Ok(());
+    }
+    let expected = if target.starts_with("refs/") {
+        target.to_owned()
+    } else {
+        format!("refs/heads/{target}")
+    };
+    let current = git_stdout(runner, &repo.root, &["symbolic-ref", "--quiet", "HEAD"]).await?;
+    if current.as_deref().map(str::trim) == Some(expected.as_str()) {
+        return Ok(());
+    }
+    if current.is_none()
+        && full_oid(target).is_some()
+        && git_required(runner, &repo.root, &["rev-parse", "HEAD"])
+            .await?
+            .trim()
+            == target
+    {
+        return Ok(());
+    }
+    Err(format!(
+        "Working tree changes are unavailable because this checkout is not on {target}."
+    ))
 }
 
 /// Read metadata without attaching, resuming, or loading the thread's turns.
@@ -368,6 +454,21 @@ pub(crate) async fn load_conversation(
     let mut data = ConversationData::default();
     let mut agent_status = BTreeMap::<String, Agent>::new();
     for entry in items {
+        // Items are oldest-first (see `list_items`), so retaining this order
+        // lets the eventual association persistence use later evidence as the
+        // newest record for a repository.
+        data.branch_creations.extend(
+            crate::branch_association::creations_from_item(&entry.item)
+                .into_iter()
+                .map(|mut creation| {
+                    creation.completed_at_ms = entry.completed_at_ms;
+                    creation
+                }),
+        );
+        if data.branch_creations.len() > MAX_BRANCH_CREATIONS {
+            let excess = data.branch_creations.len() - MAX_BRANCH_CREATIONS;
+            data.branch_creations.drain(..excess);
+        }
         match entry.item {
             ThreadItem::Plan { id, text } => data.plans.push(Document {
                 id,
@@ -459,6 +560,72 @@ pub(crate) async fn load_conversation(
         ));
     }
     Ok(data)
+}
+
+/// Distinguish a missing local branch from an unavailable or replaced checkout.
+/// Only a verified repository and Git's exact missing-ref result permit cleanup.
+pub(crate) async fn association_branch_exists(
+    runner: &dyn WorkspaceCommandExecutor,
+    association: &super::preferences::BranchAssociation,
+) -> Result<bool, String> {
+    if !association.branch_ref.starts_with("refs/heads/") {
+        return Err("Recorded branch is not a local branch ref.".into());
+    }
+    let root = &association.repo_root;
+    git_required(runner, root, &["check-ref-format", &association.branch_ref]).await?;
+    let canonical = git_required(runner, root, &["rev-parse", "--show-toplevel"]).await?;
+    if Path::new(canonical.strip_suffix('\n').unwrap_or(&canonical)) != root {
+        return Err("Recorded checkout identity changed.".into());
+    }
+    let args = ["show-ref", "--verify", "--quiet", &association.branch_ref];
+    let owned_args = args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>();
+    let output = run(runner, git_command(root, &owned_args, COMMAND_TIMEOUT)).await?;
+    match output.exit_code {
+        0 => Ok(true),
+        1 => Ok(false),
+        _ => Err(git_error(&owned_args, &output)),
+    }
+}
+
+/// Confirms a recorded branch-creation event still refers to a local branch
+/// in its recorded checkout.  It never reads `HEAD`, because the user may
+/// have changed checkouts since the command ran.
+pub(crate) async fn verify_created_branch(
+    runner: &dyn WorkspaceCommandExecutor,
+    creation: &crate::branch_association::CreatedBranch,
+) -> Result<super::preferences::BranchAssociation, String> {
+    let branch_ref = format!("refs/heads/{}", creation.branch);
+    git_required(runner, &creation.cwd, &["check-ref-format", &branch_ref]).await?;
+    let revision = format!("{branch_ref}^{{commit}}");
+    let commit = git_required(
+        runner,
+        &creation.cwd,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            "--end-of-options",
+            &revision,
+        ],
+    )
+    .await?;
+    if full_oid(commit.trim()).is_none() {
+        return Err(format!(
+            "Recorded branch {:?} is not a commit in its checkout.",
+            creation.branch
+        ));
+    }
+    let repo_root = git_required(runner, &creation.cwd, &["rev-parse", "--show-toplevel"]).await?;
+    let repo_root = PathBuf::from(repo_root.strip_suffix('\n').unwrap_or(&repo_root));
+    if repo_root.as_os_str().is_empty() {
+        return Err("Git did not return a repository root for the recorded branch.".into());
+    }
+    Ok(super::preferences::BranchAssociation {
+        repo_root,
+        branch_ref,
+        evidence_id: creation.evidence_id.clone(),
+        completed_at_ms: creation.completed_at_ms,
+    })
 }
 
 async fn refresh_descendants(
@@ -629,7 +796,7 @@ async fn list_items(
     Ok((items, true))
 }
 
-async fn repository(
+pub(crate) async fn repository(
     runner: &dyn WorkspaceCommandExecutor,
     root: &Path,
 ) -> Result<Repository, String> {
@@ -1070,6 +1237,187 @@ mod tests {
         root
     }
 
+    #[tokio::test]
+    async fn confirms_deleted_branches_without_confusing_unavailable_checkouts() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = repository_fixture(temp.path(), "repo")
+            .canonicalize()
+            .unwrap();
+        git(&root, &["branch", "owned"]);
+        let association = super::super::preferences::BranchAssociation {
+            repo_root: root.clone(),
+            branch_ref: "refs/heads/owned".into(),
+            evidence_id: "creation".into(),
+            completed_at_ms: Some(1),
+        };
+        assert!(
+            association_branch_exists(&ProcessRunner, &association)
+                .await
+                .unwrap()
+        );
+        let path = temp.path().join("thread.json");
+        crate::branch_association::persist_associations(path.clone(), vec![association.clone()])
+            .await
+            .unwrap();
+        git(&root, &["branch", "-d", "owned"]);
+        assert!(
+            !association_branch_exists(&ProcessRunner, &association)
+                .await
+                .unwrap()
+        );
+        let removed = crate::branch_association::prune_deleted_associations(
+            std::sync::Arc::new(ProcessRunner),
+            Some(path.clone()),
+            vec![association.clone()],
+        )
+        .await
+        .unwrap();
+        assert_eq!(removed, vec![association.clone()]);
+        assert!(
+            crate::outputs::Preferences::load_with_associations(&path)
+                .associations()
+                .next()
+                .is_none()
+        );
+        // A delayed writer must not bring the old link back.
+        crate::branch_association::persist_associations(path.clone(), vec![association.clone()])
+            .await
+            .unwrap();
+        assert!(
+            crate::outputs::Preferences::load_with_associations(&path)
+                .associations()
+                .next()
+                .is_none()
+        );
+        // An unreachable/corrupt checkout is not proof of deletion.
+        std::fs::rename(root.join(".git"), root.join("metadata-unavailable")).unwrap();
+        assert!(
+            association_branch_exists(&ProcessRunner, &association)
+                .await
+                .is_err()
+        );
+        let broken_ref = FakeRunner::new(vec![
+            output(0, ""),
+            output(0, format!("{}\n", root.display())),
+            output(128, ""),
+        ]);
+        assert!(
+            association_branch_exists(&broken_ref, &association)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn verifies_recorded_branch_without_reading_current_head() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = repository_fixture(temp.path(), "repo trailing ");
+        let original_branch = String::from_utf8(
+            ProcessCommand::new("git")
+                .args(["branch", "--show-current"])
+                .current_dir(&root)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .to_owned();
+        git(&root, &["branch", "recorded"]);
+        git(&root, &["switch", "-q", "-c", "different-checkout"]);
+        let creation = crate::branch_association::CreatedBranch {
+            cwd: root.clone(),
+            branch: "recorded".into(),
+            evidence_id: "command-1".into(),
+            completed_at_ms: None,
+        };
+        let verified = verify_created_branch(&ProcessRunner, &creation)
+            .await
+            .unwrap();
+        assert_eq!(verified.repo_root, root.canonicalize().unwrap());
+        assert_eq!(verified.branch_ref, "refs/heads/recorded");
+        assert_eq!(verified.evidence_id, "command-1");
+
+        let mut revision_expression = creation.clone();
+        revision_expression.branch = "recorded^{commit}".into();
+        assert!(
+            verify_created_branch(&ProcessRunner, &revision_expression)
+                .await
+                .is_err()
+        );
+
+        git(&root, &["switch", "-q", &original_branch]);
+        git(&root, &["branch", "-D", "recorded"]);
+        assert!(
+            verify_created_branch(&ProcessRunner, &creation)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn working_changes_require_the_recorded_branch_to_remain_checked_out() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = repository_fixture(temp.path(), "repo");
+        let original_branch = String::from_utf8(
+            ProcessCommand::new("git")
+                .args(["branch", "--show-current"])
+                .current_dir(&root)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .to_owned();
+        git(&root, &["switch", "-q", "-c", "recorded"]);
+        std::fs::write(root.join("tracked.txt"), "changed\n").unwrap();
+        let repo = Repository {
+            root: root.clone(),
+            identity: root.to_string_lossy().into_owned(),
+            branch: Some("recorded".into()),
+            head: None,
+            branches: vec![],
+            default_base: None,
+        };
+        assert!(
+            has_changes(
+                &ProcessRunner,
+                &repo,
+                ChangeKind::Working,
+                "refs/heads/recorded",
+                ""
+            )
+            .await
+            .unwrap()
+        );
+        git(&root, &["switch", "-q", &original_branch]);
+        let error = has_changes(
+            &ProcessRunner,
+            &repo,
+            ChangeKind::Working,
+            "refs/heads/recorded",
+            "",
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("not on refs/heads/recorded"));
+        for target in ["recorded", "refs/heads/recorded"] {
+            for kind in [ChangeKind::Working, ChangeKind::Staged] {
+                assert!(
+                    load_change(&ProcessRunner, &repo, kind, target, "")
+                        .await
+                        .is_err()
+                );
+                assert!(
+                    has_changes(&ProcessRunner, &repo, kind, target, "")
+                        .await
+                        .is_err()
+                );
+            }
+        }
+    }
+
     #[test]
     fn full_oid_rejects_refs() {
         assert!(full_oid("a".repeat(40).as_str()).is_some());
@@ -1133,14 +1481,14 @@ mod tests {
                 .unwrap()
         );
         assert!(
-            !has_changes(&runner, &repo, ChangeKind::Unstaged, "", "")
+            !has_changes(&runner, &repo, ChangeKind::Working, "", "")
                 .await
                 .unwrap()
         );
 
         std::fs::write(root.join("tracked.txt"), "unstaged\n").unwrap();
         assert!(
-            has_changes(&runner, &repo, ChangeKind::Unstaged, "", "")
+            has_changes(&runner, &repo, ChangeKind::Working, "", "")
                 .await
                 .unwrap()
         );
@@ -1153,7 +1501,7 @@ mod tests {
         git(&root, &["config", "--unset", "filter.trip.clean"]);
         git(&root, &["add", "tracked.txt"]);
         assert!(
-            !has_changes(&runner, &repo, ChangeKind::Unstaged, "", "")
+            !has_changes(&runner, &repo, ChangeKind::Working, "", "")
                 .await
                 .unwrap()
         );
@@ -1165,7 +1513,7 @@ mod tests {
 
         std::fs::write(root.join("untracked.txt"), "untracked\n").unwrap();
         assert!(
-            has_changes(&runner, &repo, ChangeKind::Untracked, "", "")
+            has_changes(&runner, &repo, ChangeKind::Working, "", "")
                 .await
                 .unwrap()
         );
@@ -1287,12 +1635,14 @@ mod tests {
             .await
             .unwrap();
         assert!(branch.contains("other.txt"));
-        assert!(
-            load_change(&runner, &repo, ChangeKind::Untracked, "", "")
-                .await
-                .unwrap()
-                .contains("empty.txt")
-        );
+        let working = load_change(&runner, &repo, ChangeKind::Working, "", "")
+            .await
+            .unwrap();
+        // The Changes view presents both tracked worktree edits and new
+        // files in one diff, while leaving staged changes to their own view.
+        assert!(working.contains("unstaged"));
+        assert!(working.contains("empty.txt"));
+        assert!(working.contains("new file"));
         let head_after = ProcessCommand::new("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(&root)
@@ -1300,22 +1650,10 @@ mod tests {
             .unwrap();
         assert_eq!(head_before.stdout, head_after.stdout);
         assert!(
-            load_change(&runner, &repo, ChangeKind::Unstaged, "", "")
-                .await
-                .unwrap()
-                .contains("unstaged")
-        );
-        assert!(
             load_change(&runner, &repo, ChangeKind::Staged, "", "")
                 .await
                 .unwrap()
                 .contains("staged")
-        );
-        assert!(
-            load_change(&runner, &repo, ChangeKind::Untracked, "", "")
-                .await
-                .unwrap()
-                .contains("new file")
         );
 
         assert_eq!(
