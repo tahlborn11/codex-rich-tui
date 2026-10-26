@@ -1,13 +1,15 @@
 ---
 source: tui/src/outputs/ui_tests.rs
+assertion_line: 698
 expression: buffer_text(&wide)
 ---
  OUTPUTS  current chat                                                                                                                                                              
- Plans  Files [ Changes ] Agents                                                                                                                                                    
+[ Changes ] Agents  Files                                                                                                                                                           
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  VIEW   1 Branch  2 Changes  3 Staged  4 Turn patch                                                                                                                                 
  REPOSITORIES  Changed repos  0 hidden · a show all                                                                                                                                 
   [api]                                                                                                                                                                             
+   Branch: feature/viewer ▾  (1)                                                                                                                                                    
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  Base: main  →  Target: feature/viewer                                                                                                                                              
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -19,6 +21,5 @@ Changed files                                               │ Preview  c copie
                                                             │   2 │     println!("before");                             │    2 │     println!("after");                             
                                                             │   3 │ }                                                   │    3 │ }                                                  
                                                             │                                                                                                                       
-                                                            │                                                                                                                       
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-←/→ folders · Enter open · Alt+←/→ screens · Tab focus · / search · r refresh · c copy · Esc back · [/] repo · t target · b base · v view
+←/→ folders · Enter open · Alt+←/→ screens · Tab focus · / search · r refresh · c copy · Esc back · [/] repo · t branches · o associate · b base · v view

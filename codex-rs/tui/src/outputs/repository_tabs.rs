@@ -9,6 +9,7 @@ pub(super) enum RepositoryTabAction {
     ToggleClean,
     Previous,
     Next,
+    BranchPicker,
 }
 
 impl OutputsView {
@@ -27,10 +28,21 @@ impl OutputsView {
             .bookmark(&self.bookmark_key(&repo.identity));
         let inside = self.chat_is_inside(repo);
         let association = self.preferences.association(&repo.identity);
+        let associated_target = association.map(|association| association.branch_ref.clone());
+        let explicit_bookmark = bookmark.filter(|mark| {
+            mark.target_is_explicit
+                && (inside
+                    || mark.target.as_deref().is_some_and(|target| {
+                        self.preferences
+                            .association_for(&repo.identity, &Self::local_branch_ref(target))
+                            .is_some()
+                    }))
+        });
         let target = bookmark
             .filter(|mark| inside && mark.target_is_explicit)
             .and_then(|mark| mark.target.clone())
-            .or_else(|| association.map(|association| association.branch_ref.clone()))
+            .or_else(|| explicit_bookmark.and_then(|mark| mark.target.clone()))
+            .or(associated_target)
             .or_else(|| {
                 inside
                     .then(|| bookmark.and_then(|mark| mark.target.clone()))
@@ -39,8 +51,13 @@ impl OutputsView {
             .or_else(|| inside.then(|| self.associated_branch.clone()).flatten())
             .or_else(|| inside.then(|| repo.branch.clone()).flatten())
             .or_else(|| inside.then(|| repo.head.clone()).flatten());
-        let base = bookmark
+        let branch_bookmark = target.as_deref().and_then(|branch| {
+            self.preferences
+                .bookmark(&self.branch_bookmark_key(&repo.identity, branch))
+        });
+        let base = branch_bookmark
             .and_then(|mark| mark.base.clone())
+            .or_else(|| bookmark.and_then(|mark| mark.base.clone()))
             .or_else(|| repo.default_base.clone());
         (target, base)
     }
@@ -165,6 +182,7 @@ impl OutputsView {
             self.notice = Some(format!("Couldn't remember repository: {error}"));
         }
         self.reset_repo_refs();
+        self.request_local_branches();
         self.query.clear();
         self.start_change_load();
     }
@@ -228,7 +246,7 @@ impl OutputsView {
             return 0;
         }
         let pages = self.repository_tab_pages(width.saturating_sub(2));
-        2 + pages
+        3 + pages
             .iter()
             .flatten()
             .map(|(rect, _)| rect.bottom())
@@ -350,6 +368,52 @@ impl OutputsView {
                 RepositoryTabAction::Select(self.repositories[*index].identity.clone()),
             ));
         }
+        // Branch selection belongs with the checkout tabs.  This selector is
+        // intentionally separate from the comparison tabs above: it only
+        // changes the read-only Branch view and never checks anything out.
+        let selector_y = area.y.saturating_add(1).saturating_add(
+            pages[self.repository_tab_page]
+                .iter()
+                .map(|(rect, _)| rect.bottom())
+                .max()
+                .unwrap_or(0),
+        );
+        if selector_y < area.bottom() {
+            let selected = self
+                .target_ref
+                .as_deref()
+                .or_else(|| {
+                    self.selected_repository()
+                        .and_then(|repo| repo.branch.as_deref())
+                })
+                .unwrap_or("choose branch")
+                .strip_prefix("refs/heads/")
+                .unwrap_or_else(|| {
+                    self.target_ref
+                        .as_deref()
+                        .or_else(|| {
+                            self.selected_repository()
+                                .and_then(|repo| repo.branch.as_deref())
+                        })
+                        .unwrap_or("choose branch")
+                });
+            let count = self.branch_picker_branches().len();
+            let label = format!(" Branch: {selected} ▾  ({count}) ");
+            let rect = Rect::new(
+                area.x.saturating_add(2),
+                selector_y,
+                label.width() as u16,
+                1,
+            )
+            .intersection(area);
+            Paragraph::new(Line::from(Span::styled(
+                label,
+                crate::style::secondary_text_style().underlined(),
+            )))
+            .render(rect, buf);
+            self.repository_tab_hit_areas
+                .push((rect, RepositoryTabAction::BranchPicker));
+        }
     }
 
     pub(super) fn activate_repository_tab(&mut self, x: u16, y: u16) -> bool {
@@ -384,6 +448,7 @@ impl OutputsView {
                 self.repository_tab_page = self.repository_tab_page.saturating_add(1);
                 self.reveal_selected_repository = false;
             }
+            RepositoryTabAction::BranchPicker => self.open_branch_picker(),
         }
         true
     }

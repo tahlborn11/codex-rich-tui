@@ -1,13 +1,15 @@
 ---
 source: tui/src/outputs/ui_tests.rs
+assertion_line: 702
 expression: buffer_text(&narrow)
 ---
  OUTPUTS  current chat                                      
- Plans  Files [ Changes ] Agents                            
+[ Changes ] Agents  Files                                   
 ────────────────────────────────────────────────────────────
  VIEW   1 Branch  2 Changes  3 Staged  4 Turn patch         
  REPOS  Changed repos  0 hidden · a show all                
   [api]                                                     
+   Branch: feature/viewer ▾  (1)                            
 ────────────────────────────────────────────────────────────
  Base: main  →  Target: feature/viewer                      
 ────────────────────────────────────────────────────────────
@@ -18,7 +20,6 @@ src/main.rs
    2      -     println!("before");                         
         2 +     println!("after");                          
    3    3   }                                               
-                                                            
                                                             
 ────────────────────────────────────────────────────────────
 1–4 views · [] repo · ←/→ folders · Tab focus · Esc back
