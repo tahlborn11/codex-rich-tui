@@ -248,8 +248,8 @@ A clean build reports an identity such as:
 codex-rich 2026.08.10+74432be3 (upstream d1093932)
 ```
 
-The Cargo workspace uses `0.163.0+rich`, based on the verified upstream `rust-v0.163.0` release tag.
-Backend model discovery uses the numeric version `0.163.0`. The HTTP user agent uses the full Cargo version.
+The Cargo workspace uses `0.164.0+rich`, based on the verified upstream `rust-v0.164.0` release tag.
+Backend model discovery uses the numeric version `0.164.0`. The HTTP user agent uses the full Cargo version.
 Keep this compatibility version current when the fork adopts a newer upstream release baseline.
 The package helper rejects the upstream `0.0.0` development placeholder because it restricts the remote model catalog.
 
