@@ -1,9 +1,13 @@
-//! Evidence of branches created by successful commands in one chat.
+//! Branch usage observed in a chat's execution and file-change locations.
 //!
-//! A checkout's current HEAD is not ownership evidence. Recognize literal Git
-//! creation commands, then let Outputs verify the exact named ref before saving it.
+//! Usage does not imply exclusive ownership. Existing literal creation evidence
+//! is retained as a precise historical hint; new usage is independent of command syntax.
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use codex_app_server_protocol::CommandExecutionStatus;
 use codex_app_server_protocol::ThreadItem;
@@ -15,6 +19,96 @@ pub(crate) struct CreatedBranch {
     pub(crate) branch: String,
     pub(crate) evidence_id: String,
     pub(crate) completed_at_ms: Option<i64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct BranchUse {
+    pub(crate) cwd: PathBuf,
+    pub(crate) evidence_id: String,
+    pub(crate) completed_at_ms: Option<i64>,
+    pub(crate) inferred: bool,
+}
+
+/// Execution cwd and changed file locations come from structured tool items,
+/// not shell text. A failed executed command can still be work on a branch.
+pub(crate) fn uses_from_item(item: &ThreadItem) -> Vec<BranchUse> {
+    let mut locations = Vec::new();
+    let id = match item {
+        ThreadItem::CommandExecution {
+            id, cwd, status, ..
+        } if *status != CommandExecutionStatus::Declined => {
+            locations.push(PathBuf::from(cwd.as_str()));
+            id
+        }
+        ThreadItem::FileChange {
+            id,
+            changes,
+            status: codex_app_server_protocol::PatchApplyStatus::Completed,
+            ..
+        } => {
+            locations.extend(
+                changes
+                    .iter()
+                    .filter_map(|change| Path::new(&change.path).parent().map(Path::to_path_buf)),
+            );
+            id
+        }
+        _ => return Vec::new(),
+    };
+    locations.sort();
+    locations.dedup();
+    locations
+        .into_iter()
+        .take(128)
+        .map(|cwd| BranchUse {
+            cwd,
+            evidence_id: format!("usage:{id}"),
+            completed_at_ms: None,
+            inferred: false,
+        })
+        .collect()
+}
+
+/// Historical cwd identifies a used checkout, not its old HEAD. Keep that
+/// distinction in the persisted record and never overwrite precise evidence.
+pub(crate) async fn verify_uses(
+    runner: crate::workspace_command::WorkspaceCommandRunner,
+    uses: Vec<BranchUse>,
+) -> Vec<crate::outputs::BranchAssociation> {
+    use futures::StreamExt;
+    let mut latest = std::collections::BTreeMap::new();
+    for usage in uses {
+        latest.insert(usage.cwd.clone(), usage);
+    }
+    let mut pending = futures::stream::iter(latest.into_values().take(128))
+        .map(|usage| {
+            let runner = runner.clone();
+            async move {
+                crate::outputs::data::observe_branch(
+                    runner.as_ref(),
+                    &usage.cwd,
+                    &usage.evidence_id,
+                    usage.completed_at_ms,
+                    usage.inferred,
+                )
+                .await
+                .ok()
+            }
+        })
+        .buffer_unordered(4);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut observed = Vec::new();
+    while let Ok(Some(result)) = tokio::time::timeout_at(deadline, pending.next()).await {
+        if let Some(association) = result {
+            observed.push(association);
+        }
+    }
+    observed.sort_by(|left, right| {
+        left.completed_at_ms
+            .cmp(&right.completed_at_ms)
+            .then_with(|| left.evidence_id.cmp(&right.evidence_id))
+    });
+    observed
 }
 
 pub(crate) fn creations_from_item(item: &ThreadItem) -> Vec<CreatedBranch> {
@@ -132,8 +226,8 @@ pub(crate) async fn verify_creations(
         .collect()
 }
 
-/// Prune only confirmed missing refs. Probe failures preserve recorded ownership.
-/// Durable tombstones keep old history or delayed writers from restoring it.
+/// Missing refs become historical entries. Probe failures leave them unchanged;
+/// deletion never erases the chat's work history or creates a detach tombstone.
 pub(crate) async fn prune_deleted_associations(
     runner: crate::workspace_command::WorkspaceCommandRunner,
     path: Option<PathBuf>,
@@ -144,12 +238,19 @@ pub(crate) async fn prune_deleted_associations(
         .map(|association| {
             let runner = runner.clone();
             async move {
+                if association.archived {
+                    return None;
+                }
                 let missing = matches!(
                     crate::outputs::data::association_branch_exists(runner.as_ref(), &association)
                         .await,
                     Ok(false)
                 );
-                missing.then_some(association)
+                missing.then(|| {
+                    let mut historical = association;
+                    historical.archived = true;
+                    historical
+                })
             }
         })
         .buffer_unordered(4);
@@ -168,7 +269,7 @@ pub(crate) async fn prune_deleted_associations(
             let path = path.with_extension("branches.json");
             let mut preferences = crate::outputs::Preferences::load(&path);
             for association in &removals {
-                preferences.remove_association(association);
+                preferences.record_association(association.clone());
             }
             preferences.save_waiting(&path)?;
             Ok::<_, String>(
@@ -176,8 +277,13 @@ pub(crate) async fn prune_deleted_associations(
                     .into_iter()
                     .filter(|association| {
                         preferences
-                            .association(&association.repo_root.to_string_lossy())
-                            .is_none()
+                            .association_for(
+                                &association.repo_root.to_string_lossy(),
+                                &association.branch_ref,
+                            )
+                            .is_some_and(|stored| {
+                                stored.archived && stored.evidence_id == association.evidence_id
+                            })
                     })
                     .collect(),
             )
@@ -202,6 +308,87 @@ pub(crate) async fn persist_associations(
     })
     .await
     .map_err(|error| format!("Branch association persistence failed: {error}"))?
+}
+
+/// Store live observations only when they materially change the branch view.
+/// Repeated tool events commonly see the same checked-out ref and commit; the
+/// sidecar still receives new branches, new heads, archival upgrades, and a
+/// precise observation replacing recovered history.
+pub(crate) async fn persist_observations(
+    path: PathBuf,
+    associations: Vec<crate::outputs::BranchAssociation>,
+) -> Result<bool, String> {
+    let path = path.with_extension("branches.json");
+    tokio::task::spawn_blocking(move || {
+        let mut preferences = crate::outputs::Preferences::load(&path);
+        let mut changed = false;
+        for association in associations {
+            let unchanged_live_observation = preferences
+                .association(&association.repo_root.to_string_lossy())
+                .is_some_and(|existing| {
+                    existing.branch_ref == association.branch_ref
+                        && !association.inferred
+                        && !existing.inferred
+                        && !existing.archived
+                        && existing.last_head == association.last_head
+                        && existing.last_base == association.last_base
+                });
+            if !unchanged_live_observation {
+                changed |= preferences.record_association(association);
+            }
+        }
+        if changed {
+            preferences.save_waiting(&path)?;
+        }
+        Ok(changed)
+    })
+    .await
+    .map_err(|error| format!("Live branch observation persistence failed: {error}"))?
+}
+
+/// Claim the bounded, one-time historical cwd recovery pass before any Git
+/// probe starts. A completed claim is durable even if probing later finds no
+/// repository or is interrupted.
+pub(crate) async fn claim_history_recovery(path: PathBuf) -> Result<bool, String> {
+    let path = path.with_extension("branches.json");
+    tokio::task::spawn_blocking(move || {
+        crate::outputs::Preferences::default().claim_history_usage_backfilled(&path)
+    })
+    .await
+    .map_err(|error| format!("Historical branch recovery claim failed: {error}"))?
+}
+
+pub(crate) async fn detach_association(
+    path: PathBuf,
+    association: crate::outputs::BranchAssociation,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let path = path.with_extension("branches.json");
+        let mut preferences = crate::outputs::Preferences::load(&path);
+        if let Some(current) = preferences
+            .association_for(
+                &association.repo_root.to_string_lossy(),
+                &association.branch_ref,
+            )
+            .cloned()
+        {
+            let detached_at_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|duration| duration.as_millis().try_into().unwrap_or(i64::MAX))
+                .unwrap_or_default();
+            static DETACH_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+            let sequence = DETACH_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+            let tombstone = crate::outputs::BranchAssociation {
+                evidence_id: format!("detach:{detached_at_ms}:{sequence}"),
+                completed_at_ms: Some(detached_at_ms),
+                ..current.clone()
+            };
+            preferences.detach_association(&current, tombstone);
+        }
+        preferences.save_waiting(&path)
+    })
+    .await
+    .map_err(|error| format!("Branch detachment failed: {error}"))?
 }
 
 fn creations_from_command(command: &str, cwd: &Path, evidence_id: &str) -> Vec<CreatedBranch> {
@@ -357,6 +544,33 @@ fn parse_creation_args<'a>(kind: &str, args: &[&'a str]) -> Option<(&'a str, Opt
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usage_comes_from_structured_context_not_shell_syntax_or_exit_success() {
+        for command in [
+            "python3 script.py",
+            "git fetch origin\ngit worktree add -b next ../next",
+            "./opaque-wrapper",
+        ] {
+            let item: ThreadItem = serde_json::from_value(serde_json::json!({
+                "type":"commandExecution", "id":"work", "command":command,
+                "cwd":"/project/checkout", "status":"completed", "exitCode":1,
+                "commandActions":[],
+            }))
+            .unwrap();
+            let uses = uses_from_item(&item);
+            assert_eq!(uses.len(), 1);
+            assert_eq!(uses[0].cwd, Path::new("/project/checkout"));
+            assert_eq!(uses[0].evidence_id, "usage:work");
+        }
+        let declined: ThreadItem = serde_json::from_value(serde_json::json!({
+            "type":"commandExecution", "id":"declined", "command":"git status",
+            "cwd":"/project/checkout", "status":"declined", "exitCode":null,
+            "commandActions":[],
+        }))
+        .unwrap();
+        assert!(uses_from_item(&declined).is_empty());
+    }
 
     #[test]
     fn captures_literal_creation_names_and_checkout_paths() {
@@ -527,6 +741,7 @@ mod tests {
             branch_ref: "refs/heads/topic".into(),
             evidence_id: id.into(),
             completed_at_ms: Some(completed_at_ms),
+            ..Default::default()
         };
         let history = tokio::spawn(persist_associations(
             path.clone(),
@@ -542,12 +757,78 @@ mod tests {
         drop(lock);
         history.await.unwrap().unwrap();
         live.await.unwrap().unwrap();
-        // Simulate an older CLI rewriting its bookmark file without knowing
-        // about branch ownership; the separate provenance file must survive.
+        // Simulate an older CLI rewriting its bookmark file without branch-use
+        // provenance; the separate sidecar must survive.
         std::fs::write(&path, br#"{"repos":{},"selected_repo":null}"#).unwrap();
         let preferences = crate::outputs::Preferences::load_with_associations(&path);
         assert!(preferences.association("/project/api").is_some());
         assert!(preferences.association("/outside/worker").is_some());
+    }
+
+    #[tokio::test]
+    async fn unchanged_live_observation_does_not_rewrite_or_refresh() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("thread.json");
+        let observation = crate::outputs::BranchAssociation {
+            repo_root: "/project".into(),
+            branch_ref: "refs/heads/topic".into(),
+            evidence_id: "usage:first".into(),
+            completed_at_ms: Some(10),
+            last_head: Some("head".into()),
+            last_base: Some("base".into()),
+            ..Default::default()
+        };
+        assert!(
+            persist_observations(path.clone(), vec![observation.clone()])
+                .await
+                .unwrap()
+        );
+        let repeat = crate::outputs::BranchAssociation {
+            evidence_id: "usage:repeat".into(),
+            completed_at_ms: Some(20),
+            ..observation.clone()
+        };
+        assert!(
+            !persist_observations(path.clone(), vec![repeat])
+                .await
+                .unwrap()
+        );
+        let advanced = crate::outputs::BranchAssociation {
+            evidence_id: "usage:advanced".into(),
+            completed_at_ms: Some(30),
+            last_head: Some("next-head".into()),
+            ..observation
+        };
+        assert!(persist_observations(path, vec![advanced]).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn returning_to_unchanged_branch_updates_last_used_order() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("thread.json");
+        let used = |branch: &str, time| crate::outputs::BranchAssociation {
+            repo_root: "/repo".into(),
+            branch_ref: format!("refs/heads/{branch}"),
+            evidence_id: format!("usage:{time}"),
+            completed_at_ms: Some(time),
+            last_head: Some("unchanged-head".into()),
+            last_base: Some("base".into()),
+            ..Default::default()
+        };
+        for observation in [used("a", 10), used("b", 20), used("a", 30)] {
+            assert!(
+                persist_observations(path.clone(), vec![observation])
+                    .await
+                    .unwrap()
+            );
+        }
+        assert_eq!(
+            crate::outputs::Preferences::load_with_associations(&path)
+                .association("/repo")
+                .unwrap()
+                .branch_ref,
+            "refs/heads/a"
+        );
     }
 
     #[test]

@@ -1,24 +1,34 @@
 //! Opens the read-only output browser without changing the displayed thread.
 use super::*;
 
+#[path = "outputs_branch_observer.rs"]
+mod observers;
+pub(super) use observers::BranchObservers;
+
 impl App {
-    pub(super) fn record_output_branch_creations(
+    pub(super) fn record_output_branch_usage(
         &self,
         server: &AppServerSession,
-        completed: &codex_app_server_protocol::ItemCompletedNotification,
+        thread: &str,
+        item: &codex_app_server_protocol::ThreadItem,
+        observed_at_ms: i64,
     ) {
-        let mut creations = crate::branch_association::creations_from_item(&completed.item);
-        if creations.is_empty() {
+        let mut creations = crate::branch_association::creations_from_item(item);
+        let mut uses = crate::branch_association::uses_from_item(item);
+        if creations.is_empty() && uses.is_empty() {
             return;
         }
-        let Ok(thread_id) = ThreadId::from_string(&completed.thread_id) else {
+        let Ok(thread_id) = ThreadId::from_string(thread) else {
             return;
         };
         let Some(runner) = self.workspace_command_runner.clone() else {
             return;
         };
         for creation in &mut creations {
-            creation.completed_at_ms = Some(completed.completed_at_ms);
+            creation.completed_at_ms = Some(observed_at_ms);
+        }
+        for usage in &mut uses {
+            usage.completed_at_ms = Some(observed_at_ms);
         }
         let local_environments = self
             .environment_manager
@@ -37,34 +47,84 @@ impl App {
             .join("outputs")
             .join(format!("{thread_id}.json"));
         let tx = self.app_event_tx.clone();
+        let scope = format!(
+            "{thread_id}|{:?}|{:?}|{:?}",
+            Arc::as_ptr(&runner),
+            self.app_server_target,
+            local_environments
+        );
+        let Some(slot) = self.output_branch_observers.enqueue(scope, uses, creations) else {
+            return;
+        };
+        let permits = self.output_branch_observers.permits.clone();
         tokio::spawn(async move {
-            let Ok(thread) =
-                crate::outputs::data::load_workspace_metadata(&handle, &thread_id.to_string())
-                    .await
-            else {
+            let Ok(_permit) = permits.acquire_owned().await else {
                 return;
             };
-            if thread.id != thread_id.to_string()
-                || !thread.environments.as_ref().is_some_and(|environments| {
-                    !environments.is_empty()
-                        && environments.iter().all(|environment| {
-                            local_environments.contains(&environment.environment_id)
-                        })
-                })
-            {
-                return;
-            }
-            let associations = crate::branch_association::verify_creations(runner, creations).await;
-            if associations.is_empty() {
-                return;
-            }
-            let saved =
-                crate::branch_association::persist_associations(path.to_path_buf(), associations)
-                    .await;
-            match saved {
-                Ok(()) => tx.send(AppEvent::OutputBranchesRecorded { thread_id }),
-                Err(error) => {
-                    tracing::warn!(%thread_id, %error, "failed to save chat branch associations")
+            let cached = slot
+                .lock()
+                .ok()
+                .and_then(|pending| pending.verified_cwd.clone());
+            let cwd = if let Some(cwd) = cached {
+                cwd
+            } else {
+                let metadata =
+                    crate::outputs::data::load_workspace_metadata(&handle, &thread_id.to_string())
+                        .await;
+                let cwd = metadata
+                    .ok()
+                    .filter(|thread| {
+                        thread.id == thread_id.to_string()
+                            && thread.environments.as_ref().is_some_and(|environments| {
+                                !environments.is_empty()
+                                    && environments.iter().all(|environment| {
+                                        local_environments.contains(&environment.environment_id)
+                                    })
+                            })
+                    })
+                    .map(|thread| thread.cwd.to_path_buf());
+                let Some(cwd) = cwd else {
+                    if let Ok(mut pending) = slot.lock() {
+                        pending.cancel();
+                    }
+                    return;
+                };
+                if let Ok(mut pending) = slot.lock() {
+                    pending.verified_cwd = Some(cwd.clone());
+                }
+                cwd
+            };
+            loop {
+                let batch = slot
+                    .lock()
+                    .ok()
+                    .and_then(|mut pending| pending.take_batch());
+                let Some((mut uses, creations)) = batch else {
+                    break;
+                };
+                for usage in &mut uses {
+                    if !usage.cwd.is_absolute() {
+                        usage.cwd = cwd.join(&usage.cwd);
+                    }
+                }
+                let mut associations =
+                    crate::branch_association::verify_creations(runner.clone(), creations).await;
+                associations
+                    .extend(crate::branch_association::verify_uses(runner.clone(), uses).await);
+                if associations.is_empty() {
+                    continue;
+                }
+                match crate::branch_association::persist_observations(
+                    path.to_path_buf(),
+                    associations,
+                )
+                .await
+                {
+                    Ok(true) => tx.send(AppEvent::OutputBranchesRecorded { thread_id }),
+                    Ok(false) => {}
+                    Err(error) => {
+                        tracing::warn!(%thread_id, %error, "failed to save chat branch associations")
+                    }
                 }
             }
         });
@@ -134,7 +194,6 @@ impl App {
                 })
                 .collect(),
         );
-        view.set_local_plans(self.outputs_local_plans());
         view.set_turn_patch(self.chat_widget.output_turn_patch());
         tui.enter_alt_screen()?;
         self.cancel_pending_key_chord();
@@ -143,43 +202,9 @@ impl App {
         Ok(())
     }
 
-    fn outputs_local_plans(&self) -> Vec<crate::outputs::Document> {
-        self.transcript_cells
-            .iter()
-            .enumerate()
-            .rev()
-            .filter_map(|(index, cell)| {
-                let title = if cell.as_any().is::<crate::history_cell::PlanUpdateCell>() {
-                    "Plan progress"
-                } else if cell.as_any().is::<crate::history_cell::ProposedPlanCell>() {
-                    "Proposed plan"
-                } else {
-                    return None;
-                };
-                let markdown = cell.copy_source().map(str::to_owned).unwrap_or_else(|| {
-                    cell.raw_lines()
-                        .iter()
-                        .map(std::string::ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                });
-                Some(crate::outputs::Document {
-                    id: format!("retained-plan-{index}"),
-                    title: title.to_owned(),
-                    markdown,
-                })
-            })
-            .take(10)
-            .collect()
-    }
-
-    pub(super) fn sync_outputs_local_plans(&mut self) {
-        if matches!(self.overlay, Some(Overlay::Outputs(_))) {
-            let plans = self.outputs_local_plans();
-            if let Some(Overlay::Outputs(view)) = &mut self.overlay {
-                view.set_local_plans(plans);
-                view.set_turn_patch(self.chat_widget.output_turn_patch());
-            }
+    pub(super) fn sync_outputs_turn_patch(&mut self) {
+        if let Some(Overlay::Outputs(view)) = &mut self.overlay {
+            view.set_turn_patch(self.chat_widget.output_turn_patch());
         }
     }
 

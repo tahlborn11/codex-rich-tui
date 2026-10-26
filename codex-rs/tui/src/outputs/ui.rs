@@ -44,7 +44,6 @@ use super::types::Agent;
 use super::types::Category;
 use super::types::ChangeKind;
 use super::types::ConversationData;
-use super::types::Document;
 use super::types::Repository;
 
 #[path = "repository_tabs.rs"]
@@ -65,15 +64,20 @@ enum Prompt {
     Search,
     Find,
     OpenPath,
+    AssociateCheckout,
+    BranchPicker,
 }
 
 enum LoadResult {
     Conversation(u64, Result<ConversationData, String>),
     Repositories(u64, Result<Vec<Repository>, String>),
     BranchAssociations(u64, Vec<super::preferences::BranchAssociation>),
+    BranchHistoryBackfilled(u64),
+    ManualBranch(u64, super::preferences::BranchAssociation, Repository),
     RepositoryScope(u64, Option<String>),
     BranchPruned(u64, Vec<super::preferences::BranchAssociation>),
     BranchAssociationError(u64, String),
+    LocalBranches(u64, String, Result<Vec<String>, String>),
     RepositoryChange(u64, String, Result<bool, String>),
     Workspace(u64, Result<Box<codex_app_server_protocol::Thread>, String>),
     Change(u64, Result<String, String>),
@@ -110,7 +114,6 @@ pub(crate) struct OutputsView {
     query: String,
     open_path: String,
     conversation: ConversationData,
-    local_plans: Vec<Document>,
     live_turn_patch: Option<String>,
     repositories: Vec<Repository>,
     all_repositories: Vec<Repository>,
@@ -133,6 +136,9 @@ pub(crate) struct OutputsView {
     repository_tab_width: u16,
     reveal_selected_repository: bool,
     repository_tab_hit_areas: Vec<(Rect, RepositoryTabAction)>,
+    local_branches: BTreeMap<String, Vec<String>>,
+    branch_picker_hit_areas: Vec<(Rect, String)>,
+    branch_picker_selection: usize,
     change_kind: ChangeKind,
     target_ref: Option<String>,
     target_is_explicit: bool,
@@ -190,7 +196,7 @@ impl OutputsView {
             preferences_path,
             preferences,
             is_done: false,
-            category: Category::Plans,
+            category: Category::Changes,
             focus: Focus::List,
             selected: 0,
             scroll: 0,
@@ -200,7 +206,6 @@ impl OutputsView {
             query: String::new(),
             open_path: String::new(),
             conversation: ConversationData::default(),
-            local_plans: Vec::new(),
             live_turn_patch: None,
             repositories: Vec::new(),
             all_repositories: Vec::new(),
@@ -223,6 +228,9 @@ impl OutputsView {
             repository_tab_width: 80,
             reveal_selected_repository: true,
             repository_tab_hit_areas: Vec::new(),
+            local_branches: BTreeMap::new(),
+            branch_picker_hit_areas: Vec::new(),
+            branch_picker_selection: 0,
             change_kind: ChangeKind::Branch,
             target_ref: None,
             target_is_explicit: false,
@@ -326,37 +334,19 @@ impl OutputsView {
         self.normalize_file_paths();
         self.conversation.files.sort();
         self.conversation.files.dedup();
-        self.merge_local_plans();
-        self.clamp_selection();
-    }
-    /// Seed plans that are still present in the active transcript but have not
-    /// reached the app-server history (for example, a live checklist update).
-    pub(crate) fn set_local_plans(&mut self, plans: Vec<Document>) {
-        self.conversation
-            .plans
-            .retain(|plan| !plan.id.starts_with("retained-plan-"));
-        self.local_plans = plans;
-        self.merge_local_plans();
         self.clamp_selection();
     }
     fn normalize_file_paths(&mut self) {
         if self.workspace_verified {
+            for usage in &mut self.conversation.branch_uses {
+                if !usage.cwd.is_absolute() {
+                    usage.cwd = self.cwd.join(&usage.cwd);
+                }
+            }
             for path in &mut self.conversation.files {
                 if path.is_relative() {
                     *path = self.cwd.join(&*path);
                 }
-            }
-        }
-    }
-    fn merge_local_plans(&mut self) {
-        for plan in &self.local_plans {
-            if !self
-                .conversation
-                .plans
-                .iter()
-                .any(|existing| existing.markdown == plan.markdown)
-            {
-                self.conversation.plans.push(plan.clone());
             }
         }
     }
@@ -381,11 +371,35 @@ impl OutputsView {
             None => self.repository.min(self.repositories.len().saturating_sub(1)),
         };
         self.reset_repo_refs();
+        self.request_local_branches();
         if let Some(repo) = self.selected_repository() {
             self.preferences
                 .set_selected_repo(Some(repo.identity.clone()));
             self.save_bookmark();
         }
+    }
+    fn request_local_branches(&mut self) {
+        let Some(runner) = self.runner.clone() else {
+            return;
+        };
+        let Some(repository) = self.selected_repository().cloned() else {
+            return;
+        };
+        if self.local_branches.contains_key(&repository.identity) {
+            return;
+        }
+        let tx = self.load_tx.clone();
+        let frame = self.frame.clone();
+        let generation = self.repository_load_generation;
+        self.spawn(async move {
+            let result = data::local_branches(runner.as_ref(), &repository.root).await;
+            let _ = tx.send(LoadResult::LocalBranches(
+                generation,
+                repository.identity,
+                result,
+            ));
+            frame.schedule_frame();
+        });
     }
     fn chat_is_inside(&self, repo: &Repository) -> bool {
         self.containing_checkout.as_deref() == Some(repo.identity.as_str())
@@ -443,6 +457,34 @@ impl OutputsView {
                         self.clear_list_click();
                     }
                 }
+                crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                    if self.prompt == Some(Prompt::BranchPicker) =>
+                {
+                    if let Some(branch) = self
+                        .branch_picker_hit_areas
+                        .iter()
+                        .find(|(area, _)| {
+                            area.contains(ratatui::layout::Position::new(mouse.column, mouse.row))
+                        })
+                        .map(|(_, branch)| branch.clone())
+                    {
+                        self.select_picker_branch_named(branch);
+                        self.query.clear();
+                        self.prompt = None;
+                    }
+                }
+                crossterm::event::MouseEventKind::ScrollDown
+                    if self.prompt == Some(Prompt::BranchPicker) =>
+                {
+                    let count = self.branch_picker_branches().len();
+                    self.branch_picker_selection =
+                        (self.branch_picker_selection + 3).min(count.saturating_sub(1));
+                }
+                crossterm::event::MouseEventKind::ScrollUp
+                    if self.prompt == Some(Prompt::BranchPicker) =>
+                {
+                    self.branch_picker_selection = self.branch_picker_selection.saturating_sub(3);
+                }
                 crossterm::event::MouseEventKind::ScrollDown => {
                     self.scroll_preview_with_mouse(true)
                 }
@@ -456,8 +498,15 @@ impl OutputsView {
             self.clear_list_click();
             let text = crate::history_cell::sanitize_user_text(text.as_str().into());
             match self.prompt {
-                Some(Prompt::OpenPath) => self.open_path.push_str(&text),
-                Some(Prompt::Search) => self.query.push_str(&text),
+                Some(Prompt::OpenPath) | Some(Prompt::AssociateCheckout) => {
+                    self.open_path.push_str(&text)
+                }
+                Some(Prompt::Search | Prompt::BranchPicker) => {
+                    self.query.push_str(&text);
+                    if self.prompt == Some(Prompt::BranchPicker) {
+                        self.branch_picker_selection = 0;
+                    }
+                }
                 Some(Prompt::Find) => self.find_query.push_str(&text),
                 None => {}
             }
@@ -520,10 +569,7 @@ impl OutputsView {
             self.start_initial_loads();
             return;
         }
-        if plain
-            && key.code == KeyCode::Char('s')
-            && matches!(self.category, Category::Plans | Category::Files)
-        {
+        if plain && key.code == KeyCode::Char('s') && self.category == Category::Files {
             self.source_mode = !self.source_mode;
             return;
         }
@@ -533,6 +579,11 @@ impl OutputsView {
         }
         if plain && self.category == Category::Changes {
             match key.code {
+                KeyCode::Char('o') => {
+                    self.prompt = Some(Prompt::AssociateCheckout);
+                    self.open_path.clear();
+                    return;
+                }
                 KeyCode::Char('a') => {
                     self.show_clean_repositories = !self.show_clean_repositories;
                     self.reveal_selected_repository = true;
@@ -555,7 +606,7 @@ impl OutputsView {
                     return;
                 }
                 KeyCode::Char('t') => {
-                    self.cycle_target(1);
+                    self.open_branch_picker();
                     return;
                 }
                 KeyCode::Char('b') => {
@@ -653,7 +704,7 @@ impl OutputsView {
         match key.code {
             KeyCode::Esc => {
                 self.prompt = None;
-                if prompt == Prompt::Search {
+                if matches!(prompt, Prompt::Search | Prompt::BranchPicker) {
                     self.query.clear();
                     self.selected = 0;
                     self.selected_key = None;
@@ -662,8 +713,16 @@ impl OutputsView {
                 true
             }
             KeyCode::Enter => {
+                if prompt == Prompt::BranchPicker {
+                    self.select_picker_branch();
+                    self.prompt = None;
+                    self.query.clear();
+                    return true;
+                }
                 self.prompt = None;
-                if prompt == Prompt::OpenPath {
+                if prompt == Prompt::AssociateCheckout {
+                    self.associate_checkout_path();
+                } else if prompt == Prompt::OpenPath {
                     let path = PathBuf::from(&self.open_path);
                     let path = if path.is_absolute() {
                         path
@@ -692,9 +751,26 @@ impl OutputsView {
                     self.query.pop();
                 } else if prompt == Prompt::Find {
                     self.find_query.pop();
-                } else {
+                } else if matches!(prompt, Prompt::OpenPath | Prompt::AssociateCheckout) {
                     self.open_path.pop();
+                } else {
+                    self.query.pop();
+                    self.branch_picker_selection = 0;
                 }
+                true
+            }
+            KeyCode::Up if prompt == Prompt::BranchPicker => {
+                self.branch_picker_selection = self.branch_picker_selection.saturating_sub(1);
+                true
+            }
+            KeyCode::Down if prompt == Prompt::BranchPicker => {
+                let count = self.branch_picker_branches().len();
+                self.branch_picker_selection =
+                    (self.branch_picker_selection + 1).min(count.saturating_sub(1));
+                true
+            }
+            KeyCode::Delete if prompt == Prompt::BranchPicker => {
+                self.detach_picker_branch();
                 true
             }
             _ if is_plain_text_key_event(key) => {
@@ -703,8 +779,13 @@ impl OutputsView {
                         self.query.push(c);
                     } else if prompt == Prompt::Find {
                         self.find_query.push(c);
-                    } else {
+                    } else if matches!(prompt, Prompt::OpenPath | Prompt::AssociateCheckout) {
                         self.open_path.push(c);
+                    } else {
+                        self.query.push(c);
+                        if prompt == Prompt::BranchPicker {
+                            self.branch_picker_selection = 0;
+                        }
                     }
                 }
                 true
@@ -1004,11 +1085,15 @@ impl OutputsView {
     fn reset_repo_refs(&mut self) {
         if let Some(repo) = self.selected_repository() {
             let (target, base) = self.repository_refs(repo);
-            self.target_is_explicit = self.chat_is_inside(repo)
-                && self
-                    .preferences
-                    .bookmark(&self.bookmark_key(&repo.identity))
-                    .is_some_and(|bookmark| bookmark.target_is_explicit);
+            self.target_is_explicit = target.as_deref().is_some_and(|target| {
+                self.preferences
+                    .bookmark(&self.branch_bookmark_key(&repo.identity, target))
+                    .or_else(|| {
+                        self.preferences
+                            .bookmark(&self.bookmark_key(&repo.identity))
+                    })
+                    .is_some_and(|bookmark| bookmark.target_is_explicit)
+            });
             self.target_ref = target;
             self.base_ref = base;
         } else {
@@ -1020,18 +1105,29 @@ impl OutputsView {
     fn bookmark_key(&self, identity: &str) -> String {
         format!("{}\u{1f}{}", self.thread_id, identity)
     }
+    fn branch_bookmark_key(&self, identity: &str, branch: &str) -> String {
+        format!(
+            "{}\u{1f}{}",
+            self.bookmark_key(identity),
+            Self::local_branch_ref(branch)
+        )
+    }
     fn save_bookmark(&mut self) {
         let Some(identity) = self.selected_repository().map(|repo| repo.identity.clone()) else {
             return;
         };
-        self.preferences.set(
-            self.bookmark_key(&identity),
-            RepoBookmark {
-                target: self.target_ref.clone(),
-                base: self.base_ref.clone(),
-                target_is_explicit: self.target_is_explicit,
-            },
-        );
+        let bookmark = RepoBookmark {
+            target: self.target_ref.clone(),
+            base: self.base_ref.clone(),
+            target_is_explicit: self.target_is_explicit,
+        };
+        if let Some(target) = &self.target_ref {
+            self.preferences.set(
+                self.branch_bookmark_key(&identity, target),
+                bookmark.clone(),
+            );
+        }
+        self.preferences.set(self.bookmark_key(&identity), bookmark);
         if let Some(path) = &self.preferences_path
             && let Err(error) = self.preferences.save_bookmarks(path)
         {
@@ -1060,22 +1156,269 @@ impl OutputsView {
         self.start_change_load();
         self.start_repository_checks();
     }
-    fn cycle_target(&mut self, by: isize) {
-        self.cycle_ref(by, true);
+    /// Returns the branches that can be viewed for the selected checkout.
+    /// The current checkout is always included, and saved chat evidence is
+    /// shown first.  This is deliberately presentation-only: selecting an
+    /// entry changes the comparison, never Git's checkout.
+    fn branch_picker_branches(&self) -> Vec<String> {
+        let Some(repo) = self.selected_repository() else {
+            return Vec::new();
+        };
+        let mut branches = Vec::new();
+        for association in self.preferences.associations_for(&repo.identity) {
+            if !branches.contains(&association.branch_ref) {
+                branches.push(association.branch_ref.clone());
+            }
+        }
+        if let Some(branch) = &repo.branch {
+            let branch = Self::local_branch_ref(branch);
+            if !branches.contains(&branch) {
+                branches.push(branch);
+            }
+        }
+        if let Some(local_branches) = self.local_branches.get(&repo.identity) {
+            for branch in local_branches {
+                if !branches.contains(branch) {
+                    branches.push(branch.clone());
+                }
+            }
+        }
+        let query = self.query.to_ascii_lowercase();
+        branches.retain(|branch| query.is_empty() || branch.to_ascii_lowercase().contains(&query));
+        branches
+    }
+    fn local_branch_ref(branch: &str) -> String {
+        if branch.starts_with("refs/") {
+            branch.to_owned()
+        } else {
+            format!("refs/heads/{branch}")
+        }
+    }
+    fn selected_branch_association(
+        &self,
+        branch: &str,
+    ) -> Option<&super::preferences::BranchAssociation> {
+        self.selected_repository().and_then(|repo| {
+            self.preferences
+                .association_for(&repo.identity, &Self::local_branch_ref(branch))
+        })
+    }
+    /// Historical branch entries retain commit IDs so a deleted or merged ref
+    /// can still render a branch diff. Working and staged views deliberately
+    /// do not call this helper: they must always inspect the real checkout.
+    fn branch_snapshot_refs(
+        &self,
+        target: Option<&str>,
+        base: Option<&str>,
+    ) -> (Option<String>, Option<String>) {
+        let Some(repo) = self.selected_repository() else {
+            return (target.map(str::to_owned), base.map(str::to_owned));
+        };
+        let Some(target) = target else {
+            return (None, base.map(str::to_owned));
+        };
+        let association = self
+            .preferences
+            .association_for(&repo.identity, &Self::local_branch_ref(target));
+        let target = association
+            .filter(|association| association.archived)
+            .and_then(|association| association.last_head.clone())
+            .unwrap_or_else(|| target.to_owned());
+        let base = association
+            .filter(|association| association.archived)
+            .and_then(|association| association.last_base.clone())
+            .or_else(|| base.map(str::to_owned));
+        (Some(target), base)
+    }
+    fn open_branch_picker(&mut self) {
+        if self.selected_repository().is_none() {
+            return;
+        }
+        self.query.clear();
+        self.branch_picker_selection = self
+            .branch_picker_branches()
+            .iter()
+            .position(|branch| self.target_ref.as_deref() == Some(branch.as_str()))
+            .unwrap_or(0);
+        self.prompt = Some(Prompt::BranchPicker);
+    }
+    fn select_picker_branch(&mut self) {
+        let Some(branch) = self
+            .branch_picker_branches()
+            .get(self.branch_picker_selection)
+            .cloned()
+        else {
+            return;
+        };
+        self.select_picker_branch_named(branch);
+    }
+    fn select_picker_branch_named(&mut self, branch: String) {
+        let Some(repository) = self.selected_repository().cloned() else {
+            return;
+        };
+        self.target_ref = Some(branch.clone());
+        self.target_is_explicit = true;
+        self.save_bookmark();
+        self.start_change_load();
+        self.start_repository_checks();
+        if self
+            .preferences
+            .association_for(&repository.identity, &Self::local_branch_ref(&branch))
+            .is_some_and(|association| !association.archived)
+        {
+            return;
+        }
+        let Some(runner) = self.runner.clone() else {
+            return;
+        };
+        let tx = self.load_tx.clone();
+        let frame = self.frame.clone();
+        let generation = self.repository_load_generation;
+        let preferences_path = self.preferences_path.clone();
+        let completed_at_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .and_then(|duration| i64::try_from(duration.as_millis()).ok());
+        self.spawn(async move {
+            let result = data::observe_named_branch(
+                runner.as_ref(),
+                &repository.root,
+                &Self::local_branch_ref(&branch),
+                "manual-output-branch-association",
+                completed_at_ms,
+            )
+            .await;
+            match result {
+                Ok(association) => {
+                    if let Some(path) = preferences_path
+                        && let Err(error) = crate::branch_association::persist_associations(
+                            path,
+                            vec![association.clone()],
+                        )
+                        .await
+                    {
+                        let _ = tx.send(LoadResult::BranchAssociationError(generation, error));
+                    } else {
+                        let _ = tx.send(LoadResult::BranchAssociations(
+                            generation,
+                            vec![association],
+                        ));
+                    }
+                }
+                Err(error) => {
+                    let _ = tx.send(LoadResult::BranchAssociationError(generation, error));
+                }
+            }
+            frame.schedule_frame();
+        });
+    }
+    fn detach_picker_branch(&mut self) {
+        let Some(branch) = self
+            .branch_picker_branches()
+            .get(self.branch_picker_selection)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(identity) = self.selected_repository().map(|repo| repo.identity.clone()) else {
+            return;
+        };
+        let branch = Self::local_branch_ref(&branch);
+        let Some(association) = self
+            .preferences
+            .association_for(&identity, &branch)
+            .cloned()
+        else {
+            self.notice = Some(
+                "That branch was discovered in the repository, not associated with this chat."
+                    .into(),
+            );
+            return;
+        };
+        self.preferences.remove_association(&association);
+        if let Some(path) = self.preferences_path.clone() {
+            let tx = self.load_tx.clone();
+            let frame = self.frame.clone();
+            let generation = self.repository_load_generation;
+            self.spawn(async move {
+                match crate::branch_association::detach_association(path, association).await {
+                    Ok(()) => {
+                        let _ = tx.send(LoadResult::BranchAssociations(generation, Vec::new()));
+                    }
+                    Err(error) => {
+                        let _ = tx.send(LoadResult::BranchAssociationError(generation, error));
+                    }
+                }
+                frame.schedule_frame();
+            });
+        }
+        self.notice = Some(format!("Detached {branch} from this chat."));
+        self.set_repositories(self.all_repositories.clone());
+    }
+    fn associate_checkout_path(&mut self) {
+        let Some(runner) = self.runner.clone() else {
+            self.notice = Some("Workspace commands are unavailable for this connection.".into());
+            return;
+        };
+        let path = PathBuf::from(&self.open_path);
+        let path = if path.is_absolute() {
+            path
+        } else {
+            self.cwd.join(path)
+        };
+        let tx = self.load_tx.clone();
+        let frame = self.frame.clone();
+        let generation = self.repository_load_generation;
+        let preferences_path = self.preferences_path.clone();
+        let completed_at_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .and_then(|duration| i64::try_from(duration.as_millis()).ok());
+        self.spawn(async move {
+            let result = data::observe_branch(
+                runner.as_ref(),
+                &path,
+                "manual-output-association",
+                completed_at_ms,
+                false,
+            )
+            .await;
+            match result {
+                Ok(association) => {
+                    let repository =
+                        data::repository(runner.as_ref(), &association.repo_root).await;
+                    if let Some(preferences_path) = preferences_path
+                        && let Err(error) = crate::branch_association::persist_associations(
+                            preferences_path,
+                            vec![association.clone()],
+                        )
+                        .await
+                    {
+                        let _ = tx.send(LoadResult::BranchAssociationError(generation, error));
+                    } else if let Ok(repository) = repository {
+                        let _ = tx.send(LoadResult::ManualBranch(
+                            generation,
+                            association,
+                            repository,
+                        ));
+                    } else {
+                        let _ = tx.send(LoadResult::BranchAssociationError(
+                            generation,
+                            "Couldn't load the associated checkout.".into(),
+                        ));
+                    }
+                }
+                Err(error) => {
+                    let _ = tx.send(LoadResult::BranchAssociationError(generation, error));
+                }
+            }
+            frame.schedule_frame();
+        });
     }
     fn cycle_base(&mut self, by: isize) {
         self.cycle_ref(by, false);
     }
     fn cycle_ref(&mut self, by: isize, target: bool) {
-        if target
-            && self
-                .selected_repository()
-                .is_some_and(|repo| !self.chat_is_inside(repo))
-        {
-            self.notice =
-                Some("Target follows the branch created by this chat in this repository.".into());
-            return;
-        }
         let Some(branches) = self.selected_repository().map(|repo| repo.branches.clone()) else {
             return;
         };
@@ -1173,6 +1516,9 @@ impl OutputsView {
             let tx = self.load_tx.clone();
             let cwd = self.cwd.clone();
             let creations = self.conversation.branch_creations.clone();
+            let uses = self.conversation.branch_uses.clone();
+            let recover_history =
+                self.conversation.history_loaded && !self.preferences.history_usage_backfilled();
             let mut roots = self
                 .preferences
                 .associations()
@@ -1191,9 +1537,6 @@ impl OutputsView {
                 .await
                 {
                     Ok(removed) if !removed.is_empty() => {
-                        for association in &removed {
-                            roots.remove(&association.repo_root);
-                        }
                         let _ = tx.send(LoadResult::BranchPruned(generation, removed));
                         frame.schedule_frame();
                     }
@@ -1212,8 +1555,43 @@ impl OutputsView {
                     return;
                 };
                 let _ = tx.send(LoadResult::RepositoryScope(generation, containing.clone()));
-                let associations =
+                let mut associations =
                     crate::branch_association::verify_creations(runner.clone(), creations).await;
+                let exact_branches = associations
+                    .iter()
+                    .map(|entry| (entry.repo_root.clone(), entry.branch_ref.clone()))
+                    .collect::<BTreeSet<_>>();
+                let claimed_history = if recover_history {
+                    match preferences_path.as_ref() {
+                        Some(path) => {
+                            match crate::branch_association::claim_history_recovery(path.clone())
+                                .await
+                            {
+                                Ok(claimed) => claimed,
+                                Err(error) => {
+                                    let _ = tx.send(LoadResult::BranchAssociationError(
+                                        generation, error,
+                                    ));
+                                    false
+                                }
+                            }
+                        }
+                        None => true,
+                    }
+                } else {
+                    false
+                };
+                if claimed_history {
+                    let recovered =
+                        crate::branch_association::verify_uses(runner.clone(), uses).await;
+                    associations.extend(recovered.into_iter().filter(|entry| {
+                        !exact_branches
+                            .contains(&(entry.repo_root.clone(), entry.branch_ref.clone()))
+                    }));
+                }
+                if recover_history {
+                    let _ = tx.send(LoadResult::BranchHistoryBackfilled(generation));
+                }
                 if !associations.is_empty() {
                     if let Some(path) = preferences_path {
                         if let Err(error) = crate::branch_association::persist_associations(
@@ -1239,10 +1617,18 @@ impl OutputsView {
                     }
                     let _ = tx.send(LoadResult::BranchAssociations(generation, associations));
                 }
-                let result = if containing.is_some() {
-                    data::discover_repositories(runner.as_ref(), &cwd).await
-                } else {
+                let result = {
                     use futures::StreamExt;
+                    if containing.is_some() {
+                        // Preserve containing-checkout discovery and combine it
+                        // with checkouts observed outside the original cwd.
+                        if let Ok(repositories) =
+                            data::discover_repositories(runner.as_ref(), &cwd).await
+                        {
+                            roots
+                                .extend(repositories.into_iter().map(|repository| repository.root));
+                        }
+                    }
                     let mut repositories = futures::stream::iter(roots.into_iter().take(256))
                         .map(|root| {
                             let runner = runner.clone();
@@ -1285,9 +1671,8 @@ impl OutputsView {
         }
         self.change_text = Some("Loading changes…".into());
         if !self.workspace_verified {
-            self.change_text = Some(
-                "Workspace context is not verified. Plans and Agents remain available.".into(),
-            );
+            self.change_text =
+                Some("Workspace context is not verified. Agents remain available.".into());
             return;
         }
         let Some(runner) = self.runner.clone() else {
@@ -1295,14 +1680,17 @@ impl OutputsView {
                 Some("Workspace commands are unavailable for this connection.".into());
             return;
         };
-        let Some((repo, kind, target, base)) = self
+        let Some((repo, kind, mut target, mut base)) = self
             .change_request()
             .map(|(r, k, t, b)| (r.clone(), k, t.map(str::to_owned), b.map(str::to_owned)))
         else {
             self.change_text =
-                Some("No associated repository selected. Parent-directory chats show only branches created by this chat. New associations are recorded after successful branch-creation commands.".into());
+                Some("No associated repository selected. Parent-directory chats show recorded checkouts used by this chat; press o to associate another checkout.".into());
             return;
         };
+        if kind == ChangeKind::Branch {
+            (target, base) = self.branch_snapshot_refs(target.as_deref(), base.as_deref());
+        }
         if kind == ChangeKind::Branch && (target.is_none() || base.is_none()) {
             self.change_text = Some("Choose a target and base branch with t and b. No default comparison is available in this repository.".into());
             return;
@@ -1325,9 +1713,8 @@ impl OutputsView {
     }
     fn load_path(&mut self, path: PathBuf) {
         if !self.workspace_verified {
-            self.file_text = Some(
-                "Workspace context is not verified. Plans and Agents remain available.".into(),
-            );
+            self.file_text =
+                Some("Workspace context is not verified. Agents remain available.".into());
             return;
         }
         let Some(runner) = self.runner.clone() else {
@@ -1397,7 +1784,6 @@ impl OutputsView {
                 }
             }
             Category::Changes => {}
-            Category::Plans => {}
         }
     }
     fn file_root(&self) -> PathBuf {
@@ -1479,42 +1865,26 @@ impl OutputsView {
                 LoadResult::BranchPruned(generation, removed)
                     if generation == self.repository_load_generation =>
                 {
+                    for association in &removed {
+                        self.preferences.record_association(association.clone());
+                    }
                     if let Some(path) = &self.preferences_path {
                         self.preferences.refresh_associations(path);
                     }
-                    for association in &removed {
-                        let identity = association.repo_root.to_string_lossy();
-                        if self
-                            .preferences
-                            .association(&identity)
-                            .is_some_and(|current| current != association)
-                        {
-                            continue;
-                        }
-                        self.preferences.remove_association(association);
-                        if self.preferences.selected_repo() == Some(identity.as_ref()) {
-                            self.preferences.set_selected_repo(None);
-                        }
-                        let key = self.bookmark_key(&identity);
-                        if let Some(mut bookmark) = self.preferences.bookmark(&key).cloned()
-                            && bookmark.target.as_deref().is_some_and(|target| {
-                                target == association.branch_ref
-                                    || Some(target)
-                                        == association.branch_ref.strip_prefix("refs/heads/")
-                            })
-                        {
-                            bookmark.target = None;
-                            bookmark.target_is_explicit = false;
-                            self.preferences.set(key, bookmark);
-                        }
+                    if !removed.is_empty() {
+                        self.notice = Some(
+                            "A branch used by this chat is now available as archived history."
+                                .into(),
+                        );
                     }
-                    if let Some(path) = &self.preferences_path
-                        && let Err(error) = self.preferences.save_bookmarks(path)
-                    {
-                        self.notice =
-                            Some(format!("Couldn't clear deleted branch selection: {error}"));
+                    // Pruning persists before it notifies us.  Refresh the
+                    // visible catalogue without launching another pruning
+                    // task, which used to make missing refs loop forever.
+                    self.set_repositories(self.all_repositories.clone());
+                    if self.category == Category::Changes {
+                        self.start_change_load();
+                        self.start_repository_checks();
                     }
-                    self.refresh_branch_associations();
                 }
                 LoadResult::BranchAssociations(generation, associations)
                     if generation == self.repository_load_generation =>
@@ -1531,6 +1901,42 @@ impl OutputsView {
                         self.start_repository_checks();
                     }
                 }
+                LoadResult::BranchHistoryBackfilled(generation)
+                    if generation == self.repository_load_generation =>
+                {
+                    self.preferences.mark_history_usage_backfilled();
+                    if let Some(path) = &self.preferences_path {
+                        self.preferences.refresh_associations(path);
+                    }
+                }
+                LoadResult::ManualBranch(generation, association, repository)
+                    if generation == self.repository_load_generation =>
+                {
+                    self.preferences.record_association(association);
+                    if let Some(path) = &self.preferences_path {
+                        self.preferences.refresh_associations(path);
+                    }
+                    if !self
+                        .all_repositories
+                        .iter()
+                        .any(|candidate| candidate.identity == repository.identity)
+                    {
+                        self.all_repositories.push(repository.clone());
+                    }
+                    self.set_repositories(self.all_repositories.clone());
+                    if let Some(index) = self
+                        .repositories
+                        .iter()
+                        .position(|candidate| candidate.identity == repository.identity)
+                    {
+                        self.repository = index;
+                        self.reset_repo_refs();
+                        self.request_local_branches();
+                    }
+                    self.save_bookmark();
+                    self.start_change_load();
+                    self.start_repository_checks();
+                }
                 LoadResult::RepositoryScope(generation, containing)
                     if generation == self.repository_load_generation =>
                 {
@@ -1540,6 +1946,18 @@ impl OutputsView {
                     if generation == self.repository_load_generation =>
                 {
                     self.notice = Some(format!("Couldn't save chat branch associations: {error}"));
+                }
+                LoadResult::LocalBranches(generation, identity, result)
+                    if generation == self.repository_load_generation =>
+                {
+                    match result {
+                        Ok(branches) => {
+                            self.local_branches.insert(identity, branches);
+                        }
+                        Err(error) => {
+                            self.notice = Some(format!("Couldn't list local branches: {error}"));
+                        }
+                    }
                 }
                 LoadResult::RepositoryChange(generation, identity, result)
                     if generation == self.repository_check_generation
@@ -1614,13 +2032,6 @@ impl OutputsView {
         let query = self.query.to_lowercase();
         let matches = |text: &str| query.is_empty() || text.to_lowercase().contains(&query);
         match self.category {
-            Category::Plans => self
-                .conversation
-                .plans
-                .iter()
-                .filter(|d| matches(&d.title))
-                .map(|d| (d.id.clone(), d.title.clone()))
-                .collect(),
             Category::Files | Category::Changes => self
                 .tree_rows()
                 .into_iter()
@@ -1658,7 +2069,6 @@ impl OutputsView {
             );
         }
         match self.category {
-            Category::Plans => self.conversation.plans.iter().find(|d| Some(&d.id) == selected.as_ref()).map(|d| d.markdown.clone()).unwrap_or_else(|| "No plans recorded for this conversation.".into()),
             Category::Files => self.file_text.clone().or_else(|| selected.as_ref().map(|p| format!("{}\n\nLoading…", PathBuf::from(p).strip_prefix(self.file_root()).unwrap_or(std::path::Path::new(p)).display()))).unwrap_or_else(|| "No files in this folder, or the directory is still loading.".into()),
             Category::Changes => self.change_files.iter().find(|file| Some(&file.id) == selected.as_ref()).map(|file| file.source.clone())
                 .or_else(|| (!self.change_files.is_empty()).then(|| "No matching changed files.".into()))
@@ -1738,7 +2148,11 @@ impl OutputsView {
         }
         self.render_footer(rows[5], buf);
         if let Some(prompt) = self.prompt {
-            self.render_prompt(area, buf, prompt);
+            if prompt == Prompt::BranchPicker {
+                self.render_branch_picker(area, buf);
+            } else {
+                self.render_prompt(area, buf, prompt);
+            }
         }
     }
     fn render_header(&mut self, area: Rect, buf: &mut Buffer) {
@@ -1877,7 +2291,7 @@ impl OutputsView {
                     }
                 }
                 None if !self.workspace_verified => self.notice.clone().unwrap_or_else(|| "Workspace context is not verified.".into()),
-                None if self.repositories_loaded => "No branches created by this chat were recorded for repositories in this directory. Repos appear after a successful branch-creation command.".into(),
+                None if self.repositories_loaded => "No checkouts used by this chat were recorded here. Press o to associate a checkout.".into(),
                 None => self.notice.clone().unwrap_or_else(|| "Discovering repositories…".into()),
             }
         } else if self.category == Category::Files {
@@ -2038,7 +2452,7 @@ impl OutputsView {
         } else {
             None
         };
-        let markdown = matches!(self.category, Category::Plans | Category::Agents)
+        let markdown = self.category == Category::Agents
             || self.category == Category::Files
                 && language
                     .as_deref()
@@ -2143,7 +2557,7 @@ impl OutputsView {
             }
         }
         if self.category == Category::Changes && !compact_changes {
-            text.push_str(" · [/] repo · t target · b base · v view");
+            text.push_str(" · [/] repo · t branches · o associate · b base · v view");
         }
         if let Some(notice) = &self.notice {
             text.push_str(" · ");
@@ -2172,6 +2586,8 @@ impl OutputsView {
             " Find in preview "
         } else if prompt == Prompt::Search {
             " Search outputs "
+        } else if prompt == Prompt::AssociateCheckout {
+            " Associate checkout path "
         } else {
             " Open workspace path "
         };
@@ -2187,6 +2603,82 @@ impl OutputsView {
         Paragraph::new(crate::history_cell::sanitize_user_text(value.as_str().into()).into_owned())
             .block(Block::default().borders(Borders::ALL).title(title))
             .render(box_area, buf);
+    }
+    fn render_branch_picker(&mut self, area: Rect, buf: &mut Buffer) {
+        let branches = self.branch_picker_branches();
+        self.branch_picker_selection = self
+            .branch_picker_selection
+            .min(branches.len().saturating_sub(1));
+        self.branch_picker_hit_areas.clear();
+        // One line for filter and one for the footer.  Keep both outside the
+        // selectable window so the last branch never shares a hit target with
+        // the footer.
+        let rows = branches.len().min(10) as u16;
+        let height = rows.saturating_add(4).min(area.height);
+        let width = area.width.min(76);
+        let x = area.x.saturating_add(area.width.saturating_sub(width) / 2);
+        let y = area
+            .y
+            .saturating_add(area.height.saturating_sub(height) / 2);
+        let popup = Rect::new(x, y, width, height);
+        Clear.render(popup, buf);
+        let title = " Branches · ● used in this chat ";
+        let block = Block::default().borders(Borders::ALL).title(title);
+        let inner = block.inner(popup);
+        block.render(popup, buf);
+        let query = if self.query.is_empty() {
+            "filter branches"
+        } else {
+            &self.query
+        };
+        Paragraph::new(Line::from(vec![
+            Span::styled(" / ", crate::style::secondary_text_style()),
+            Span::from(query),
+        ]))
+        .render(Rect::new(inner.x, inner.y, inner.width, 1), buf);
+        let list_height = usize::from(inner.height.saturating_sub(2));
+        let mut start = self.branch_picker_selection.saturating_sub(list_height / 2);
+        start = start.min(branches.len().saturating_sub(list_height));
+        for (offset, (index, branch)) in branches
+            .iter()
+            .enumerate()
+            .skip(start)
+            .take(list_height)
+            .enumerate()
+        {
+            let row = Rect::new(
+                inner.x,
+                inner.y.saturating_add(1 + offset as u16),
+                inner.width,
+                1,
+            );
+            let association = self.selected_branch_association(branch);
+            let marker = if association.is_some() { "● " } else { "  " };
+            let history = association.map_or(String::new(), |association| {
+                if association.archived {
+                    "  archived".into()
+                } else if association.inferred {
+                    "  recovered".into()
+                } else {
+                    String::new()
+                }
+            });
+            let label = format!("{marker}{branch}{history}");
+            let span = if index == self.branch_picker_selection {
+                Span::styled(label, crate::style::selection_style().bold())
+            } else {
+                Span::from(label)
+            };
+            Paragraph::new(Line::from(span)).render(row, buf);
+            self.branch_picker_hit_areas.push((row, branch.clone()));
+        }
+        if inner.height > 1 {
+            let hint = " ↑↓ select · Enter associate · Delete detach · Esc close ";
+            Paragraph::new(hint.dim()).render(
+                Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1),
+                buf,
+            );
+        }
     }
 }
 

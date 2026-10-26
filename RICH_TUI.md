@@ -42,9 +42,9 @@ an explicit shortcut. The footer shows `→ for outputs` between the Agents and
 shortcuts hints when Right is available. The `outputs` keymap section controls
 list navigation.
 
-The top tabs show Plans, Files, Changes, and Agents, with the current screen
-highlighted. Click a tab or use Alt+Left and Alt+Right to select a screen. Left and
-Right also switch screens in the Plans and Agents lists. Use Tab to focus the preview.
+The top tabs show Changes, Agents, and Files, with Changes selected when the viewer
+opens. Click a tab or use Alt+Left and Alt+Right to select a screen. Left and
+Right also switch screens in the Agents list. Use Tab to focus the preview.
 Enter opens a selected file or document. Wide terminals show the list and preview together.
 Narrow terminals show one at a time. Escape returns from the preview, then closes
 the viewer. The viewer preserves the composer draft. Single-click an item in any
@@ -60,11 +60,12 @@ use Tab to switch panes. In narrow view, the wheel reveals the preview.
   Names and paths are relative to the file root.
 - `/` filters the list or finds text in the preview. Enter applies the search.
   The Files filter searches directories that have already loaded.
-- `c` copies the complete source document. `s` switches Plans and Files between
+- `c` copies the complete source document. `s` switches Files between
   rendered text and source. Code blocks use the document copy action.
-- `o` opens a file path in Files. Paths must stay within the selected file root.
+- `o` opens a file path in Files, within the selected file root. In Changes,
+  `o` associates a local checkout path with the chat.
 - `r` refreshes the data. Agent previews do not attach to or resume the agent.
-- In Changes, `[` and `]` select a repository, `t` selects the target branch, `b`
+- In Changes, `[` and `]` select a repository, `t` opens the branch picker, `b`
   selects the base, and `v` cycles the change views. Repository tabs show each
   available checkout. Click a repo to select it; overflow pages have clickable
   arrows. The Changed repos filter hides checkouts confirmed clean in the current
@@ -85,33 +86,42 @@ use Tab to switch panes. In narrow view, the wheel reveals the preview.
   keep rename, permission, and binary-file details. `c` copies the selected file's
   complete original patch, including headers.
 
-A chat inside a repository uses that checkout. A chat in a parent project folder
-shows only repositories with a recorded branch created by that chat. Its target
-follows the recorded branch; `t` cannot select an unrelated branch. The Show all
-filter reveals clean associated repositories, not unrelated checkouts. Explicit
-target choices remain available for chats opened inside a repository.
+Chats and branches have a many-to-many relationship. Outputs records local
+branches observed at command execution directories and file-edit locations.
+This uses structured tool locations, so scripts and shell aliases do not need
+special command parsers. A checkout can have several branches associated with
+one chat, and several chats can use the same branch. Linked worktrees retain
+separate checkout identities. Read-only commands also count as checkout usage.
 
-Successful literal `git switch -c`, `git checkout -b`, and `git worktree add -b`
-commands in POSIX shells record the exact local branch ref and checkout for the chat.
-Quiet and tracking flags are supported. Commands
-may use `git -C`, a literal `cd` with an absolute or `./`/`../` path, or an `&&` chain. Failed or ambiguous commands,
-including pipelines and OR recovery, do not establish an association. A branch
-creation with `switch -c` or `checkout -b`, followed by `; git status` (or a
-newline and `git status`), is accepted
-only when the recorded output also contains Git’s explicit new-branch confirmation. Branches
-created through opaque scripts or aliases cannot be inferred automatically.
-Existing chats can recover evidence from the latest bounded history pages.
-Old viewer selections and the current checkout do not establish ownership.
+Select a repository tab, then press `t` or click the branch selector to browse
+its branches. Associated branches appear first; other local branches can be
+selected and associated explicitly. Press `o` to associate a checkout by path,
+and Delete in the branch picker to detach a branch from this chat. These actions
+do not check out or delete branches. The Show all filter reveals clean associated
+repositories. Target and base choices persist per chat, checkout, and branch.
 
-Associations persist per chat and checkout, including recorded worktrees outside
-the original project directory. Linked worktrees have separate identities.
-When a recorded branch is deleted, opening or refreshing Outputs removes its
-chat association. The ten-second repository checks also remove deleted branches
-while Changes is open. A temporarily unavailable checkout does not erase an
-association. Removed evidence is retained as a tombstone so old command history
-cannot restore the link; a newer branch-creation event can establish a new link.
-Repository, target, and base choices are saved per chat and checkout. An
-unavailable remembered checkout requires an explicit repository selection.
+Opening an existing chat attempts a bounded, one-time recovery from structured
+command and edit history. Recovered associations are labelled as inferred: they
+identify the branch currently observed at a recorded location, rather than prove
+which branch was checked out when an old command ran. The attempt is saved even
+when a location is unavailable, so refreshing or detaching does not repeatedly
+reinterpret old history. Explicit association is available when recovery cannot
+find a checkout. Recognized successful branch-creation commands remain a
+supplementary source of exact branch refs.
+
+Live observations are bounded and coalesced per chat and checkout location.
+They inspect Git state when processed; concurrent checkout changes can prevent
+an intermediate branch from being observed. Explicit selection provides a
+fallback. Remote and unverified execution contexts cannot establish local
+associations.
+
+Merged branches remain in chat history. Deleted refs become archived entries,
+with the last observed commit and base retained for historical branch diffs
+while those Git objects remain available. Working and staged views still require
+a live checkout of the selected branch. Explicit detach saves a tombstone;
+observations older than the detach cannot restore the link, while later work
+can associate the branch again. Temporarily unavailable checkouts retain their
+history. An unavailable remembered checkout requires an explicit selection.
 
 Branch changes compare the target against its merge base with the selected base.
 Viewing a branch does not check it out. The header shows the base and target,
@@ -139,7 +149,7 @@ machine that uses Homebrew for developer tooling, the non-Rust prerequisites can
 
 ```bash
 xcode-select --install
-brew install git just python
+brew install git just python zstd
 ```
 
 Install Rust with [rustup](https://rustup.rs/) and confirm the required commands are available:
@@ -384,52 +394,54 @@ just fmt
 
 Follow `AGENTS.md` for the complete validation requirements of whichever crates were changed.
 
-### Automatic build-cache cleanup
+### Automatic compressed build cache
 
-The Rich package builder runs cache cleanup after each successful package build.
-This includes `just codex`, `just package-rich-tui`, and `just install-rich-tui-local`.
-You do not need a scheduled task or a separate cleanup command.
-Direct `cargo` commands do not run this helper.
+The Rich package builder manages a local compressed Cargo cache for `just codex`,
+`just package-rich-tui`, and `just install-rich-tui-local`.
+Direct `cargo` commands use their normal expanded cache.
 
-The default policy keeps a 50 GiB cache budget and a 100 GiB free-space reserve.
-It removes inactive build profiles and old package copies after 14 days.
-Under disk pressure, it removes other package copies and incremental caches before complete build profiles.
+Before a package build, the helper keeps an existing warm cache. If the cache is
+cold, it restores a compatible local `.tar.zst` archive. Cargo then checks
+fingerprints and timestamps and rebuilds changed inputs during the normal build.
 
-It preserves the current package, requested archives, installed executables, and source files.
-It also protects other package copies for one hour after their last change.
-Only packages with the builder's staging marker qualify for automatic removal.
-The installer excludes this marker and identifies installation directories separately.
-The installer rejects destinations inside this repository's disposable Cargo target directory.
+After a successful package build, the helper creates and verifies a new archive.
+Only then does it remove the expanded Cargo cache directories. The helper preserves
+package outputs, requested release archives, top-level executables, installed
+files, source files, and Cargo lock files. A failed build does not save or evict
+its cache. A failed snapshot leaves the expanded cache available.
 
-If the remaining build cache exceeds the budget, cleanup can discard it and require a cold rebuild next time.
-This fallback preserves the current profile's top-level executables.
+Archives live under `~/.cache/codex-rich-tui/build-cache/`, in a directory scoped
+to this checkout. Exact keys identify the dependency and build configuration.
+Compatible fallback keys allow Cargo to reuse dependencies after a lockfile change.
+Compiler, native architecture, profile definitions, and compiler-flag changes
+prevent an incompatible restore. Each snapshot records all included target and
+profile directories, so switching the requested build profile can reuse them.
+The archives contain Cargo build artifacts. Downloaded Cargo sources and V8
+resources keep their existing locations.
 
-Cleanup uses Cargo locks on macOS and Linux to avoid active builds.
-If a lock is busy, cleanup skips the run.
-Unsupported platforms and external build directories also skip cleanup.
+The default archive budget is 50 GiB, with a 100 GiB free-space reserve and
+14-day retention. These limits apply to compressed archives. A restore
+requires room for the expanded cache. If storage exceeds the budget, the helper
+keeps the current verified archive and reports the remaining storage pressure.
 
-Protected or unrecognized files can leave the cache above the budget.
-Mounted directories also prevent cleanup.
-The helper reports retained space and any unmet limits.
-Cleanup errors do not fail a successful package build.
+The helper uses `tar` and `zstd`. On macOS, install Zstandard with `brew install zstd`.
+Missing tools, active builds, unsafe paths, or insufficient space cause cache
+maintenance to skip safely. The package build can still use a warm cache or build
+from source. External Cargo build directories remain outside automatic cache management.
 
-Use these environment variables to change the policy:
+Use these environment variables to change retention:
 
 ```bash
 CODEX_RICH_CACHE_MAX_GIB=50 \
 CODEX_RICH_CACHE_KEEP_DAYS=14 \
 CODEX_RICH_MIN_FREE_GIB=100 \
-just install-rich-tui-local
+just package-rich-tui
 ```
 
-Set `CODEX_RICH_CLEANUP=0` to disable automatic cleanup.
-To preview cleanup without changes, run:
-
-```bash
-python3 scripts/codex_rich_cleanup.py \
-  --package-dir codex-rs/target/codex-rich-tui-dev \
-  --cargo-profile dev-small --dry-run
-```
+Set `CODEX_RICH_CACHE=0` to disable automatic restore, snapshot, and eviction.
+Set `CODEX_RICH_CLEANUP=0` to keep the expanded cache after a successful snapshot.
+This option is useful during repeated development builds because it avoids an
+extract cycle each time.
 
 ## Keep the fork current
 

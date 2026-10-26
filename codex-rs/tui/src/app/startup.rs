@@ -1057,6 +1057,7 @@ See the Codex keymap documentation for supported actions and examples."
             chat_widget,
             workspace_command_runner: Some(workspace_command_runner),
             backend_preference_context,
+            output_branch_observers: Default::default(),
             config,
             local_settings,
             realtime_call_client: Arc::default(),

@@ -1,19 +1,20 @@
 ---
 source: tui/src/outputs/ui_tests.rs
+assertion_line: 1374
 expression: buffer_text(&narrow)
 ---
  OUTPUTS  current chat                                      
- Plans  Files [ Changes ] Agents                            
+[ Changes ] Agents  Files                                   
 ────────────────────────────────────────────────────────────
  VIEW   1 Branch  2 Changes  3 Staged  4 Turn patch         
  REPOS  All repos  0 hidden · a hide clean                  
   [api *] clean-lib (clean)  worker *  docs (clean)         
+   Branch: feature/tree ▾  (1)                              
 ────────────────────────────────────────────────────────────
  Checkout: feature/tree                                     
 ────────────────────────────────────────────────────────────
 Changed files                                              │
 ›   app.rs                                                 │
-                                                           │
                                                            │
                                                            │
                                                            │
