@@ -13,5 +13,4 @@ mod ui;
 
 pub(crate) use preferences::BranchAssociation;
 pub(crate) use preferences::Preferences;
-pub(crate) use types::Document;
 pub(crate) use ui::OutputsView;
