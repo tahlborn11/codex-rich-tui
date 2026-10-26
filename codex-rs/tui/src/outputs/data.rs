@@ -659,6 +659,7 @@ async fn refresh_descendants(
                     section_id: None,
                     project_id: None,
                     parent_thread_id: None,
+                    attached_to_thread_id: None,
                     ancestor_thread_id: Some(root.to_owned()),
                     cwd: None,
                     use_state_db_only: true,
