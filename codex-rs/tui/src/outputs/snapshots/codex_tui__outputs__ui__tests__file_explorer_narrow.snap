@@ -1,10 +1,10 @@
 ---
 source: tui/src/outputs/ui_tests.rs
-assertion_line: 873
+assertion_line: 993
 expression: buffer_text(&narrow)
 ---
  OUTPUTS  current chat                                      
- Plans [ Files ] Changes  Agents                            
+ Changes  Agents [ Files ]                                  
 ────────────────────────────────────────────────────────────
 project · Enter expand/open · ←/→ folders · Alt+←/→ screens 
                                                             

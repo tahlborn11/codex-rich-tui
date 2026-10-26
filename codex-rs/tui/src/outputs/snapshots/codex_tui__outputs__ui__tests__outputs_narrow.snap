@@ -1,17 +1,20 @@
 ---
 source: tui/src/outputs/ui_tests.rs
-assertion_line: 452
+assertion_line: 577
 expression: buffer_text(&narrow)
 ---
  OUTPUTS  current chat                                      
-[ Plans ] Files  Changes  Agents                            
+ Changes [ Agents ] Files                                   
 ────────────────────────────────────────────────────────────
 /project                                                    
                                                             
  Preview  c copies source                                   
+Viewer agent                                                
+Status: completed                                           
+                                                            
 Outputs                                                     
                                                             
-☑ Browse plans                                              
+☑ Browse changes                                            
 ☐ Compare branches                                          
                                                             
 ╭─ rust ─────────   ╮                                       

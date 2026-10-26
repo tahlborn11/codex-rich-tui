@@ -24,7 +24,6 @@ use uuid::Uuid;
 use super::types::Agent;
 use super::types::ChangeKind;
 use super::types::ConversationData;
-use super::types::Document;
 use super::types::Repository;
 use crate::workspace_command::WorkspaceCommand;
 use crate::workspace_command::WorkspaceCommandExecutor;
@@ -451,9 +450,24 @@ pub(crate) async fn load_conversation(
         .map_err(|error| error.to_string())?;
     let latest_turn = latest.data.first().map(|turn| turn.id.clone());
     let mut turn_patch = String::new();
-    let mut data = ConversationData::default();
+    let mut data = ConversationData {
+        history_loaded: true,
+        ..Default::default()
+    };
     let mut agent_status = BTreeMap::<String, Agent>::new();
     for entry in items {
+        data.branch_uses.extend(
+            crate::branch_association::uses_from_item(&entry.item)
+                .into_iter()
+                .map(|mut usage| {
+                    usage.completed_at_ms = entry.completed_at_ms;
+                    usage.inferred = true;
+                    usage
+                }),
+        );
+        if data.branch_uses.len() > 512 {
+            data.branch_uses.drain(..data.branch_uses.len() - 512);
+        }
         // Items are oldest-first (see `list_items`), so retaining this order
         // lets the eventual association persistence use later evidence as the
         // newest record for a repository.
@@ -470,11 +484,7 @@ pub(crate) async fn load_conversation(
             data.branch_creations.drain(..excess);
         }
         match entry.item {
-            ThreadItem::Plan { id, text } => data.plans.push(Document {
-                id,
-                title: "Proposed plan".into(),
-                markdown: text,
-            }),
+            ThreadItem::Plan { .. } => {}
             ThreadItem::FileChange {
                 changes,
                 status: codex_app_server_protocol::PatchApplyStatus::Completed,
@@ -595,36 +605,69 @@ pub(crate) async fn verify_created_branch(
     creation: &crate::branch_association::CreatedBranch,
 ) -> Result<super::preferences::BranchAssociation, String> {
     let branch_ref = format!("refs/heads/{}", creation.branch);
-    git_required(runner, &creation.cwd, &["check-ref-format", &branch_ref]).await?;
-    let revision = format!("{branch_ref}^{{commit}}");
-    let commit = git_required(
+    observe_named_branch(
         runner,
         &creation.cwd,
-        &[
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            "--end-of-options",
-            &revision,
-        ],
+        &branch_ref,
+        &creation.evidence_id,
+        creation.completed_at_ms,
     )
-    .await?;
-    if full_oid(commit.trim()).is_none() {
-        return Err(format!(
-            "Recorded branch {:?} is not a commit in its checkout.",
-            creation.branch
-        ));
+    .await
+}
+
+/// Snapshot the actual local branch used by a command/file location. This does
+/// not inspect command text or claim that the chat created the branch.
+pub(crate) async fn observe_branch(
+    runner: &dyn WorkspaceCommandExecutor,
+    cwd: &Path,
+    evidence_id: &str,
+    completed_at_ms: Option<i64>,
+    inferred: bool,
+) -> Result<super::preferences::BranchAssociation, String> {
+    if !cwd.is_absolute() {
+        return Err("Branch usage needs a verified absolute checkout path.".into());
     }
-    let repo_root = git_required(runner, &creation.cwd, &["rev-parse", "--show-toplevel"]).await?;
+    let branch = git_required(runner, cwd, &["symbolic-ref", "--quiet", "HEAD"]).await?;
+    let branch = branch.trim();
+    let mut association =
+        observe_named_branch(runner, cwd, branch, evidence_id, completed_at_ms).await?;
+    let after = git_required(runner, cwd, &["symbolic-ref", "--quiet", "HEAD"]).await?;
+    if branch != after.trim() {
+        return Err("Checkout branch changed during usage observation.".into());
+    }
+    association.inferred = inferred;
+    Ok(association)
+}
+
+pub(crate) async fn observe_named_branch(
+    runner: &dyn WorkspaceCommandExecutor,
+    cwd: &Path,
+    branch_ref: &str,
+    evidence_id: &str,
+    completed_at_ms: Option<i64>,
+) -> Result<super::preferences::BranchAssociation, String> {
+    if !cwd.is_absolute() || !branch_ref.starts_with("refs/heads/") {
+        return Err("Association requires a local branch and an absolute checkout path.".into());
+    }
+    git_required(runner, cwd, &["check-ref-format", branch_ref]).await?;
+    let head = resolve_commit(runner, cwd, branch_ref).await?;
+    let repo_root = git_required(runner, cwd, &["rev-parse", "--show-toplevel"]).await?;
     let repo_root = PathBuf::from(repo_root.strip_suffix('\n').unwrap_or(&repo_root));
     if repo_root.as_os_str().is_empty() {
         return Err("Git did not return a repository root for the recorded branch.".into());
     }
+    let last_base = match default_base(runner, &repo_root).await? {
+        Some(base) => resolve_commit(runner, &repo_root, &base).await.ok(),
+        None => None,
+    };
     Ok(super::preferences::BranchAssociation {
         repo_root,
-        branch_ref,
-        evidence_id: creation.evidence_id.clone(),
-        completed_at_ms: creation.completed_at_ms,
+        branch_ref: branch_ref.to_owned(),
+        evidence_id: evidence_id.to_owned(),
+        completed_at_ms,
+        last_head: Some(head),
+        last_base,
+        ..Default::default()
     })
 }
 
@@ -835,6 +878,23 @@ pub(crate) async fn repository(
         branches,
         default_base,
     })
+}
+
+pub(crate) async fn local_branches(
+    runner: &dyn WorkspaceCommandExecutor,
+    root: &Path,
+) -> Result<Vec<String>, String> {
+    Ok(git_required(
+        runner,
+        root,
+        &["for-each-ref", "--format=%(refname)", "refs/heads"],
+    )
+    .await?
+    .lines()
+    .take(1024)
+    .filter(|line| line.starts_with("refs/heads/"))
+    .map(str::to_owned)
+    .collect())
 }
 
 async fn default_base(
@@ -1250,6 +1310,7 @@ mod tests {
             branch_ref: "refs/heads/owned".into(),
             evidence_id: "creation".into(),
             completed_at_ms: Some(1),
+            ..Default::default()
         };
         assert!(
             association_branch_exists(&ProcessRunner, &association)
@@ -1273,14 +1334,16 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(removed, vec![association.clone()]);
+        let mut historical = association.clone();
+        historical.archived = true;
+        assert_eq!(removed, vec![historical.clone()]);
         assert!(
             crate::outputs::Preferences::load_with_associations(&path)
                 .associations()
                 .next()
-                .is_none()
+                .is_some_and(|stored| stored.archived)
         );
-        // A delayed writer must not bring the old link back.
+        // A delayed writer must not turn historical evidence active again.
         crate::branch_association::persist_associations(path.clone(), vec![association.clone()])
             .await
             .unwrap();
@@ -1288,7 +1351,7 @@ mod tests {
             crate::outputs::Preferences::load_with_associations(&path)
                 .associations()
                 .next()
-                .is_none()
+                .is_some_and(|stored| stored.archived)
         );
         // An unreachable/corrupt checkout is not proof of deletion.
         std::fs::rename(root.join(".git"), root.join("metadata-unavailable")).unwrap();
@@ -1354,6 +1417,102 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn historical_worktree_usage_recovers_without_parsing_creation_commands() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = repository_fixture(temp.path(), "source");
+        let checkout = temp.path().join("vending");
+        git(
+            &source,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "TI-552-rename-derivatives-sync",
+                checkout.to_str().unwrap(),
+                "HEAD",
+            ],
+        );
+        let item: ThreadItem = serde_json::from_value(serde_json::json!({
+            "type":"commandExecution", "id":"opaque-work", "command":"python3 opaque_script.py",
+            "cwd":checkout, "status":"completed", "exitCode":0, "commandActions":[],
+        }))
+        .unwrap();
+        assert!(crate::branch_association::creations_from_item(&item).is_empty());
+        let mut uses = crate::branch_association::uses_from_item(&item);
+        uses[0].inferred = true;
+        uses[0].completed_at_ms = Some(10);
+        let associations =
+            crate::branch_association::verify_uses(std::sync::Arc::new(ProcessRunner), uses).await;
+        assert_eq!(associations.len(), 1);
+        assert_eq!(associations[0].repo_root, checkout.canonicalize().unwrap());
+        assert_eq!(
+            associations[0].branch_ref,
+            "refs/heads/TI-552-rename-derivatives-sync"
+        );
+        assert!(associations[0].inferred);
+        assert!(associations[0].last_head.is_some());
+        let local = local_branches(&ProcessRunner, &checkout).await.unwrap();
+        assert!(local.contains(&associations[0].branch_ref));
+        assert!(local.iter().all(|branch| branch.starts_with("refs/heads/")));
+    }
+
+    #[tokio::test]
+    async fn deleted_branch_retains_its_recorded_diff_without_switching_checkout() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = repository_fixture(temp.path(), "history")
+            .canonicalize()
+            .unwrap();
+        let base = resolve_commit(&ProcessRunner, &root, "HEAD").await.unwrap();
+        let original = git_required(&ProcessRunner, &root, &["symbolic-ref", "--short", "HEAD"])
+            .await
+            .unwrap();
+        git(&root, &["switch", "-q", "-c", "earlier"]);
+        std::fs::write(root.join("tracked.txt"), "earlier branch change\n").unwrap();
+        git(&root, &["commit", "-qam", "earlier work"]);
+        let mut used = observe_branch(&ProcessRunner, &root, "work", Some(20), false)
+            .await
+            .unwrap();
+        used.last_base = Some(base);
+        git(&root, &["switch", "-q", original.trim()]);
+        git(&root, &["branch", "-D", "earlier"]);
+        let updated = crate::branch_association::prune_deleted_associations(
+            std::sync::Arc::new(ProcessRunner),
+            None,
+            vec![used],
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.len(), 1);
+        assert!(updated[0].archived);
+        let repo = repository(&ProcessRunner, &root).await.unwrap();
+        let patch = load_change(
+            &ProcessRunner,
+            &repo,
+            ChangeKind::Branch,
+            updated[0].last_head.as_deref().unwrap(),
+            updated[0].last_base.as_deref().unwrap(),
+        )
+        .await
+        .unwrap();
+        assert!(patch.contains("+earlier branch change"));
+        assert!(
+            load_change(
+                &ProcessRunner,
+                &repo,
+                ChangeKind::Working,
+                "refs/heads/earlier",
+                "HEAD"
+            )
+            .await
+            .is_err()
+        );
+        let after = git_required(&ProcessRunner, &root, &["symbolic-ref", "--short", "HEAD"])
+            .await
+            .unwrap();
+        assert_eq!(after, original);
     }
 
     #[tokio::test]

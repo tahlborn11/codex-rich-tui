@@ -1,13 +1,15 @@
 ---
 source: tui/src/outputs/ui_tests.rs
+assertion_line: 1370
 expression: buffer_text(&wide)
 ---
  OUTPUTS  current chat                                                                                                                      
- Plans  Files [ Changes ] Agents                                                                                                            
+[ Changes ] Agents  Files                                                                                                                   
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  VIEW   1 Branch  2 Changes  3 Staged  4 Turn patch                                                                                         
  REPOSITORIES  Changed repos  2 hidden · a show all                                                                                         
   [api *] worker *                                                                                                                          
+   Branch: feature/tree ▾  (1)                                                                                                              
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  Checkout: feature/tree                                                                                                                     
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -19,6 +21,5 @@ Changed files                                  │ Preview  c copies source
                                                │                                                                                            
                                                │                                                                                            
                                                │                                                                                            
-                                               │                                                                                            
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-←/→ folders · Enter open · Alt+←/→ screens · Tab focus · / search · r refresh · c copy · Esc back · [/] repo · t target · b base · v view
+←/→ folders · Enter open · Alt+←/→ screens · Tab focus · / search · r refresh · c copy · Esc back · [/] repo · t branches · o associate · b

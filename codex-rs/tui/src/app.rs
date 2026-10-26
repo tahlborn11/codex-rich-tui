@@ -545,6 +545,7 @@ pub(crate) struct App {
     pub(crate) app_event_tx: AppEventSender,
     pub(crate) chat_widget: ChatWidget,
     workspace_command_runner: Option<WorkspaceCommandRunner>,
+    output_branch_observers: outputs::BranchObservers,
     /// Legacy bootstrap and server-setting inputs; local preferences live in `local_settings`.
     pub(crate) config: Config,
     pub(crate) local_settings: crate::local_settings::LocalSettings,
@@ -870,7 +871,7 @@ impl App {
             return Ok(AppRunControl::Continue);
         }
         if matches!(&event, TuiEvent::Draw) {
-            self.sync_outputs_local_plans();
+            self.sync_outputs_turn_patch();
         }
         if matches!(&event, TuiEvent::Resume) {
             self.chat_widget.reassert_terminal_title();

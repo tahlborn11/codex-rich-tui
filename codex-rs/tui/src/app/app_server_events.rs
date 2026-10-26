@@ -254,8 +254,21 @@ impl App {
             return;
         }
         self.handle_agent_picker_visibility_notification(app_server_client, &notification);
+        if let ServerNotification::ItemStarted(started) = &notification {
+            self.record_output_branch_usage(
+                app_server_client,
+                &started.thread_id,
+                &started.item,
+                started.started_at_ms,
+            );
+        }
         if let ServerNotification::ItemCompleted(completed) = &notification {
-            self.record_output_branch_creations(app_server_client, completed);
+            self.record_output_branch_usage(
+                app_server_client,
+                &completed.thread_id,
+                &completed.item,
+                completed.completed_at_ms,
+            );
         }
 
         if let ServerNotification::ThreadStarted(started) = &notification
