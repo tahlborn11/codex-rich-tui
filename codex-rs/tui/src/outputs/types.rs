@@ -4,27 +4,19 @@ use std::path::PathBuf;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum Category {
     #[default]
-    Plans,
-    Files,
     Changes,
     Agents,
+    Files,
 }
 impl Category {
-    pub(crate) const ALL: [Self; 4] = [Self::Plans, Self::Files, Self::Changes, Self::Agents];
+    pub(crate) const ALL: [Self; 3] = [Self::Changes, Self::Agents, Self::Files];
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Plans => "Plans",
-            Self::Files => "Files",
             Self::Changes => "Changes",
             Self::Agents => "Agents",
+            Self::Files => "Files",
         }
     }
-}
-#[derive(Clone, Debug)]
-pub(crate) struct Document {
-    pub(crate) id: String,
-    pub(crate) title: String,
-    pub(crate) markdown: String,
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Agent {
@@ -35,12 +27,14 @@ pub(crate) struct Agent {
 }
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ConversationData {
-    pub(crate) plans: Vec<Document>,
+    pub(crate) history_loaded: bool,
     pub(crate) files: Vec<PathBuf>,
     pub(crate) agents: Vec<Agent>,
     pub(crate) notice: Option<String>,
     pub(crate) turn_patch: Option<String>,
     pub(crate) branch_creations: Vec<crate::branch_association::CreatedBranch>,
+    /// Checkout/file locations actually used by this chat, independent of shell syntax.
+    pub(crate) branch_uses: Vec<crate::branch_association::BranchUse>,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Repository {

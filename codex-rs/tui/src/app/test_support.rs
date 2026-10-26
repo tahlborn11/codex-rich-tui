@@ -57,6 +57,7 @@ pub(crate) async fn make_test_app() -> Box<App> {
             &config,
             Some(config.cwd.to_path_buf()),
         ),
+        output_branch_observers: Default::default(),
         launch_cwd: config.cwd.to_path_buf(),
         runtime_working_directory_override: None,
         local_settings: crate::local_settings::LocalSettings::from(&config),

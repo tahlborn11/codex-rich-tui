@@ -424,22 +424,14 @@ class UnsupportedPlatformTests(unittest.TestCase):
 
 @unittest.skipIf(os.name == "nt", "POSIX process inspection is unsupported on Windows")
 class PosixProcessSnapshotTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.bin_dir = Path(self.temp.name) / "bin"
-        self.bin_dir.mkdir()
-        self.sleeper = self.bin_dir / "sleeper"
-
-    def tearDown(self):
-        self.temp.cleanup()
-
     @unittest.skipUnless(Path("/bin/sleep").is_file(), "requires /bin/sleep")
     def test_snapshot_reports_actual_executable_path_not_argument_text(self):
-        shutil.copyfile("/bin/sleep", self.sleeper)
-        self.sleeper.chmod(0o755)
-        process = subprocess.Popen(["./sleeper", "20"], cwd=self.bin_dir)
+        # Copying a signed system binary can cause macOS to kill the copy before
+        # inspection. Keep the executable intact and put a decoy path in argv.
+        decoy = "/nonexistent/codex-cache-test/target/rustc"
+        process = subprocess.Popen([decoy, "20"], executable="/bin/sleep")
         try:
-            expected = str(self.sleeper.resolve())
+            expected = str(Path("/bin/sleep").resolve())
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
                 snapshot = cleanup._process_snapshot()
@@ -451,6 +443,7 @@ class PosixProcessSnapshotTests(unittest.TestCase):
                 expected in snapshot,
                 "snapshot did not include the launched executable",
             )
+            self.assertNotIn(decoy, snapshot)
         finally:
             process.terminate()
             process.wait()
