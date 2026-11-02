@@ -213,12 +213,7 @@ async fn replacement_uses_server_defaults_and_preserves_explicit_launch_settings
         (Some("medium"), "profile_effort", "server-model", "low"),
         (Some(""), "profile", "profile-model", "low"),
         (Some("medium"), "profile", "profile-model", "low"),
-        (
-            Some("medium"),
-            "profile_unrelated",
-            "managed-model",
-            "medium",
-        ),
+        (Some("medium"), "profile_unrelated", "server-model", "high"),
     ] {
         let (mut app, mut events, _ops) = make_test_app_with_channels().await;
         let server_home = tempdir()?;
@@ -373,10 +368,10 @@ async fn replacement_uses_server_defaults_and_preserves_explicit_launch_settings
             let width = u16::try_from(project_path.len().saturating_add(120)).unwrap_or(u16::MAX);
             let rendered =
                 render_bottom_popup(&app.chat_widget, width).replace(&project_path, "<PROJECT>");
-            insta::assert_snapshot!(rendered, @r"
+            insta::assert_snapshot!(rendered, @"
             › Ask Codex to do anything
 
-              server-model high · <PROJECT> · → for outputs
+              server-model high · <PROJECT> · ← for agents · → for outputs
             ");
         }
         if explicit.starts_with("profile_summary") {

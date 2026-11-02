@@ -87,7 +87,9 @@ impl Overlay {
 
     pub(crate) fn handle_event(&mut self, tui: &mut tui::Tui, event: TuiEvent) -> Result<()> {
         let mouse_capture = match self {
-            Overlay::Transcript(_) | Overlay::Analytics(_) | Overlay::Outputs(_) => tui::MouseCapture::Enabled,
+            Overlay::Transcript(_) | Overlay::Analytics(_) | Overlay::Outputs(_) => {
+                tui::MouseCapture::Enabled
+            }
             Overlay::Static(_) => tui::MouseCapture::Disabled,
         };
         tui.set_mouse_capture(mouse_capture)?;

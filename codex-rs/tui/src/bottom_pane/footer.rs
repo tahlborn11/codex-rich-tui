@@ -873,7 +873,9 @@ fn passive_footer_suffix(props: &FooterProps, has_status: bool) -> Line<'static>
         .into_iter()
         .filter_map(|(key, label)| key.map(|key| (key, label)))
         {
-            line.push_span(" · ".set_style(secondary_text_style()));
+            if !line.spans.is_empty() {
+                line.push_span(" · ".set_style(secondary_text_style()));
+            }
             line.extend(key.spans());
             line.push_span(format!(" for {label}").set_style(secondary_text_style()));
         }
@@ -1153,10 +1155,25 @@ mod tests {
             active_agent_label: Some("Robie [explorer]".to_string()),
         };
 
-        let line = passive_footer_status_line(&props).expect("contextual footer");
+        let Some(FooterContent::HyperlinkLine(line)) = passive_footer_status_line(&props) else {
+            panic!("contextual footer should preserve hyperlinks");
+        };
         assert_eq!(
-            line_text(&line),
+            line_text(&line.line),
             "Robie [explorer] · ← for agents · → for outputs"
+        );
+        let props = FooterProps {
+            active_agent_label: None,
+            status_line_enabled: true,
+            status_line_value: Some(FooterContent::Line("status".into())),
+            ..props
+        };
+        let Some(FooterContent::HyperlinkLine(line)) = passive_footer_status_line(&props) else {
+            panic!("status footer should preserve hyperlinks");
+        };
+        assert_eq!(
+            line_text(&line.line),
+            "status · ← for agents · → for outputs"
         );
     }
 

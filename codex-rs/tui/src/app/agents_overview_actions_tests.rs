@@ -29,16 +29,33 @@ async fn pin_action_updates_shared_section_state() -> Result<()> {
             AppEvent::ToggleAgentsOverviewPin { thread_id, pinned },
         ))
         .await?;
-        assert!(app.agents_overview.pending_pin_change.is_some());
-        let completed = rx.recv().await.expect("pin request completes");
-        assert!(matches!(
-            &completed,
-            AppEvent::AgentsOverviewPinToggled { .. }
-        ));
-        app.agents_overview
-            .refresh_notifications
-            .insert(thread_id, Vec::new());
-        Box::pin(app.handle_event(&mut tui, &mut app_server, completed)).await?;
+        let request_id = app
+            .agents_overview
+            .pending_pin_change
+            .expect("pin request is pending");
+        loop {
+            let event = rx.recv().await.expect("pin request completes");
+            let completion_matches = matches!(
+                &event,
+                AppEvent::AgentsOverviewPinToggled {
+                    request_id: completed_request_id,
+                    thread_id: completed_thread_id,
+                    pinned: completed_pinned,
+                    ..
+                } if *completed_request_id == request_id
+                    && *completed_thread_id == thread_id
+                    && *completed_pinned == pinned
+            );
+            if completion_matches {
+                app.agents_overview
+                    .refresh_notifications
+                    .insert(thread_id, Vec::new());
+            }
+            Box::pin(app.handle_event(&mut tui, &mut app_server, event)).await?;
+            if completion_matches {
+                break;
+            }
+        }
         assert_eq!(app.agents_overview.pending_pin_change, None);
         assert!(app.agents_overview.refresh_notifications.is_empty());
         let threads = list_pinned_threads(&app_server.request_handle())
