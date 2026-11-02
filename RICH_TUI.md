@@ -26,9 +26,8 @@ macOS-specific.
   into an aggregate `Ran N commands` entry.
 - Terminal titles can show live activity, project, thread, branch, model, and other configured
   values.
-- Upstream MCP OAuth recovery refreshes expired or rejected access tokens and saves the new
-  credentials. Packaged `codex-rich` builds add a separate Keychain service. This separation
-  prevents refresh-token races with the Codex desktop app.
+- MCP OAuth credentials use the same store as the desktop app and upstream CLI. Upstream
+  cross-process coordination serializes refreshes when the clients use the same `CODEX_HOME`.
 
 The fork's `rich-markdown` branch carries these changes on top of upstream Codex.
 The `main` branch tracks `upstream/main`.
@@ -321,16 +320,29 @@ codex-rich mcp list
 codex-rich mcp login <server-name>
 ```
 
-Packaged `codex-rich` builds store direct Keychain-backed MCP credentials under
-`Codex Rich MCP Credentials`, separately from the `Codex MCP Credentials` service used by other
-Codex installations. When Codex's encrypted-secrets Keychain backend is selected, the fork also
-uses a separate `${CODEX_HOME}/codex-rich` credential root (normally
-`~/.codex/codex-rich`). The same root isolates the `auto` and `file` fallback stores. This
-separation is necessary for providers that rotate refresh tokens: two independent Codex processes
-must not consume the same one-time refresh token. After first installing a build with this
-isolation, authenticate each OAuth server once with `codex-rich mcp login <server-name>` even if it
-was already authorized in the desktop app. The desktop app's existing credentials are left
-unchanged.
+Packaged `codex-rich` builds share the standard `Codex MCP Credentials` Keychain service
+with the desktop app and upstream CLI. File and encrypted-secrets stores use the same
+`CODEX_HOME`, normally `~/.codex`. All sharing clients must use that same home and keep
+`mcp_oauth_refresh_coordination` enabled. The upstream refresh lock covers the credential
+reread, provider request, and persistence, so concurrent clients adopt the refreshed token.
+
+The shared store is authoritative. The fork reuses existing desktop logins when the server name
+and URL match. The fork does not copy, overwrite, or delete entries in the former
+`Codex Rich MCP Credentials` service or `~/.codex/codex-rich` directory. Keep those entries
+until you verify the shared setup. If a server has no shared login, authenticate it once
+through either current client. Avoid older clients with refresh coordination disabled.
+
+For the first shared-store release, finish active work, install the new package, then update
+the managed daemon from that package:
+
+```bash
+codex-rich app-server daemon update --from-cli
+```
+
+The update restarts a running daemon. Reopen Rich TUI clients afterward. The desktop backend
+must also include stable MCP OAuth refresh coordination. The verified desktop backend
+`0.166.0-alpha.5.1` and upstream CLI `0.164.0` enable it by default. macOS can request Keychain
+access once when the signed Rich executable first reads an existing shared entry.
 
 After login, start a new Codex Rich session so the authenticated MCP tools are loaded. In the TUI,
 use `/mcp` to inspect the active servers. These commands follow the official OpenAI
