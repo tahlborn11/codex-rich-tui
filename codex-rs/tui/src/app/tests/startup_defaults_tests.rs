@@ -726,7 +726,7 @@ async fn fresh_startup_reads_destination_and_cleared_model_uses_catalog() -> Res
             let width = u16::try_from(project_path.len().saturating_add(120)).unwrap_or(u16::MAX);
             let rendered =
                 render_bottom_popup(&app.chat_widget, width).replace(&project_path, "<PROJECT>");
-            insta::assert_snapshot!(rendered, @r"
+            insta::assert_snapshot!(rendered, @"
             › Ask Codex to do anything
 
               GPT-6.1-Sol high · <PROJECT> · → for outputs

@@ -29,25 +29,33 @@ async fn pin_action_updates_shared_section_state() -> Result<()> {
             AppEvent::ToggleAgentsOverviewPin { thread_id, pinned },
         ))
         .await?;
-        let pending = app
+        let request_id = app
             .agents_overview
             .pending_pin_change
-            .expect("pin request started");
-        let completed = tokio::time::timeout(std::time::Duration::from_secs(15), async {
-            loop {
-                let event = rx.recv().await.expect("pin request completes");
-                if let AppEvent::AgentsOverviewPinToggled { request_id, .. } = &event
-                    && *request_id == pending
-                {
-                    return event;
-                }
+            .expect("pin request is pending");
+        loop {
+            let event = rx.recv().await.expect("pin request completes");
+            let completion_matches = matches!(
+                &event,
+                AppEvent::AgentsOverviewPinToggled {
+                    request_id: completed_request_id,
+                    thread_id: completed_thread_id,
+                    pinned: completed_pinned,
+                    ..
+                } if *completed_request_id == request_id
+                    && *completed_thread_id == thread_id
+                    && *completed_pinned == pinned
+            );
+            if completion_matches {
+                app.agents_overview
+                    .refresh_notifications
+                    .insert(thread_id, Vec::new());
             }
-        })
-        .await?;
-        app.agents_overview
-            .refresh_notifications
-            .insert(thread_id, Vec::new());
-        Box::pin(app.handle_event(&mut tui, &mut app_server, completed)).await?;
+            Box::pin(app.handle_event(&mut tui, &mut app_server, event)).await?;
+            if completion_matches {
+                break;
+            }
+        }
         assert_eq!(app.agents_overview.pending_pin_change, None);
         assert!(app.agents_overview.refresh_notifications.is_empty());
         let threads = list_pinned_threads(&app_server.request_handle())

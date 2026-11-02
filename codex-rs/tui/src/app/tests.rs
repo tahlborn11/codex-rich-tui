@@ -2239,11 +2239,11 @@ async fn token_usage_update_refreshes_status_line_with_runtime_context_window() 
         (true, 800_000, "800K window · 8 used"),
         (false, 900_000, "900K window · 8 used"),
     ] {
-        let before = render_bottom_popup(&app.chat_widget, /*width*/ 60);
+        let before = app.chat_widget.status_line_text();
         app.chat_widget
             .set_feature_enabled(Feature::TuiExtensionsStatusLine, extensions);
         app.refresh_status_line();
-        assert_eq!(render_bottom_popup(&app.chat_widget, /*width*/ 60), before);
+        assert_eq!(app.chat_widget.status_line_text(), before);
         app.handle_thread_event_now(ThreadBufferedEvent::Notification(Box::new(
             token_usage_notification(thread_id, "turn-1", Some(window)),
         )));
@@ -2252,6 +2252,11 @@ async fn token_usage_update_refreshes_status_line_with_runtime_context_window() 
             Some(FooterContent::HyperlinkLine(_))
         ));
         let rendered = render_bottom_popup(&app.chat_widget, /*width*/ 60);
+        let expected = if extensions {
+            expected.to_string()
+        } else {
+            format!("{expected} · → for outputs")
+        };
         assert!(
             rendered.lines().any(|row| row.trim() == expected),
             "{rendered}"

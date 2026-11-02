@@ -11,6 +11,7 @@ use std::time::UNIX_EPOCH;
 
 use codex_app_server_protocol::CommandExecutionStatus;
 use codex_app_server_protocol::ThreadItem;
+use codex_app_server_protocol::ThreadItemPayload;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct CreatedBranch {
@@ -33,14 +34,14 @@ pub(crate) struct BranchUse {
 /// not shell text. A failed executed command can still be work on a branch.
 pub(crate) fn uses_from_item(item: &ThreadItem) -> Vec<BranchUse> {
     let mut locations = Vec::new();
-    let id = match item {
-        ThreadItem::CommandExecution {
+    let id = match &item.payload {
+        ThreadItemPayload::CommandExecution {
             id, cwd, status, ..
         } if *status != CommandExecutionStatus::Declined => {
             locations.push(PathBuf::from(cwd.as_str()));
             id
         }
-        ThreadItem::FileChange {
+        ThreadItemPayload::FileChange {
             id,
             changes,
             status: codex_app_server_protocol::PatchApplyStatus::Completed,
@@ -112,7 +113,7 @@ pub(crate) async fn verify_uses(
 }
 
 pub(crate) fn creations_from_item(item: &ThreadItem) -> Vec<CreatedBranch> {
-    let ThreadItem::CommandExecution {
+    let ThreadItemPayload::CommandExecution {
         id,
         command,
         cwd,
@@ -120,7 +121,7 @@ pub(crate) fn creations_from_item(item: &ThreadItem) -> Vec<CreatedBranch> {
         exit_code: Some(0),
         aggregated_output,
         ..
-    } = item
+    } = &item.payload
     else {
         return Vec::new();
     };

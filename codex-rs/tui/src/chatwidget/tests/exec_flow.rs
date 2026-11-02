@@ -274,7 +274,7 @@ async fn command_activity_keeps_failures_and_manual_shell_commands_visible() {
     end_exec(&mut chat, first, "first\n", "", /*exit_code*/ 0);
 
     let mut failed = begin_exec(&mut chat, "call-failed", "printf broken");
-    if let AppServerThreadItem::CommandExecution {
+    if let AppServerThreadItemPayload::CommandExecution {
         status,
         aggregated_output,
         ..

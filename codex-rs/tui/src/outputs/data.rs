@@ -14,7 +14,9 @@ use codex_app_server_protocol::ClientRequest;
 use codex_app_server_protocol::RequestId;
 use codex_app_server_protocol::SortDirection;
 use codex_app_server_protocol::SubAgentActivityKind;
+#[cfg(test)]
 use codex_app_server_protocol::ThreadItem;
+use codex_app_server_protocol::ThreadItemPayload;
 use codex_app_server_protocol::ThreadItemsListCursor;
 use codex_app_server_protocol::ThreadItemsListParams;
 use codex_app_server_protocol::ThreadItemsListResponse;
@@ -483,9 +485,9 @@ pub(crate) async fn load_conversation(
             let excess = data.branch_creations.len() - MAX_BRANCH_CREATIONS;
             data.branch_creations.drain(..excess);
         }
-        match entry.item {
-            ThreadItem::Plan { .. } => {}
-            ThreadItem::FileChange {
+        match entry.item.payload {
+            ThreadItemPayload::Plan { .. } => {}
+            ThreadItemPayload::FileChange {
                 changes,
                 status: codex_app_server_protocol::PatchApplyStatus::Completed,
                 ..
@@ -499,7 +501,7 @@ pub(crate) async fn load_conversation(
                     data.files.push(PathBuf::from(change.path));
                 }
             }
-            ThreadItem::SubAgentActivity {
+            ThreadItemPayload::SubAgentActivity {
                 agent_thread_id,
                 agent_path,
                 kind,
@@ -521,7 +523,7 @@ pub(crate) async fn load_conversation(
                     },
                 );
             }
-            ThreadItem::CollabAgentToolCall {
+            ThreadItemPayload::CollabAgentToolCall {
                 receiver_thread_ids,
                 prompt,
                 agents_states,
@@ -776,16 +778,16 @@ pub(crate) async fn load_agent(
     let (items, partial) = list_items(handle, thread_id).await?;
     let mut text = String::new();
     for entry in items {
-        match entry.item {
-            // Deliberately exclude ThreadItem::Reasoning: raw reasoning is not
+        match entry.item.payload {
+            // Deliberately exclude ThreadItemPayload::Reasoning: raw reasoning is not
             // an Outputs surface, even when old history still contains it.
-            ThreadItem::AgentMessage { text: message, .. } => {
+            ThreadItemPayload::AgentMessage { text: message, .. } => {
                 if !text.is_empty() {
                     text.push_str("\n\n");
                 }
                 text.push_str(&message);
             }
-            ThreadItem::Plan { text: plan, .. } => {
+            ThreadItemPayload::Plan { text: plan, .. } => {
                 if !text.is_empty() {
                     text.push_str("\n\n");
                 }
