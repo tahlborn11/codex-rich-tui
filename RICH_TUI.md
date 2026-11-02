@@ -162,6 +162,8 @@ command -v codesign
 ```
 
 The first package build downloads managed Codex runtime resources, so it requires network access.
+The packaging helper resolves the required V8 artifacts and builds both companion executables.
+Use that helper instead of a standalone `cargo build` for a complete installation.
 
 ### 2. Clone the fork and configure upstream
 
@@ -266,7 +268,7 @@ The package helper rejects the upstream `0.0.0` development placeholder because 
 The package records the full fork and upstream commit IDs in `codex-package.json`. Development
 builds from a modified checkout include `.dirty` after the fork commit abbreviation.
 The metadata also records the numeric discovery version as `richUpstreamClientVersion`.
-Tag successful installed releases as `codex-rich-YYYY.MM.DD`.
+Tag successful installed releases as `codex-rich-YYYY.MM.DD[.N]`.
 For another release on the same day, set `CODEX_RICH_RELEASE_VERSION=YYYY.MM.DD.N` and use the matching tag.
 
 ### 5. Sign in to Codex
@@ -313,12 +315,15 @@ Configure remote MCP servers in the same file using the standard
 `[mcp_servers.<server-name>]` tables. Do not commit tokens, client secrets, or private server
 configuration to this repository.
 
-Inspect configured servers and authenticate OAuth servers with the forked executable:
+Inspect configured servers and authenticate an OAuth server through either CLI:
 
 ```bash
 codex-rich mcp list
-codex-rich mcp login <server-name>
+codex mcp login <server-name>
+codex-rich mcp list
 ```
+
+Use `codex-rich mcp login <server-name>` to log in directly with Rich.
 
 Packaged `codex-rich` builds share the standard `Codex MCP Credentials` Keychain service
 with the desktop app and upstream CLI. File and encrypted-secrets stores use the same
@@ -326,23 +331,11 @@ with the desktop app and upstream CLI. File and encrypted-secrets stores use the
 `mcp_oauth_refresh_coordination` enabled. The upstream refresh lock covers the credential
 reread, provider request, and persistence, so concurrent clients adopt the refreshed token.
 
-The shared store is authoritative. The fork reuses existing desktop logins when the server name
-and URL match. The fork does not copy, overwrite, or delete entries in the former
-`Codex Rich MCP Credentials` service or `~/.codex/codex-rich` directory. Keep those entries
-until you verify the shared setup. If a server has no shared login, authenticate it once
-through either current client. Avoid older clients with refresh coordination disabled.
-
-For the first shared-store release, finish active work, install the new package, then update
-the managed daemon from that package:
-
-```bash
-codex-rich app-server daemon update --from-cli
-```
-
-The update restarts a running daemon. Reopen Rich TUI clients afterward. The desktop backend
-must also include stable MCP OAuth refresh coordination. The verified desktop backend
-`0.166.0-alpha.5.1` and upstream CLI `0.164.0` enable it by default. macOS can request Keychain
-access once when the signed Rich executable first reads an existing shared entry.
+The fork reuses existing desktop and CLI logins when the server name and URL match.
+If a server has no shared login, authenticate it once through either current client.
+All clients must support stable MCP OAuth refresh coordination. The desktop backend must support it too.
+Avoid clients with refresh coordination disabled. macOS can request Keychain access when the
+signed Rich executable first reads an existing shared entry.
 
 After login, start a new Codex Rich session so the authenticated MCP tools are loaded. In the TUI,
 use `/mcp` to inspect the active servers. These commands follow the official OpenAI
@@ -380,6 +373,16 @@ for supported Codex settings.
 
 ## Development workflow
 
+Run these commands from the repository root.
+Install the tools used by the formatting and test commands:
+
+```bash
+brew install uv
+cargo install --locked dotslash
+cargo install --locked cargo-nextest
+rustup component add rustfmt clippy
+```
+
 Run the current source tree without replacing the stable installation:
 
 ```bash
@@ -399,13 +402,28 @@ just package-rich-tui
 For TUI changes, format and run the focused tests before committing:
 
 ```bash
-cd codex-rs
 just test -p codex-tui
 just fix -p codex-tui
 just fmt
 ```
 
-Follow `AGENTS.md` for the complete validation requirements of whichever crates were changed.
+Follow the applicable crate instructions for the complete validation requirements.
+On macOS, start broad core or workspace suites with `--test-threads=4`.
+Run a failing test alone with `--test-threads=1` before diagnosis.
+Before Code Mode tests, build the companion host through the packaging helper above.
+
+For OAuth changes, test the installed Rich package against a current official CLI:
+
+```bash
+CODEX_OFFICIAL_TEST_BIN="$(command -v codex)" \
+CODEX_RICH_TEST_BIN="$(command -v codex-rich)" \
+python3 scripts/check_codex_rich_shared_oauth.py -v
+```
+
+The check uses temporary homes, synthetic tokens, and a loopback provider.
+Set `CODEX_SHARED_OAUTH_KEYCHAIN_TEST=1` to include the macOS Keychain check.
+That check creates a synthetic Keychain entry and verifies its removal afterward.
+It requires a signed Rich package. Forced termination can leave the synthetic entry behind.
 
 ### Automatic compressed build cache
 
@@ -458,11 +476,17 @@ extract cycle each time.
 
 ## Keep the fork current
 
-The safe manual update flow is:
+Start with a clean checkout and no Git operation in progress.
+Stop if any command fails. Inspect divergent commits before another attempt.
+Preserve substantive fork work on `rich-markdown`.
 
 ```bash
+git status
 git fetch origin --tags
 git fetch upstream --tags
+rich_lease=$(git rev-parse origin/rich-markdown)
+git switch rich-markdown
+git merge --ff-only origin/rich-markdown
 git switch main
 git merge --ff-only upstream/main
 git switch rich-markdown
@@ -470,25 +494,59 @@ git rebase upstream/main
 ```
 
 Review renderer conflicts and snapshot changes. If a conflict is ambiguous, abort the rebase.
-Run the tests required by `AGENTS.md`. Commit the validated result before the final package build
-so the package records a clean fork commit. Then rebuild the installed package:
+Run the required formatting, lint, crate tests, and snapshot checks.
+Commit the validated result before the final package build so the package records a clean fork commit.
+
+Choose the release version from the build date in `America/New_York`.
+Use `YYYY.MM.DD`, or the next unused `YYYY.MM.DD.N` if that date already has a release.
+Check local and origin tags before the build. Never replace an existing release tag.
+Set the selected version explicitly:
 
 ```bash
-just install-rich-tui-local
+rich_version=YYYY.MM.DD
+rich_release_commit=$(git rev-parse HEAD)
+CODEX_RICH_RELEASE_VERSION="$rich_version" just install-rich-tui-local
 codex-rich --version
 ```
 
-The package build automatically applies the cache policy described above.
-Review its cleanup report if disk pressure requires a cold rebuild.
+Verify the version, fork commit, upstream commit, and absence of a `.dirty` marker.
+Check the package metadata, launcher, companion executables, help output, and signatures.
+The package build applies the cache policy described above.
 
-After validation and installation checks, push both branches:
+After all checks pass, push both branches. Use the recorded lease for a rebased branch:
 
 ```bash
 git push origin main
-git push --force-with-lease origin rich-markdown
+git push --force-with-lease="refs/heads/rich-markdown:$rich_lease" origin rich-markdown
 ```
 
 Stop if the lease fails. Inspect the remote changes before another push.
+Use a normal push for an update that does not rewrite branch history.
+After the branch push succeeds, tag the exact installed release commit:
+
+```bash
+git fetch origin --tags
+test -z "$(git tag --list "codex-rich-$rich_version")"
+git tag -a "codex-rich-$rich_version" "$rich_release_commit" -m "Codex Rich TUI $rich_version"
+git push origin "refs/tags/codex-rich-$rich_version"
+```
+
+### Update running clients and the managed daemon
+
+Reopen Rich TUI clients after installation to load the new executable.
+For TUI-only changes, the daemon can keep its current package.
+For core, protocol, OAuth, Code Mode, or app-server changes, update the daemon too.
+Finish active work first. Then copy and pin the installed Rich package:
+
+```bash
+codex-rich app-server daemon version
+codex-rich app-server daemon update --from-cli
+codex-rich app-server daemon version
+```
+
+The update restarts a running daemon. Reopen its clients afterward.
+A restart alone retains the selected package.
+An update without `--from-cli` selects the production package instead of the local fork.
 
 Scheduled Codex tasks can maintain the fork, but their state lives outside this repository.
 Review UI conflicts, OAuth behavior, and upstream protocol changes before publication.
