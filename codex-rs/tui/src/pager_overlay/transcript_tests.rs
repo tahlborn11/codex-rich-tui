@@ -108,7 +108,10 @@ async fn select_enter_closes_and_remapped_action_marks_in_the_inline_overlay() -
     if let Some((id, close_overlay)) = ordinary.pending_follow_close {
         assert!(close_overlay);
         ordinary.browsing_footer = None;
-        ordinary.finish_pending_copy(&(id, Ok(crate::clipboard_copy::CopyStatus::Confirmed)));
+        assert_eq!(
+            ordinary.finish_clipboard(&(id, Ok(crate::clipboard_copy::CopyStatus::Confirmed))),
+            Some(std::time::Duration::ZERO)
+        );
     }
     assert!(ordinary.is_done());
 

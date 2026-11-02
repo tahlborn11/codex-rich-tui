@@ -183,7 +183,7 @@ git remote set-url upstream https://github.com/openai/codex.git
 
 ### 3. Create the local code-signing identity
 
-The stable installer signs both Codex executables with the same persistent identity on every
+The stable installer signs all three Codex executables with the same persistent identity on every
 rebuild. This gives macOS Keychain a stable designated requirement, preventing OAuth credentials
 from being treated as though a different unsigned development binary is requesting access after
 each build.
@@ -220,10 +220,10 @@ just install-rich-tui-local
 
 This command:
 
-1. Builds the main `codex` executable and `codex-code-mode-host`.
+1. Builds the main `codex` executable, `codex-code-mode-host`, and `codex-exec-server`.
 2. Creates a canonical package containing Codex's managed runtime resources.
 3. Copies the complete package to `~/.local/share/codex-rich-tui`.
-4. Signs both executables and replaces them atomically.
+4. Signs all three executables and replaces them atomically.
 5. Creates `~/.local/bin/codex-rich` without replacing the normal `codex` command.
 
 The operation is safe to repeat after every update. To use a different launcher directory, set
@@ -248,6 +248,7 @@ Open a new shell and verify the installation:
 command -v codex-rich
 codex-rich --version
 test -x ~/.local/share/codex-rich-tui/bin/codex-code-mode-host
+test -x ~/.local/share/codex-rich-tui/bin/codex-exec-server
 codesign -d -r- ~/.local/share/codex-rich-tui/bin/codex 2>&1
 ```
 
@@ -258,8 +259,8 @@ A clean build reports an identity such as:
 codex-rich 2026.08.10+74432be3 (upstream d1093932)
 ```
 
-The Cargo workspace uses `0.164.0+rich`, based on the verified upstream `rust-v0.164.0` release tag.
-Backend model discovery uses the numeric version `0.164.0`. The HTTP user agent uses the full Cargo version.
+The Cargo workspace uses `0.166.0+rich`, based on the verified upstream `rust-v0.166.0` release tag.
+Backend model discovery uses the numeric version `0.166.0`. The HTTP user agent uses the full Cargo version.
 Keep this compatibility version current when the fork adopts a newer upstream release baseline.
 The package helper rejects the upstream `0.0.0` development placeholder because it restricts the remote model catalog.
 

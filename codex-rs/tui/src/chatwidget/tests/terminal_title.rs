@@ -127,7 +127,7 @@ async fn mcp_completion_reasserts_terminal_title() {
     chat.refresh_terminal_title();
     take_terminal_title_writes();
 
-    chat.handle_mcp_tool_call_completed_now(AppServerThreadItem::McpToolCall {
+    chat.handle_mcp_tool_call_completed_now(AppServerThreadItemPayload::McpToolCall {
         id: "title-mcp".to_string(),
         server: "example".to_string(),
         tool: "lookup".to_string(),

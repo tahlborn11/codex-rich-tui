@@ -92,6 +92,7 @@ async fn fixture_with_history(items: Vec<serde_json::Value>, latest: &str) -> Fi
         }
     });
     let client = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
+        required_human_approval: false,
         endpoint: RemoteAppServerEndpoint::WebSocket {
             websocket_url: url,
             auth_token: None,

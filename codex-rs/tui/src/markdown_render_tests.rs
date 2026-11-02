@@ -302,12 +302,7 @@ fn blockquote_list_then_nested_blockquote() {
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
         Line::from_iter(["│ ".green(), "• ".into(), "parent".into()]),
-        Line::from_iter([
-            "│ ".green(),
-            "  ".into(),
-            "│ ".green(),
-            "child".into(),
-        ]),
+        Line::from_iter(["│ ".green(), "  ".into(), "│ ".green(), "child".into()]),
     ]);
     assert_eq!(text, expected);
 }
@@ -534,14 +529,7 @@ fn blockquote_with_code_block() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(
-        lines,
-        vec![
-            "│ ╭─ code · ⎘",
-            "│ │ code",
-            "│ ╰─",
-        ]
-    );
+    assert_eq!(lines, vec!["│ ╭─ code · ⎘", "│ │ code", "│ ╰─",]);
 }
 
 #[test]
@@ -560,12 +548,7 @@ fn blockquote_with_multiline_code_block() {
         .collect();
     assert_eq!(
         lines,
-        vec![
-            "│ ╭─ code · ⎘",
-            "│ │ first",
-            "│ │ second",
-            "│ ╰─",
-        ]
+        vec!["│ ╭─ code · ⎘", "│ │ first", "│ │ second", "│ ╰─",]
     );
 }
 
@@ -1431,14 +1414,7 @@ fn code_block_known_lang_has_syntax_colors() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(
-        content,
-        vec![
-            "╭─ rust · ⎘",
-            "│ fn main() {}",
-            "╰─",
-        ]
-    );
+    assert_eq!(content, vec!["╭─ rust · ⎘", "│ fn main() {}", "╰─",]);
 
     // At least one code span should have non-default foreground syntax highlighting.
     let has_colored_span = text.lines[1]
@@ -1513,22 +1489,22 @@ fn fenced_code_panel_background_stops_at_the_content_sized_right_rail() {
         || crate::style::user_message_style().bg,
     );
 
-    assert!(text
-        .lines
-        .iter()
-        .all(|line| line.style.bg.is_none()));
-    assert!(text
-        .lines
-        .iter()
-        .flat_map(|line| &line.spans)
-        .all(|span| span.style.bg == panel_background));
+    assert!(text.lines.iter().all(|line| line.style.bg.is_none()));
+    assert!(
+        text.lines
+            .iter()
+            .flat_map(|line| &line.spans)
+            .all(|span| span.style.bg == panel_background)
+    );
     let lines = plain_lines(&text);
     let panel_width = display_width(&lines[0]);
     assert!(panel_width < 106);
     assert!(lines.iter().all(|line| display_width(line) == panel_width));
-    assert!(lines[1..lines.len() - 1]
-        .iter()
-        .all(|line| line.ends_with('│')));
+    assert!(
+        lines[1..lines.len() - 1]
+            .iter()
+            .all(|line| line.ends_with('│'))
+    );
     assert_debug_snapshot!("fenced_code_panel_background_and_rail", text.lines);
 }
 
@@ -1545,14 +1521,7 @@ fn code_block_unknown_lang_plain() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(
-        content,
-        vec![
-            "╭─ xyzlang · ⎘",
-            "│ hello world",
-            "╰─",
-        ]
-    );
+    assert_eq!(content, vec!["╭─ xyzlang · ⎘", "│ hello world", "╰─",]);
 
     // No syntax coloring for an unknown language.
     let has_colored_span = text.lines[1]
@@ -1579,14 +1548,7 @@ fn code_block_no_lang_plain() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(
-        content,
-        vec![
-            "╭─ code · ⎘",
-            "│ no lang specified",
-            "╰─",
-        ]
-    );
+    assert_eq!(content, vec!["╭─ code · ⎘", "│ no lang specified", "╰─",]);
 }
 
 #[test]
@@ -1594,12 +1556,7 @@ fn code_block_multiple_lines_root() {
     let md = "```\nfirst\nsecond\n```\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter([
-            "╭─ ".dim(),
-            "code".bold(),
-            " · ".dim(),
-            "⎘".dim(),
-        ]),
+        Line::from_iter(["╭─ ".dim(), "code".bold(), " · ".dim(), "⎘".dim()]),
         Line::from_iter(["│ ".dim(), "first".into()]),
         Line::from_iter(["│ ".dim(), "second".into()]),
         Line::from("╰─".dim()),
@@ -1700,13 +1657,7 @@ fn code_block_inside_unordered_list_item_is_indented() {
         .collect();
     assert_eq!(
         lines,
-        vec![
-            "• Item",
-            "",
-            "  ╭─ code · ⎘",
-            "  │ code line",
-            "  ╰─",
-        ]
+        vec!["• Item", "", "  ╭─ code · ⎘", "  │ code line", "  ╰─",]
     );
 }
 
@@ -1974,22 +1925,28 @@ fn html_block_is_verbatim_multiline() {
 #[test]
 fn task_lists_use_semantic_status_markers() {
     let text = render_markdown_text("- [x] Completed task\n- [ ] Pending task\n");
-    assert_eq!(plain_lines(&text), vec!["☑ Completed task", "☐ Pending task"]);
+    assert_eq!(
+        plain_lines(&text),
+        vec!["☑ Completed task", "☐ Pending task"]
+    );
 }
 
 #[test]
 fn details_html_renders_expanded_without_raw_tags() {
-    let markdown = "<details>\n<summary>Hidden treasure</summary>\n\nYou found a tiny dragon.\n</details>\n";
+    let markdown =
+        "<details>\n<summary>Hidden treasure</summary>\n\nYou found a tiny dragon.\n</details>\n";
     let text = render_markdown_text(markdown);
     let rendered = plain_lines(&text);
-    assert_eq!(rendered, vec!["▾ Hidden treasure", "", "  You found a tiny dragon."]);
+    assert_eq!(
+        rendered,
+        vec!["▾ Hidden treasure", "", "  You found a tiny dragon."]
+    );
     assert_snapshot!("details_html_expanded", rendered.join("\n"));
 }
 
 #[test]
 fn details_and_summary_tags_can_share_one_html_line() {
-    let markdown =
-        "<details><summary>Hidden treasure</summary>Found it.</details>\n";
+    let markdown = "<details><summary>Hidden treasure</summary>Found it.</details>\n";
     let text = render_markdown_text(markdown);
 
     assert_eq!(
@@ -2095,16 +2052,14 @@ fn code_block_preserves_trailing_blank_lines() {
         content.iter().any(|c| c == "│ fn main() {}"),
         "expected code line, got {content:?}"
     );
-    let code_start = content
-        .iter()
-        .position(|c| c == "│ fn main() {}")
-        .unwrap();
+    let code_start = content.iter().position(|c| c == "│ fn main() {}").unwrap();
     assert!(
         content.len() > code_start + 1,
         "expected a line after 'fn main() {{}}' but content ends: {content:?}"
     );
     assert_eq!(
-        content[code_start + 1], "│ ",
+        content[code_start + 1],
+        "│ ",
         "trailing blank line inside code fence was lost: {content:?}"
     );
 }

@@ -40,7 +40,7 @@ if [[ ! -f "$package_directory/codex-package.json" ]]; then
   exit 1
 fi
 
-for binary_name in codex codex-code-mode-host; do
+for binary_name in codex codex-code-mode-host codex-exec-server; do
   if [[ ! -x "$package_directory/bin/$binary_name" ]]; then
     print -u2 "missing package binary: $package_directory/bin/$binary_name"
     exit 1
@@ -101,8 +101,10 @@ stage_signed_binary codex com.tahlborn.codex-rich
 staged_codex="$REPLY"
 stage_signed_binary codex-code-mode-host com.tahlborn.codex-rich.code-mode-host
 staged_code_mode_host="$REPLY"
+stage_signed_binary codex-exec-server com.tahlborn.codex-rich.exec-server
+staged_exec_server="$REPLY"
 
-# Install package metadata and managed runtime resources only after both
+# Install package metadata and managed runtime resources only after all three
 # executables are signed and validated. Keeping the binaries out of rsync avoids
 # in-place Mach-O writes, which would invalidate their signatures and destabilize
 # Keychain ACL matching.
@@ -111,11 +113,13 @@ rsync -a \
   --exclude '/.codex-rich-staging' \
   --exclude '/bin/codex' \
   --exclude '/bin/codex-code-mode-host' \
+  --exclude '/bin/codex-exec-server' \
   "$package_directory/" \
   "$install_directory/"
 
 mv -f "$staged_codex" "$install_directory/bin/codex"
 mv -f "$staged_code_mode_host" "$install_directory/bin/codex-code-mode-host"
+mv -f "$staged_exec_server" "$install_directory/bin/codex-exec-server"
 
 ln -sfn "$install_directory/bin/codex" "$launcher_path"
 
