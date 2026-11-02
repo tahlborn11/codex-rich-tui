@@ -60,7 +60,6 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::io::Write;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -98,11 +97,7 @@ pub(crate) use self::resolved_store::resolve_oauth_tokens_from_store_policy;
 use self::resolved_store::try_resolve_oauth_tokens_from_store_policy;
 pub(crate) use self::runtime::OAuthRuntime;
 
-const KEYRING_SERVICE: &str = match option_env!("CODEX_RICH_VERSION") {
-    Some(_) => "Codex Rich MCP Credentials",
-    None => "Codex MCP Credentials",
-};
-const RICH_OAUTH_HOME_DIR: &str = "codex-rich";
+const KEYRING_SERVICE: &str = "Codex MCP Credentials";
 const MCP_OAUTH_SECRET_PREFIX: &str = "MCP_OAUTH";
 const REFRESH_SKEW_MILLIS: u64 = 30_000;
 
@@ -431,9 +426,9 @@ fn load_oauth_tokens_from_secrets_keyring_with_lock_held<K: KeyringStore + Clone
     server_name: &str,
     url: &str,
 ) -> std::result::Result<Option<StoredOAuthTokens>, OAuthKeyringLoadError> {
-    let codex_home = mcp_oauth_storage_home()?;
+    let codex_home = find_codex_home().map_err(anyhow::Error::from)?;
     let manager = SecretsManager::new_with_keyring_store_and_namespace(
-        codex_home,
+        codex_home.to_path_buf(),
         SecretsBackendKind::Local,
         Arc::new(keyring_store.clone()),
         LocalSecretsNamespace::McpOAuth,
@@ -569,9 +564,9 @@ fn save_oauth_tokens_to_secrets_keyring_with_lock_held<K: KeyringStore + Clone +
     tokens: &StoredOAuthTokens,
     serialized: &str,
 ) -> Result<()> {
-    let codex_home = mcp_oauth_storage_home()?;
+    let codex_home = find_codex_home()?;
     let manager = SecretsManager::new_with_keyring_store_and_namespace(
-        codex_home,
+        codex_home.to_path_buf(),
         SecretsBackendKind::Local,
         Arc::new(keyring_store.clone()),
         LocalSecretsNamespace::McpOAuth,
@@ -737,9 +732,9 @@ fn delete_oauth_tokens_from_secrets_keyring<K: KeyringStore + Clone + 'static>(
     url: &str,
 ) -> Result<bool> {
     let _store_lock = OAuthStoreLock::acquire_for_write(OAuthStore::Secrets)?;
-    let codex_home = mcp_oauth_storage_home()?;
+    let codex_home = find_codex_home()?;
     let manager = SecretsManager::new_with_keyring_store_and_namespace(
-        codex_home,
+        codex_home.to_path_buf(),
         SecretsBackendKind::Local,
         Arc::new(keyring_store.clone()),
         LocalSecretsNamespace::McpOAuth,
@@ -1103,28 +1098,8 @@ fn compute_secret_name(server_name: &str, server_url: &str) -> Result<SecretName
     SecretName::new(&format!("{MCP_OAUTH_SECRET_PREFIX}_{}", &hex[..32]))
 }
 
-fn mcp_oauth_storage_home() -> Result<PathBuf> {
-    Ok(mcp_oauth_storage_home_io()?)
-}
-
-fn mcp_oauth_storage_home_io() -> std::io::Result<PathBuf> {
-    let codex_home = find_codex_home()?;
-    Ok(mcp_oauth_storage_home_for_build(
-        &codex_home,
-        option_env!("CODEX_RICH_VERSION").is_some(),
-    ))
-}
-
-fn mcp_oauth_storage_home_for_build(codex_home: &Path, rich_build: bool) -> PathBuf {
-    if rich_build {
-        codex_home.join(RICH_OAUTH_HOME_DIR)
-    } else {
-        codex_home.to_path_buf()
-    }
-}
-
 fn fallback_file_path() -> Result<PathBuf> {
-    Ok(mcp_oauth_storage_home()?.join(FALLBACK_FILENAME))
+    Ok(find_codex_home()?.join(FALLBACK_FILENAME).to_path_buf())
 }
 
 fn read_fallback_file_unlocked() -> Result<Option<FallbackFile>> {
@@ -1216,11 +1191,15 @@ fn sha_256_prefix(value: &Value) -> Result<String> {
 mod tests {
     use super::*;
     use anyhow::Result;
+    use codex_keyring_store::CredentialStoreError;
+    use codex_keyring_store::KeyringStore;
     use codex_keyring_store::tests::MockKeyringStore;
     use codex_secrets::compute_keyring_account;
     use keyring::Error as KeyringError;
     use pretty_assertions::assert_eq;
+    use std::collections::BTreeMap;
     use std::sync::Arc;
+    use std::sync::Mutex as StdMutex;
     #[path = "credential_store_tests.rs"]
     mod credential_store_tests;
     #[path = "persistor_tests.rs"]
@@ -1230,14 +1209,109 @@ mod tests {
 
     use super::test_support::TempCodexHome;
 
+    #[derive(Clone, Debug, Default)]
+    struct ServiceAwareKeyringStore {
+        entries: Arc<StdMutex<BTreeMap<(String, String), String>>>,
+    }
+
+    impl ServiceAwareKeyringStore {
+        fn value(&self, service: &str, account: &str) -> Option<String> {
+            self.entries
+                .lock()
+                .expect("service-aware test store lock")
+                .get(&(service.into(), account.into()))
+                .cloned()
+        }
+    }
+
+    impl KeyringStore for ServiceAwareKeyringStore {
+        fn load(
+            &self,
+            service: &str,
+            account: &str,
+        ) -> std::result::Result<Option<String>, CredentialStoreError> {
+            Ok(self.value(service, account))
+        }
+
+        fn save(
+            &self,
+            service: &str,
+            account: &str,
+            value: &str,
+        ) -> std::result::Result<(), CredentialStoreError> {
+            self.entries
+                .lock()
+                .expect("service-aware test store lock")
+                .insert((service.into(), account.into()), value.into());
+            Ok(())
+        }
+
+        fn delete(
+            &self,
+            service: &str,
+            account: &str,
+        ) -> std::result::Result<bool, CredentialStoreError> {
+            Ok(self
+                .entries
+                .lock()
+                .expect("service-aware test store lock")
+                .remove(&(service.into(), account.into()))
+                .is_some())
+        }
+    }
+
     #[test]
-    fn rich_oauth_coordination_has_a_separate_home() {
-        let home = std::path::Path::new("/codex-home");
-        assert_eq!(mcp_oauth_storage_home_for_build(home, false), home);
+    fn direct_keyring_uses_shared_standard_service_without_touching_legacy_rich_records()
+    -> Result<()> {
+        let _env = TempCodexHome::new();
+        const STANDARD_SERVICE: &str = "Codex MCP Credentials";
+        const LEGACY_RICH_SERVICE: &str = "Codex Rich MCP Credentials";
+        let store = ServiceAwareKeyringStore::default();
+        let tokens = sample_tokens();
+        let key = super::compute_store_key(&tokens.server_name, &tokens.url)?;
+        let mut legacy_tokens = tokens.clone();
+        legacy_tokens
+            .token_response
+            .0
+            .set_access_token(AccessToken::new("legacy-rich-token".into()));
+        store.save(
+            LEGACY_RICH_SERVICE,
+            &key,
+            &serde_json::to_string(&legacy_tokens)?,
+        )?;
+        store.save(STANDARD_SERVICE, &key, &serde_json::to_string(&tokens)?)?;
+
+        let resolved = super::resolve_oauth_tokens_from_store_policy(
+            &store,
+            &tokens.server_name,
+            &tokens.url,
+            OAuthCredentialsStoreMode::Keyring,
+            AuthKeyringBackendKind::Direct,
+        )?
+        .expect("shared standard-service credentials load");
+        assert_tokens_match_without_expiry(&resolved.tokens, &tokens);
+
+        let mut replacement = tokens;
+        replacement
+            .token_response
+            .0
+            .set_access_token(AccessToken::new("shared-standard-token".into()));
+        super::save_oauth_tokens_with_keyring(
+            &store,
+            AuthKeyringBackendKind::Direct,
+            &replacement.server_name,
+            &replacement,
+        )?;
+
         assert_eq!(
-            mcp_oauth_storage_home_for_build(home, true),
-            home.join("codex-rich")
+            store.value(STANDARD_SERVICE, &key),
+            Some(serde_json::to_string(&replacement)?)
         );
+        assert_eq!(
+            store.value(LEGACY_RICH_SERVICE, &key),
+            Some(serde_json::to_string(&legacy_tokens)?)
+        );
+        Ok(())
     }
 
     #[test]
@@ -1523,7 +1597,7 @@ mod tests {
 
     #[test]
     fn save_oauth_tokens_with_secrets_backend_writes_encrypted_storage() -> Result<()> {
-        let _env = TempCodexHome::new();
+        let env = TempCodexHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let key = super::compute_store_key(&tokens.server_name, &tokens.url)?;
@@ -1538,9 +1612,8 @@ mod tests {
             &tokens,
         )?;
 
-        let storage_home = super::mcp_oauth_storage_home()?;
         let manager = SecretsManager::new_with_keyring_store_and_namespace(
-            storage_home.clone(),
+            env.path().to_path_buf(),
             SecretsBackendKind::Local,
             Arc::new(store.clone()),
             LocalSecretsNamespace::McpOAuth,
@@ -1551,8 +1624,8 @@ mod tests {
             .expect("tokens should be saved to encrypted storage");
         assert_eq!(serde_json::from_str::<StoredOAuthTokens>(&stored)?, tokens);
         assert_eq!(store.saved_value(&key), Some(serialized));
-        assert!(storage_home.join("secrets").join("mcp_oauth.age").exists());
-        assert!(!storage_home.join("secrets").join("local.age").exists());
+        assert!(env.path().join("secrets").join("mcp_oauth.age").exists());
+        assert!(!env.path().join("secrets").join("local.age").exists());
         assert!(!super::fallback_file_path()?.exists());
         Ok(())
     }
@@ -1605,13 +1678,10 @@ mod tests {
     #[test]
     fn save_oauth_tokens_with_secrets_backend_falls_back_to_file_when_keyring_fails() -> Result<()>
     {
-        let _env = TempCodexHome::new();
+        let env = TempCodexHome::new();
         let store = MockKeyringStore::default();
         store.set_error(
-            &compute_keyring_account(
-                &super::mcp_oauth_storage_home()?,
-                LocalSecretsNamespace::McpOAuth,
-            ),
+            &compute_keyring_account(env.path(), LocalSecretsNamespace::McpOAuth),
             KeyringError::Invalid("error".into(), "save".into()),
         );
         let tokens = sample_tokens();
@@ -1631,7 +1701,7 @@ mod tests {
 
     #[test]
     fn delete_oauth_tokens_with_secrets_backend_removes_secrets_and_file() -> Result<()> {
-        let _env = TempCodexHome::new();
+        let env = TempCodexHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let serialized = serde_json::to_string(&tokens)?;
@@ -1654,9 +1724,8 @@ mod tests {
             &tokens.url,
         )?;
 
-        let storage_home = super::mcp_oauth_storage_home()?;
         let manager = SecretsManager::new_with_keyring_store_and_namespace(
-            storage_home,
+            env.path().to_path_buf(),
             SecretsBackendKind::Local,
             Arc::new(store.clone()),
             LocalSecretsNamespace::McpOAuth,
