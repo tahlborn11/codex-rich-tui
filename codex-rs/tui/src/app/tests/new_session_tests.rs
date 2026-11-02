@@ -348,12 +348,7 @@ async fn replacement_uses_server_defaults_and_preserves_explicit_launch_settings
         (Some("medium"), "profile_effort", "server-model", "low"),
         (Some(""), "profile", "profile-model", "low"),
         (Some("medium"), "profile", "profile-model", "low"),
-        (
-            Some("medium"),
-            "profile_unrelated",
-            "managed-model",
-            "medium",
-        ),
+        (Some("medium"), "profile_unrelated", "server-model", "high"),
     ] {
         let (mut app, mut events, _ops) = make_test_app_with_channels().await;
         let server_home = tempdir()?;
