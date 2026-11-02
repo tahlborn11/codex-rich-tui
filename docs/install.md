@@ -1,5 +1,9 @@
 ## Installing & building
 
+For this fork, use the [Codex Rich TUI setup guide](../RICH_TUI.md).
+The upstream instructions below describe generic CLI development.
+The fork guide covers the complete package, local signatures, shared OAuth, and daemon updates.
+
 ### System requirements
 
 | Requirement                 | Details                                                         |
