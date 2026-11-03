@@ -26,8 +26,8 @@ macOS-specific.
   into an aggregate `Ran N commands` entry.
 - Terminal titles can show live activity, project, thread, branch, model, and other configured
   values.
-- MCP OAuth credentials use the same store as the desktop app and upstream CLI. Upstream
-  cross-process coordination serializes refreshes when the clients use the same `CODEX_HOME`.
+- The macOS Rich TUI uses an official OpenAI-signed backend. Direct commands also use that
+  backend, so MCP credential updates share the desktop app's Keychain signing identity.
 
 The fork's `rich-markdown` branch carries these changes on top of upstream Codex.
 The `main` branch tracks `upstream/main`.
@@ -184,10 +184,9 @@ git remote set-url upstream https://github.com/openai/codex.git
 
 ### 3. Create the local code-signing identity
 
-The stable installer signs all three Codex executables with the same persistent identity on every
-rebuild. This gives macOS Keychain a stable designated requirement, preventing OAuth credentials
-from being treated as though a different unsigned development binary is requesting access after
-each build.
+The installer signs the Rich package with the same local identity on each rebuild.
+The official backend retains OpenAI's signature and handles MCP credential access.
+The local certificate does not authorize Rich to update shared Keychain credentials.
 
 Open **Keychain Access**, then:
 
@@ -226,6 +225,26 @@ This command:
 3. Copies the complete package to `~/.local/share/codex-rich-tui`.
 4. Signs all three executables and replaces them atomically.
 5. Creates `~/.local/bin/codex-rich` without replacing the normal `codex` command.
+
+The macOS frontend also requires a compatible official Codex backend.
+It discovers the selected official daemon package, the desktop app's bundled backend,
+or the official CLI at `~/.local/bin/codex`.
+The backend must match the fork's upstream major and minor version, currently `0.166`.
+Rich verifies OpenAI's code signature before it runs the backend.
+Set `CODEX_RICH_OFFICIAL_CLI` to select a different compatible official executable.
+An invalid explicit selection stops the command.
+
+Finish active daemon work before the first backend cutover. Then select the official package:
+
+```bash
+codex-rich app-server daemon update --from-cli
+codex-rich app-server daemon version
+```
+
+Rich delegates this update command to the official executable.
+It copies and pins the official package, then restarts a running daemon.
+For a new home without a selected daemon package, run `codex-rich app-server daemon start` first.
+Reopen existing Rich TUI windows after the cutover.
 
 The operation is safe to repeat after every update. To use a different launcher directory, set
 `CODEX_RICH_BIN_DIR`. To change the package installation directory, invoke the installer directly
@@ -325,7 +344,7 @@ codex-rich mcp list
 
 Use `codex-rich mcp login <server-name>` to log in directly with Rich.
 
-Packaged `codex-rich` builds share the standard `Codex MCP Credentials` Keychain service
+The official backend shares the standard `Codex MCP Credentials` Keychain service
 with the desktop app and upstream CLI. File and encrypted-secrets stores use the same
 `CODEX_HOME`, normally `~/.codex`. All sharing clients must use that same home and keep
 `mcp_oauth_refresh_coordination` enabled. The upstream refresh lock covers the credential
@@ -335,15 +354,20 @@ The fork reuses existing desktop and CLI logins when the server name and URL mat
 If a server has no shared login, authenticate it once through either current client.
 All clients must support stable MCP OAuth refresh coordination. The desktop backend must support it too.
 Avoid clients with refresh coordination disabled. macOS can request Keychain access when the
-signed Rich executable first reads an existing shared entry.
+official backend first reads an entry that does not yet authorize it.
 
 After login, start a new Codex Rich session so the authenticated MCP tools are loaded. In the TUI,
 use `/mcp` to inspect the active servers. These commands follow the official OpenAI
 [MCP configuration workflow](https://developers.openai.com/codex/mcp/).
 
-The stable signature is important here: installing an unsigned replacement or signing each build
-with a new identity can cause macOS to prompt for Keychain access again or deny the stored OAuth
-credential.
+On macOS, `codex-rich mcp`, `exec`, and other backend commands run in the official executable.
+Interactive chat, resume, fork, and Agents keep the Rich TUI and connect to the official daemon.
+Rich stops if the selected local daemon has an incompatible version or an untrusted signature.
+It never falls back to its embedded backend. `--no-daemon` is unavailable in this mode.
+
+Configure settings that require an embedded launch, such as `--profile` or arbitrary `-c` overrides,
+on the official server. Rich reports these unsupported launch options.
+An explicit `--remote` endpoint retains its normal server selection.
 
 ## Terminal titles in iTerm2
 
@@ -391,6 +415,7 @@ just codex
 
 The development command builds a small package before launching it, including the companion Code
 Mode host. It reuses the normal Codex configuration and authentication.
+On macOS, it uses the same official-backend policy as the installed Rich command.
 
 Build a release-profile package without installing it:
 
@@ -534,9 +559,10 @@ git push origin "refs/tags/codex-rich-$rich_version"
 ### Update running clients and the managed daemon
 
 Reopen Rich TUI clients after installation to load the new executable.
-For TUI-only changes, the daemon can keep its current package.
-For core, protocol, OAuth, Code Mode, or app-server changes, update the daemon too.
-Finish active work first. Then copy and pin the installed Rich package:
+Keep the daemon on an official OpenAI-signed package with a compatible protocol version.
+A Rich TUI rebuild does not require a daemon update.
+If the upstream baseline changes, install a compatible official backend before the cutover.
+Finish active work first. Then copy and pin that official package:
 
 ```bash
 codex-rich app-server daemon version
@@ -546,7 +572,7 @@ codex-rich app-server daemon version
 
 The update restarts a running daemon. Reopen its clients afterward.
 A restart alone retains the selected package.
-An update without `--from-cli` selects the production package instead of the local fork.
+An update without `--from-cli` selects the official production package.
 
 Scheduled Codex tasks can maintain the fork, but their state lives outside this repository.
 Review UI conflicts, OAuth behavior, and upstream protocol changes before publication.
@@ -573,9 +599,15 @@ the companion host and the canonical package layout.
 
 ### Repeated Keychain password prompts
 
-Confirm that you consistently use `just install-rich-tui-local`, that the signing identity has not
-changed, and that `mcp_oauth_credentials_store = "keyring"` is set. Reauthenticate the affected
-server with `codex-rich mcp login <server-name>` after correcting the installation.
+Run `codex-rich app-server daemon version` and check that the managed package is official.
+If an old Rich package remains selected, finish active work and run
+`codex-rich app-server daemon update --from-cli`.
+
+macOS resets a direct Keychain item's signing partition when a client updates its password data.
+A self-signed Rich backend and the official desktop backend can repeatedly displace each other's authorization after token refreshes.
+A stable local certificate does not prevent this reset.
+The official-backend policy keeps both clients under OpenAI's signing identity.
+Existing Grafana logins remain in the shared store. This change does not require another login.
 
 ### MCP reports `OAuth metadata discovery failed`
 

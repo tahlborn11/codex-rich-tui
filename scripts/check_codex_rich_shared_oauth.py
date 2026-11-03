@@ -18,6 +18,7 @@ import queue
 import re
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -29,6 +30,13 @@ import uuid
 SERVER_NAME = "shared-oauth-contract"
 OFFICIAL = os.environ.get("CODEX_OFFICIAL_TEST_BIN")
 RICH = os.environ.get("CODEX_RICH_TEST_BIN")
+KEYCHAIN_SERVICE = "Codex MCP Credentials"
+OFFICIAL_TEAM_PARTITION = "teamid:2DC432GLL2"
+KEYCHAIN_AUDIT_SOURCE = (
+    Path(__file__).resolve().parent
+    / "fixtures"
+    / "codex_rich_keychain_partition_audit.m"
+)
 
 
 class OAuthFixture:
@@ -194,7 +202,7 @@ startup_timeout_sec = 30
 
 
 def environment(home):
-    return {
+    values = {
         **os.environ,
         "OPENAI_API_KEY": "synthetic-api-key",
         "CODEX_API_KEY": "synthetic-api-key",
@@ -202,6 +210,49 @@ def environment(home):
         "CODEX_OAUTH_TEST_API_KEY": "synthetic-api-key",
         "RUST_LOG": "codex_rmcp_client::oauth::refresh_lock::contention=debug",
     }
+    if OFFICIAL:
+        values["CODEX_RICH_OFFICIAL_CLI"] = str(Path(OFFICIAL).resolve())
+    return values
+
+
+def keychain_partitions(helper, service, account):
+    result = subprocess.run(
+        [helper, service, account],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=15,
+    )
+    partitions = json.loads(result.stdout)
+    if not isinstance(partitions, list) or not all(
+        isinstance(partition, str) for partition in partitions
+    ):
+        raise AssertionError("Keychain partition helper returned an invalid payload")
+    return partitions
+
+
+def compile_keychain_partition_helper(directory):
+    if sys.platform != "darwin":
+        raise unittest.SkipTest("Keychain partition verification requires macOS")
+    helper = directory / "keychain-partition-audit"
+    subprocess.run(
+        [
+            "clang",
+            "-Wno-deprecated-declarations",
+            "-framework",
+            "Foundation",
+            "-framework",
+            "Security",
+            str(KEYCHAIN_AUDIT_SOURCE),
+            "-o",
+            str(helper),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    return str(helper)
 
 
 @contextmanager
@@ -429,6 +480,34 @@ class SharedOAuthTests(unittest.TestCase):
         self.home = Path(self.temporary.name)
         self.fixture.configure(self.home)
 
+    def configure_keyring_server(self, home, name):
+        config = home / "config.toml"
+        config.write_text(
+            config.read_text()
+            .replace(
+                'mcp_oauth_credentials_store = "file"',
+                'mcp_oauth_credentials_store = "keyring"',
+            )
+            .replace(f"[mcp_servers.{SERVER_NAME}]", f"[mcp_servers.{name}]")
+        )
+
+    def exact_keyring_account_for(self, name):
+        # The File store exposes the exact deterministic account key without
+        # touching Keychain. It uses the same server name and loopback URL as
+        # the UUID-scoped Keychain test entry.
+        with tempfile.TemporaryDirectory(prefix="codex-shared-oauth-account-") as path:
+            home = Path(path)
+            self.fixture.configure(home)
+            config = home / "config.toml"
+            config.write_text(
+                config.read_text().replace(
+                    f"[mcp_servers.{SERVER_NAME}]", f"[mcp_servers.{name}]"
+                )
+            )
+            credentials = login(OFFICIAL, home, name)
+        self.assertEqual(len(credentials), 1)
+        return next(iter(credentials))
+
     def test_official_and_rich_write_the_same_credential_key(self):
         official = login(OFFICIAL, self.home)
         self.assertEqual(auth_status(RICH, self.home), "o_auth")
@@ -523,19 +602,13 @@ class SharedOAuthTests(unittest.TestCase):
 
     @unittest.skipUnless(
         os.environ.get("CODEX_SHARED_OAUTH_KEYCHAIN_TEST") == "1",
-        "Opt in to the synthetic macOS Keychain check after signing the Rich package",
+        "Opt in to the synthetic macOS Keychain check with an official backend",
     )
-    def test_signed_rich_reads_official_synthetic_keychain_login(self):
+    def test_official_backend_preserves_keychain_partitions_across_rich_writes(self):
         name = "codex-shared-oauth-" + uuid.uuid4().hex
-        config = self.home / "config.toml"
-        config.write_text(
-            config.read_text()
-            .replace(
-                'mcp_oauth_credentials_store = "file"',
-                'mcp_oauth_credentials_store = "keyring"',
-            )
-            .replace(f"[mcp_servers.{SERVER_NAME}]", f"[mcp_servers.{name}]")
-        )
+        self.configure_keyring_server(self.home, name)
+        account = self.exact_keyring_account_for(name)
+        helper = compile_keychain_partition_helper(self.home)
 
         def cleanup():
             subprocess.run(
@@ -550,11 +623,43 @@ class SharedOAuthTests(unittest.TestCase):
             self.assertNotEqual(auth_status(OFFICIAL, self.home, name), "o_auth")
 
         self.addCleanup(cleanup)
+
+        # The official client creates the synthetic entry. This assertion proves
+        # the fixture selected the exact account before Rich is involved.
         login(OFFICIAL, self.home, name, file_store=False)
         self.assertFalse(
             (self.home / ".credentials.json").exists(),
             "Keychain check must not silently fall back to File",
         )
+        self.assertEqual(
+            keychain_partitions(helper, KEYCHAIN_SERVICE, account),
+            [OFFICIAL_TEAM_PARTITION],
+        )
+
+        # Rich must delegate its write to the official backend. Inspect the
+        # partition before another official read can mask a Rich-side reset.
+        login(RICH, self.home, name, file_store=False)
+        self.assertFalse(
+            (self.home / ".credentials.json").exists(),
+            "Rich write must not fall back to File",
+        )
+        self.assertEqual(
+            keychain_partitions(helper, KEYCHAIN_SERVICE, account),
+            [OFFICIAL_TEAM_PARTITION],
+        )
+
+        # A final official save simulates later token persistence. Both clients
+        # must still see the same synthetic OAuth state without Keychain UI.
+        login(OFFICIAL, self.home, name, file_store=False)
+        self.assertFalse(
+            (self.home / ".credentials.json").exists(),
+            "Official write must not fall back to File",
+        )
+        self.assertEqual(
+            keychain_partitions(helper, KEYCHAIN_SERVICE, account),
+            [OFFICIAL_TEAM_PARTITION],
+        )
+        self.assertEqual(auth_status(OFFICIAL, self.home, name), "o_auth")
         self.assertEqual(auth_status(RICH, self.home, name), "o_auth")
         self.assertFalse((self.home / "codex-rich").exists())
 

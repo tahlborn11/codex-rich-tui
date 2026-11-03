@@ -178,6 +178,8 @@ pub struct RemoteAppServerRequestHandle {
 
 enum SocketPeerPolicy {
     ExplicitEndpoint,
+    #[cfg(target_os = "macos")]
+    OfficialOpenAi,
     #[cfg(windows)]
     NonElevatedCurrentUser,
 }
@@ -185,6 +187,26 @@ enum SocketPeerPolicy {
 impl RemoteAppServerClient {
     pub async fn connect(args: RemoteAppServerConnectArgs) -> IoResult<Self> {
         Self::connect_with_policy(args, SocketPeerPolicy::ExplicitEndpoint).await
+    }
+
+    /// Connects to an implicitly discovered macOS daemon only after validating
+    /// that the process on the other end of the connected socket is the
+    /// official OpenAI-signed backend. Validation happens before the WebSocket
+    /// upgrade sends any bytes.
+    #[cfg(target_os = "macos")]
+    pub async fn connect_official_local_daemon(args: RemoteAppServerConnectArgs) -> IoResult<Self> {
+        if !matches!(args.endpoint, RemoteAppServerEndpoint::UnixSocket { .. }) {
+            return Err(IoError::new(
+                ErrorKind::InvalidInput,
+                "official local daemon requires a Unix socket",
+            ));
+        }
+        let client = Self::connect_with_policy(args, SocketPeerPolicy::OfficialOpenAi).await?;
+        if let Err(error) = crate::official_peer::verify_server_version(client.server_version()) {
+            let _ = client.shutdown().await;
+            return Err(error);
+        }
+        Ok(client)
     }
 
     /// Connects to an implicitly discovered Windows daemon, verifying its peer
@@ -810,6 +832,10 @@ async fn connect_unix_socket_endpoint(
         })?;
     match peer_policy {
         SocketPeerPolicy::ExplicitEndpoint => {}
+        #[cfg(target_os = "macos")]
+        SocketPeerPolicy::OfficialOpenAi => {
+            crate::official_peer::verify_openai_signed_peer(&stream)?
+        }
         #[cfg(windows)]
         SocketPeerPolicy::NonElevatedCurrentUser => stream.ensure_non_elevated_peer()?,
     }
@@ -1069,6 +1095,115 @@ fn websocket_close_error_is_already_closed(err: &TungsteniteError) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    fn test_connect_args(endpoint: RemoteAppServerEndpoint) -> RemoteAppServerConnectArgs {
+        RemoteAppServerConnectArgs {
+            required_human_approval: false,
+            endpoint,
+            client_name: "codex-app-server-client-test".to_owned(),
+            client_version: "0.0.0-test".to_owned(),
+            experimental_api: false,
+            mcp_server_openai_form_elicitation: false,
+            opt_out_notification_methods: Vec::new(),
+            channel_capacity: 1,
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn official_local_daemon_rejects_non_unix_endpoint() {
+        let error = RemoteAppServerClient::connect_official_local_daemon(test_connect_args(
+            RemoteAppServerEndpoint::WebSocket {
+                websocket_url: "ws://localhost/rpc".to_owned(),
+                auth_token: None,
+            },
+        ))
+        .await
+        .err()
+        .expect("official local daemon must require a Unix socket");
+
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn official_local_daemon_rejects_untrusted_peer_before_websocket_bytes() {
+        use tokio::io::AsyncReadExt;
+
+        let directory = tempfile::TempDir::new().expect("temp dir");
+        let socket_path = directory.path().join("daemon.sock");
+        let listener = tokio::net::UnixListener::bind(&socket_path).expect("listener should bind");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("connection should accept");
+            let mut bytes = [0_u8; 1];
+            let read = tokio::time::timeout(Duration::from_secs(2), stream.read(&mut bytes))
+                .await
+                .expect("client should close or remain silent before timeout")
+                .expect("socket read should succeed");
+            assert_eq!(
+                read, 0,
+                "peer validation must precede the WebSocket handshake"
+            );
+        });
+
+        let socket_path = AbsolutePathBuf::from_absolute_path(socket_path).expect("absolute path");
+        let error = RemoteAppServerClient::connect_official_local_daemon(test_connect_args(
+            RemoteAppServerEndpoint::UnixSocket { socket_path },
+        ))
+        .await
+        .err()
+        .expect("the unsigned test peer must not satisfy the official signer requirement");
+        assert_eq!(error.kind(), ErrorKind::PermissionDenied);
+        server.await.expect("server task should join");
+    }
+
+    /// Runs only when the caller supplies an official native backend. It
+    /// verifies the Security.framework audit-token path against a real
+    /// OpenAI-signed process without using the installed daemon, user Codex
+    /// home, or Keychain credentials.
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    #[ignore = "requires CODEX_RICH_TEST_OFFICIAL_BACKEND to name an official native backend"]
+    async fn official_local_daemon_accepts_supplied_openai_signed_backend() {
+        use std::time::Instant;
+
+        let backend = std::env::var_os("CODEX_RICH_TEST_OFFICIAL_BACKEND")
+            .expect("set CODEX_RICH_TEST_OFFICIAL_BACKEND for this opt-in test");
+        let directory = tempfile::TempDir::new().expect("temp dir");
+        let codex_home = directory.path().join("codex-home");
+        std::fs::create_dir(&codex_home).expect("temporary CODEX_HOME");
+        let socket_path = directory.path().join("official-daemon.sock");
+        let listen = format!("unix://{}", socket_path.display());
+        let mut command = tokio::process::Command::new(backend);
+        command
+            .args(["app-server", "--listen", &listen])
+            .env("CODEX_HOME", &codex_home)
+            .env("OPENAI_API_KEY", "sk-codex-rich-official-peer-test")
+            .kill_on_drop(true);
+        let mut child = command.spawn().expect("official backend should start");
+
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !socket_path.exists() {
+            if let Some(status) = child.try_wait().expect("inspect backend status") {
+                panic!("official backend exited before listening: {status}");
+            }
+            assert!(
+                Instant::now() < deadline,
+                "official backend did not create its socket within 10 seconds"
+            );
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+
+        let socket_path = AbsolutePathBuf::from_absolute_path(socket_path).expect("absolute path");
+        let client = RemoteAppServerClient::connect_official_local_daemon(test_connect_args(
+            RemoteAppServerEndpoint::UnixSocket { socket_path },
+        ))
+        .await
+        .expect("official signer validation and app-server initialization should succeed");
+        client.shutdown().await.expect("client should shut down");
+        child.kill().await.expect("official backend should stop");
+    }
 
     #[tokio::test]
     async fn shutdown_tolerates_worker_exit_after_command_is_queued() {

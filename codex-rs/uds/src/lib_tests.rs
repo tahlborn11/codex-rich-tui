@@ -282,6 +282,24 @@ async fn stream_round_trips_data_between_listener_and_client() {
     server_task.await.expect("server task should join");
 }
 
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn peer_audit_token_is_present_for_connected_local_peer() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    let socket_path = temp_dir.path().join("socket");
+    let mut listener = UnixListener::bind(&socket_path)
+        .await
+        .expect("listener should bind");
+
+    let client = UnixStream::connect(&socket_path)
+        .await
+        .expect("client should connect");
+    let server = listener.accept().await.expect("server should accept");
+
+    assert_ne!(client.peer_audit_token().expect("client token"), [0; 32]);
+    assert_ne!(server.peer_audit_token().expect("server token"), [0; 32]);
+}
+
 #[cfg(windows)]
 #[tokio::test]
 async fn implicit_peer_validation_rejects_elevated_listener() {

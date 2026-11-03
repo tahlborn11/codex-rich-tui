@@ -447,10 +447,8 @@ fn remove_legacy_tui_log_file(codex_home: &Path) {
     let _ = std::fs::remove_file(codex_home.join("log").join(TUI_LOG_FILE_NAME));
 }
 
-async fn connect_remote_app_server(
-    endpoint: RemoteAppServerEndpoint,
-) -> color_eyre::Result<AppServerClient> {
-    let app_server = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
+fn remote_app_server_connect_args(endpoint: RemoteAppServerEndpoint) -> RemoteAppServerConnectArgs {
+    RemoteAppServerConnectArgs {
         required_human_approval: true,
         endpoint,
         client_name: "codex-tui".to_string(),
@@ -459,9 +457,27 @@ async fn connect_remote_app_server(
         mcp_server_openai_form_elicitation: false,
         opt_out_notification_methods: Vec::new(),
         channel_capacity: DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
-    })
+    }
+}
+
+async fn connect_remote_app_server(
+    endpoint: RemoteAppServerEndpoint,
+) -> color_eyre::Result<AppServerClient> {
+    let app_server = RemoteAppServerClient::connect(remote_app_server_connect_args(endpoint))
+        .await
+        .wrap_err("failed to connect to remote app server")?;
+    Ok(AppServerClient::Remote(app_server))
+}
+
+#[cfg(target_os = "macos")]
+async fn connect_official_local_app_server(
+    endpoint: RemoteAppServerEndpoint,
+) -> color_eyre::Result<AppServerClient> {
+    let app_server = RemoteAppServerClient::connect_official_local_daemon(
+        remote_app_server_connect_args(endpoint),
+    )
     .await
-    .wrap_err("failed to connect to remote app server")?;
+    .wrap_err("failed to connect to the official local app server")?;
     Ok(AppServerClient::Remote(app_server))
 }
 

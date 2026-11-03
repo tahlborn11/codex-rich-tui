@@ -66,6 +66,44 @@ impl UnixStream {
         self.inner.ensure_non_elevated_peer()
     }
 
+    /// Returns the Darwin audit token for the process at the other end of this
+    /// connected socket. The token is bound by the kernel to this connection,
+    /// so callers can use it to validate the peer without trusting the socket
+    /// pathname or a reusable PID.
+    #[cfg(target_os = "macos")]
+    pub fn peer_audit_token(&self) -> IoResult<[u8; 32]> {
+        use std::io;
+        use std::io::ErrorKind;
+        use std::os::fd::AsRawFd;
+
+        let mut token = [0_u8; 32];
+        let mut token_len = token.len() as libc::socklen_t;
+        // SAFETY: `self.inner` is a live Unix domain socket, and the output
+        // buffer and its length pointer remain valid for this synchronous call.
+        let result = unsafe {
+            libc::getsockopt(
+                self.inner.as_raw_fd(),
+                libc::SOL_LOCAL,
+                libc::LOCAL_PEERTOKEN,
+                token.as_mut_ptr().cast(),
+                &mut token_len,
+            )
+        };
+        if result != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if token_len != token.len() as libc::socklen_t {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "LOCAL_PEERTOKEN returned {token_len} bytes; expected {}",
+                    token.len()
+                ),
+            ));
+        }
+        Ok(token)
+    }
+
     /// Connects to `socket_path`.
     pub async fn connect(socket_path: impl AsRef<Path>) -> IoResult<Self> {
         platform::connect_stream(socket_path.as_ref())
