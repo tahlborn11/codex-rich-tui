@@ -21,6 +21,8 @@
 //! unread notifications cannot prevent request responses from being delivered.
 
 mod cloud;
+#[cfg(target_os = "macos")]
+mod official_peer;
 mod path;
 mod remote;
 mod remote_websocket;

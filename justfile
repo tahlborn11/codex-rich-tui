@@ -24,7 +24,7 @@ codex *args:
 package-rich-tui:
     {{ python }} ../scripts/build_codex_rich_package.py --cargo-profile release --package-dir target/codex-rich-tui --force
 
-# Build and install a locally signed package so macOS Keychain ACLs remain stable across rebuilds.
+# Build and install the locally signed Rich frontend package.
 install-rich-tui-local:
     {{ python }} ../scripts/build_codex_rich_package.py --cargo-profile dev-small --package-dir target/codex-rich-tui-dev --force
     ../scripts/install_codex_rich_local.sh target/codex-rich-tui-dev

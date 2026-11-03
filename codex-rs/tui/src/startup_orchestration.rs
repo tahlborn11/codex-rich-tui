@@ -13,6 +13,11 @@ pub(super) async fn run_main_inner(
     loader_overrides: LoaderOverrides,
     mut explicit_remote_endpoint: Option<RemoteAppServerEndpoint>,
 ) -> std::io::Result<AppExitInfo> {
+    if cli.official_backend_required && (cli.no_daemon || explicit_remote_endpoint.is_none()) {
+        return Err(std::io::Error::other(
+            "Codex Rich requires the official app server. Start the official daemon and reopen codex-rich without --no-daemon.",
+        ));
+    }
     if cli.no_daemon && explicit_remote_endpoint.is_some() {
         return Err(std::io::Error::other(
             "--no-daemon cannot be used with --remote.",
@@ -151,6 +156,10 @@ pub(super) async fn run_main_inner(
             workload_identity_selected,
             std::env::var_os(codex_exec_server::CODEX_EXEC_SERVER_URL_ENV_VAR).as_deref(),
         )?;
+        app_server_connection::require_external_backend(
+            cli.official_backend_required,
+            &validation_target,
+        )?;
         let validation_environment_manager =
             if should_load_configured_environments(&loader_overrides, &validation_target) {
                 EnvironmentManager::prepare_from_codex_home(&codex_home).await
@@ -220,6 +229,10 @@ pub(super) async fn run_main_inner(
         workload_identity_selected,
         std::env::var_os(codex_exec_server::CODEX_EXEC_SERVER_URL_ENV_VAR).as_deref(),
     );
+    app_server_connection::require_supported_official_launch(
+        cli.official_backend_required,
+        daemon_exclusion,
+    )?;
     let reuse_implicit_local_daemon = daemon_exclusion.is_none();
     let search_forces_embedded = cli.web_search
         && daemon_startup::config_exclusion(
@@ -267,6 +280,10 @@ pub(super) async fn run_main_inner(
         reuse_implicit_local_daemon,
         workload_identity_selected,
         std::env::var_os(codex_exec_server::CODEX_EXEC_SERVER_URL_ENV_VAR).as_deref(),
+    )?;
+    app_server_connection::require_external_backend(
+        cli.official_backend_required,
+        &presentation_target,
     )?;
     let prepared_environment_manager =
         if should_load_configured_environments(&launch_loader_overrides, &presentation_target) {
@@ -373,6 +390,10 @@ pub(super) async fn run_main_inner(
         reuse_implicit_local_daemon,
         workload_identity_selected,
         std::env::var_os(codex_exec_server::CODEX_EXEC_SERVER_URL_ENV_VAR).as_deref(),
+    )?;
+    app_server_connection::require_external_backend(
+        cli.official_backend_required,
+        &app_server_target,
     )?;
     let remote_cwd_override = cli
         .cwd
@@ -652,6 +673,11 @@ pub(super) async fn run_main_inner(
     )
     .await?;
     if compatibility_warning.is_some() {
+        if cli.official_backend_required {
+            return Err(std::io::Error::other(
+                "The official app server does not match the requested feature settings. Restart it with those settings before opening Codex Rich.",
+            ));
+        }
         app_server_target = AppServerTarget::Embedded;
         daemon_exclusion = Some("daemon feature settings");
     }

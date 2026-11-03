@@ -77,6 +77,12 @@ pub enum LifecycleCommand {
     Version,
 }
 
+/// Resolves the selected package path without probing or starting the daemon.
+/// The path may not exist when no package has been installed yet.
+pub fn selected_codex_path() -> Result<PathBuf> {
+    Daemon::from_environment()?.current_managed_codex_bin()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LifecycleStatus {
