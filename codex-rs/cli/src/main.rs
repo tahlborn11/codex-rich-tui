@@ -37,6 +37,8 @@ use codex_utils_cli::CliConfigOverrides;
 use codex_utils_cli::ProfileV2Name;
 use codex_utils_cli::SharedCliOptions;
 use std::collections::HashSet;
+#[cfg(target_os = "macos")]
+use std::ffi::OsString;
 use std::io::IsTerminal;
 use std::io::Write;
 use std::path::PathBuf;
@@ -79,6 +81,8 @@ mod mcp_cmd;
 mod mcp_login;
 mod migrate_nfs_db;
 mod migrate_rollouts;
+#[cfg(target_os = "macos")]
+mod official_backend;
 mod plugin_cmd;
 mod queue_cmd;
 mod remote_control_cmd;
@@ -252,6 +256,55 @@ enum Subcommand {
 
     /// Inspect feature flags.
     Features(FeaturesCli),
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RichCommandRoute {
+    Tui,
+    Utility,
+    Delegate,
+}
+
+#[cfg(target_os = "macos")]
+fn rich_command_route(subcommand: &Option<Subcommand>) -> RichCommandRoute {
+    match subcommand {
+        None
+        | Some(Subcommand::Agents(_))
+        | Some(Subcommand::Resume(_))
+        | Some(Subcommand::Fork(_)) => RichCommandRoute::Tui,
+        Some(Subcommand::Completion(_)) => RichCommandRoute::Utility,
+        _ => RichCommandRoute::Delegate,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn rich_delegated_command_starts_daemon(subcommand: &Option<Subcommand>) -> bool {
+    if let Some(Subcommand::RemoteControl(command)) = subcommand {
+        return !matches!(
+            command.subcommand,
+            Some(remote_control_cmd::RemoteControlSubcommand::Stop)
+        );
+    }
+    let Some(Subcommand::AppServer(command)) = subcommand else {
+        return false;
+    };
+    matches!(
+        &command.subcommand,
+        Some(AppServerSubcommand::Daemon(AppServerDaemonCommand {
+            subcommand: AppServerDaemonSubcommand::Bootstrap(_)
+                | AppServerDaemonSubcommand::Start
+                | AppServerDaemonSubcommand::Restart
+                | AppServerDaemonSubcommand::EnableRemoteControl
+                | AppServerDaemonSubcommand::DisableRemoteControl
+                | AppServerDaemonSubcommand::PidUpdateLoop { .. },
+        }))
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn original_args_after_program(args: &[OsString]) -> impl Iterator<Item = OsString> + '_ {
+    args.iter().skip(1).cloned()
 }
 
 #[derive(Debug, Parser)]
@@ -1065,6 +1118,8 @@ async fn dispatch_cli(
     arg0_paths: Arg0DispatchPaths,
     remote_control_disabled: bool,
 ) -> anyhow::Result<Option<impl Future<Output = anyhow::Result<()>>>> {
+    #[cfg(target_os = "macos")]
+    let original_args = std::env::args_os().collect::<Vec<_>>();
     let MultitoolCli {
         config_overrides: mut root_config_overrides,
         feature_toggles,
@@ -1073,14 +1128,54 @@ async fn dispatch_cli(
         subcommand,
     } = config_override_args::try_parse_from(std::env::args_os())
         .unwrap_or_else(|error| error.exit());
+    #[cfg(target_os = "macos")]
+    let rich_backend = if option_env!("CODEX_RICH_VERSION").is_some() {
+        match rich_command_route(&subcommand) {
+            RichCommandRoute::Delegate => {
+                let self_executable = arg0_paths
+                    .codex_self_exe
+                    .clone()
+                    .unwrap_or(std::env::current_exe()?);
+                let official = official_backend::resolve_official_cli(&self_executable)?;
+                if rich_delegated_command_starts_daemon(&subcommand) {
+                    official_backend::ensure_daemon_lifecycle_target(&official)?;
+                }
+                official_backend::exec_official_cli(
+                    &official,
+                    original_args_after_program(&original_args),
+                    remote_control_disabled,
+                )?;
+                unreachable!("exec_official_cli replaces this process")
+            }
+            RichCommandRoute::Tui => {
+                let self_executable = arg0_paths
+                    .codex_self_exe
+                    .clone()
+                    .unwrap_or(std::env::current_exe()?);
+                Some(official_backend::resolve_official_cli(&self_executable)?)
+            }
+            RichCommandRoute::Utility => None,
+        }
+    } else {
+        None
+    };
+    #[cfg(not(target_os = "macos"))]
+    let rich_backend: Option<std::path::PathBuf> = None;
     // Retain the launch target through TUI exit, even if a launcher changes selection.
     let daemon_cli_executable = arg0_paths
         .codex_self_exe
         .as_ref()
         .and_then(|path| path.canonicalize().ok());
-    interactive.daemon_cli_executable = daemon_cli_executable
-        .clone()
+    #[cfg(target_os = "macos")]
+    let daemon_cli_executable = rich_backend.clone().or(daemon_cli_executable);
+    interactive.daemon_cli_executable = rich_backend
+        .as_ref()
+        .or(daemon_cli_executable.as_ref())
         .and_then(|path| AbsolutePathBuf::from_absolute_path(path).ok());
+    #[cfg(target_os = "macos")]
+    if rich_backend.is_some() {
+        interactive.official_backend_required = true;
+    }
     reject_unsupported_worktree_for_subcommand(interactive.shared.worktree, &subcommand)?;
     // Fold --enable/--disable into config overrides so they flow to all subcommands.
     let toggle_overrides = feature_toggles.to_overrides()?;
@@ -2550,6 +2645,32 @@ async fn run_interactive_tui(
         }
         Err(err) => return Err(err),
     };
+    #[cfg(target_os = "macos")]
+    let mut remote_endpoint = remote_endpoint;
+    #[cfg(target_os = "macos")]
+    if interactive.official_backend_required && remote_endpoint.is_some() {
+        // Explicit endpoints retain upstream remote-launch semantics. They
+        // cannot fall back to an implicit embedded server.
+        interactive.official_backend_required = false;
+    }
+    #[cfg(target_os = "macos")]
+    if interactive.official_backend_required && remote_endpoint.is_none() {
+        if interactive.no_daemon {
+            return Ok(AppExitInfo::fatal(
+                "Codex Rich requires the official local app server. Remove `--no-daemon`.",
+            ));
+        }
+        let Some(official) = interactive.daemon_cli_executable.as_ref() else {
+            return Ok(AppExitInfo::fatal(
+                "Codex Rich could not resolve the official local app server.",
+            ));
+        };
+        let socket_path = official_backend::prepare_local_daemon(official.as_path())
+            .map_err(std::io::Error::other)?;
+        remote_endpoint = Some(codex_tui::RemoteAppServerEndpoint::UnixSocket {
+            socket_path: AbsolutePathBuf::from_absolute_path(socket_path)?,
+        });
+    }
     if interactive.agents_overview && remote_endpoint.is_none() {
         if !std::io::stdin().is_terminal() {
             return Ok(AppExitInfo::fatal("stdin is not a terminal"));
@@ -2820,6 +2941,82 @@ mod tests {
     use codex_protocol::ThreadId;
     use codex_tui::TokenUsage;
     use pretty_assertions::assert_eq;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn rich_routes_only_tui_and_completion_locally() {
+        let local_tui = MultitoolCli::try_parse_from(["codex"]).unwrap();
+        assert_eq!(
+            rich_command_route(&local_tui.subcommand),
+            RichCommandRoute::Tui
+        );
+
+        let completion = MultitoolCli::try_parse_from(["codex", "completion"]).unwrap();
+        assert_eq!(
+            rich_command_route(&completion.subcommand),
+            RichCommandRoute::Utility
+        );
+
+        let login = MultitoolCli::try_parse_from(["codex", "login", "status"]).unwrap();
+        assert_eq!(
+            rich_command_route(&login.subcommand),
+            RichCommandRoute::Delegate
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn rich_daemon_lifecycle_preflight_only_covers_commands_that_can_start() {
+        for action in [
+            "start",
+            "restart",
+            "bootstrap",
+            "enable-remote-control",
+            "disable-remote-control",
+            "pid-update-loop",
+        ] {
+            let command =
+                MultitoolCli::try_parse_from(["codex", "app-server", "daemon", action]).unwrap();
+            assert!(
+                rich_delegated_command_starts_daemon(&command.subcommand),
+                "{action}"
+            );
+        }
+        for args in [
+            vec!["codex", "remote-control"],
+            vec!["codex", "remote-control", "start"],
+            vec!["codex", "remote-control", "pair"],
+        ] {
+            let command = MultitoolCli::try_parse_from(args).unwrap();
+            assert!(rich_delegated_command_starts_daemon(&command.subcommand));
+        }
+
+        let update =
+            MultitoolCli::try_parse_from(["codex", "app-server", "daemon", "update", "--from-cli"])
+                .unwrap();
+        assert!(!rich_delegated_command_starts_daemon(&update.subcommand));
+
+        let version =
+            MultitoolCli::try_parse_from(["codex", "app-server", "daemon", "version"]).unwrap();
+        assert!(!rich_delegated_command_starts_daemon(&version.subcommand));
+        let stop = MultitoolCli::try_parse_from(["codex", "remote-control", "stop"]).unwrap();
+        assert!(!rich_delegated_command_starts_daemon(&stop.subcommand));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn rich_forwards_original_os_arguments_after_program_name() {
+        let args = vec![
+            OsString::from("codex-rich"),
+            OsString::from("mcp"),
+            OsString::from("login"),
+            OsString::from("name with spaces"),
+        ];
+        assert_eq!(
+            original_args_after_program(&args).collect::<Vec<_>>(),
+            args[1..]
+        );
+    }
 
     #[test]
     fn interactive_tui_future_stays_bounded() {

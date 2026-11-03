@@ -23,6 +23,8 @@
 mod cloud;
 pub mod cloud_backend;
 pub use codex_cloud_client::ProjectEnvironment;
+#[cfg(target_os = "macos")]
+mod official_peer;
 mod path;
 mod remote;
 mod remote_websocket;

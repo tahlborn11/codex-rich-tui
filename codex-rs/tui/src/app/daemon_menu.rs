@@ -79,7 +79,14 @@ impl App {
                 DaemonUpdateSource::PublicStable,
                 "Install latest public stable",
             ),
-            (DaemonUpdateSource::ThisCli, "Use this CLI build"),
+            (
+                DaemonUpdateSource::ThisCli,
+                if cfg!(target_os = "macos") && option_env!("CODEX_RICH_VERSION").is_some() {
+                    "Use official backend package"
+                } else {
+                    "Use this CLI build"
+                },
+            ),
         ]
         .into_iter()
         .map(|(source, name)| SelectionItem {
@@ -172,10 +179,19 @@ impl App {
         let mut explanation = match source {
             DaemonUpdateSource::PublicStable => "Install the latest public stable release. Restore production updates; keep your automatic-update setting.".to_string(),
             DaemonUpdateSource::ThisCli => {
-                let version = codex_install_context::InstallContext::current()
+                let version = codex_install_context::InstallContext::from_exe(
+                    cfg!(target_os = "macos"),
+                    Some(executable.as_path()),
+                    None,
+                )
                     .package_manifest()
                     .map_or_else(|| CODEX_CLI_VERSION.to_string(), |manifest| manifest.version.to_string());
-                format!("Use this CLI package v{version} from {}. Copy the complete package and pin it against automatic updates.", executable.display())
+                let package = if cfg!(target_os = "macos") && option_env!("CODEX_RICH_VERSION").is_some() {
+                    "the official backend"
+                } else {
+                    "this CLI"
+                };
+                format!("Use {package} package v{version} from {}. Copy the complete package and pin it against automatic updates.", executable.display())
             }
         };
         explanation.push_str("\nThis may restart the daemon and interrupt active or queued work.\nCodex exits to update in this terminal. Relaunch it afterward.");
