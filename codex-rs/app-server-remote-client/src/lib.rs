@@ -1,6 +1,8 @@
 //! Shared app-server wire client, event types and WebSocket codec, without a runtime dependency.
 //! Embedded clients and server transports re-export these types to preserve their existing APIs.
 
+#[cfg(target_os = "macos")]
+mod official_peer;
 mod remote;
 mod remote_websocket;
 mod websocket_compression;

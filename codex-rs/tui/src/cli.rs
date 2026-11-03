@@ -13,6 +13,10 @@ pub struct Cli {
     #[clap(skip)]
     pub daemon_cli_executable: Option<AbsolutePathBuf>,
 
+    /// Internal: packaged Rich clients must not run a credential-writing backend.
+    #[clap(skip)]
+    pub official_backend_required: bool,
+
     /// Optional user prompt to start the session.
     #[arg(value_name = "PROMPT", value_hint = clap::ValueHint::Other)]
     pub prompt: Option<String>,
