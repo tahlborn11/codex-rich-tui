@@ -85,11 +85,11 @@ mod version_tests {
 
     #[test]
     fn official_connection_requires_a_reported_matching_version_family() {
-        assert!(verify_server_version(Some("0.166.0")).is_ok());
-        assert!(verify_server_version(Some("0.166.0-alpha.5.1")).is_ok());
+        assert!(verify_server_version(Some("0.167.0")).is_ok());
+        assert!(verify_server_version(Some("0.167.0-alpha.5.1")).is_ok());
         assert!(verify_server_version(None).is_err());
-        assert!(verify_server_version(Some("0.167.0")).is_err());
+        assert!(verify_server_version(Some("0.166.0")).is_err());
         assert!(verify_server_version(Some("0.164.0")).is_err());
-        assert!(verify_server_version(Some("0.166.invalid")).is_err());
+        assert!(verify_server_version(Some("0.167.invalid")).is_err());
     }
 }

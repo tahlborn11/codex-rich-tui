@@ -229,7 +229,7 @@ This command:
 The macOS frontend also requires a compatible official Codex backend.
 It discovers the selected official daemon package, the desktop app's bundled backend,
 or the official CLI at `~/.local/bin/codex`.
-The backend must match the fork's upstream major and minor version, currently `0.166`.
+The backend must match the fork's upstream major and minor version, currently `0.167`.
 Rich verifies OpenAI's code signature before it runs the backend.
 Set `CODEX_RICH_OFFICIAL_CLI` to select a different compatible official executable.
 An invalid explicit selection stops the command.
@@ -279,8 +279,8 @@ A clean build reports an identity such as:
 codex-rich 2026.08.10+74432be3 (upstream d1093932)
 ```
 
-The Cargo workspace uses `0.166.0+rich`, based on the verified upstream `rust-v0.166.0` release tag.
-Backend model discovery uses the numeric version `0.166.0`. The HTTP user agent uses the full Cargo version.
+The Cargo workspace uses `0.167.0+rich`, based on the verified upstream `rust-v0.167.0` release tag.
+Backend model discovery uses the numeric version `0.167.0`. The HTTP user agent uses the full Cargo version.
 Keep this compatibility version current when the fork adopts a newer upstream release baseline.
 The package helper rejects the upstream `0.0.0` development placeholder because it restricts the remote model catalog.
 

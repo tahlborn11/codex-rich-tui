@@ -87,7 +87,7 @@ pub(super) async fn prepare_fresh_startup_config(
     apply_managed_new_thread_defaults(
         config,
         app_server.managed_new_thread_defaults(),
-        defaults.is_some(),
+        /*server_config_read*/ true,
         cli_kv_overrides,
         harness_overrides,
     );
@@ -450,7 +450,7 @@ impl App {
             apply_managed_new_thread_defaults(
                 &mut config,
                 app_server.managed_new_thread_defaults(),
-                startup_defaults.server_defaults_read,
+                /*server_config_read*/ false,
                 &cli_kv_overrides,
                 &harness_overrides,
             );
