@@ -90,6 +90,8 @@ impl App {
                 {
                     companion.view.jump_to_latest();
                 }
+                redraw_after =
+                    redraw_after.or(companion.view.finish_code_copy(completion, visible));
             }
             let parent = self.sidebar_parent();
             let panel_visible = current && self.conversation_frame.panel_area().is_some();

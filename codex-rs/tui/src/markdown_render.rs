@@ -665,7 +665,7 @@ impl<'a, 'policy> Writer<'a, 'policy> {
             fence_start: None,
             code_block_lang: None,
             code_block_buffer: String::new(),
-    code_block_copy_buffer: String,
+            code_block_copy_buffer: String::new(),
             code_block_content: 0..0,
             code_block_chrome: CodeBlockChrome::Hidden,
             code_panel_full_width: false,

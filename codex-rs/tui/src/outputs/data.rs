@@ -688,6 +688,7 @@ async fn refresh_descendants(
             handle.request_typed(ClientRequest::ThreadList {
                 request_id: RequestId::String(Uuid::new_v4().to_string()),
                 params: ThreadListParams {
+                    current_account_only: false,
                     excluded_thread_ids: None,
                     originators: None,
                     cursor: cursor.clone(),
@@ -818,6 +819,7 @@ async fn list_items(
             .request_typed(ClientRequest::ThreadItemsList {
                 request_id: RequestId::String(Uuid::new_v4().to_string()),
                 params: ThreadItemsListParams {
+                    defer_output: None,
                     thread_id: thread_id.to_owned(),
                     turn_id: None,
                     cursor: cursor.map(ThreadItemsListCursor::Opaque),

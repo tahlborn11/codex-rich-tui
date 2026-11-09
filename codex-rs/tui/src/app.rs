@@ -278,8 +278,8 @@ mod right_click_paste;
 mod status_line_settings;
 mod statusline_picker;
 pub(crate) use right_click_paste::PasteEnvironment;
-mod pane_motion;
 mod outputs;
+mod pane_motion;
 mod safety_buffering;
 mod safety_recourse;
 mod server_version_notice;
@@ -1223,6 +1223,20 @@ impl App {
         if !composer_paste && Box::pin(self.handle_sidebar_input(tui, app_server, &event)).await {
             return Ok(AppRunControl::Continue);
         }
+        if let TuiEvent::Mouse(mouse) = &event
+            && mouse.kind == MouseEventKind::Moved
+            && self.conversation_focus_available(tui)
+            && let Some(painted) = self.conversation_frame.side_pane()
+        {
+            let size = tui.prepare_draw_size()?;
+            if let Some(current) = side_pane::layout(self, tui, size.into())
+                && current.passive_thread == painted.passive_thread
+                && painted.passive.union(painted.focused) == Rect::from(size)
+            {
+                // Both views need the pointer update so leaving either control clears its hover.
+                self.handle_passive_transcript_event(tui, current.passive_thread, &event);
+            }
+        }
         if let TuiEvent::Mouse(press) = &event
             && press.kind == MouseEventKind::Down(MouseButton::Left)
             && self.conversation_focus_available(tui)
@@ -1237,6 +1251,11 @@ impl App {
                 && painted.passive.union(painted.focused) == self.workspace_chat_area(size.into())
             {
                 let painted_area = painted.passive;
+                if self.passive_inline_control_at(*press) {
+                    self.passive_link_drag = Some((current.passive_thread, painted.passive));
+                    self.handle_passive_transcript_event(tui, current.passive_thread, &event);
+                    return Ok(AppRunControl::Continue);
+                }
                 if let Some(link) = self.transcript_link_at(*press) {
                     use crate::terminal_hyperlinks::ReaderLink;
                     if press.modifiers.is_empty() {
@@ -1652,6 +1671,9 @@ impl Drop for App {
     }
 }
 
+#[cfg(test)]
+#[path = "app/pane_code_copy_tests.rs"]
+mod pane_code_copy_tests;
 #[cfg(test)]
 pub(super) mod test_support;
 #[cfg(test)]
