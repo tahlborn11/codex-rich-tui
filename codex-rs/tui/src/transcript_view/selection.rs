@@ -555,6 +555,9 @@ impl TranscriptView {
     /// End the pointer gesture without discarding selected text when input ownership changes.
     pub(crate) fn end_drag(&mut self) {
         self.follow_control = Default::default();
+        // A side-pane gesture can lose its painted ownership before its mouse-up
+        // arrives. Do not leave an inline code control looking pressed after that.
+        self.cancel_inline_control_press();
         if self.has_pending_latest_selection() {
             self.position = Position::Latest;
             self.selection = None;

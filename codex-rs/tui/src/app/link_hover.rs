@@ -40,6 +40,20 @@ impl App {
         view.link_at(mouse.column, mouse.row)
     }
 
+    pub(super) fn passive_inline_control_at(&self, mouse: MouseEvent) -> bool {
+        mouse.modifiers.is_empty()
+            && self
+                .conversation_frame
+                .side_pane()
+                .filter(|panes| panes.passive.contains((mouse.column, mouse.row).into()))
+                .and_then(|panes| self.side_companions.get(&panes.passive_thread))
+                .is_some_and(|companion| {
+                    companion
+                        .view
+                        .has_inline_control_at(mouse.column, mouse.row)
+                })
+    }
+
     pub(super) fn handle_passive_transcript_event(
         &mut self,
         tui: &mut Tui,
@@ -64,13 +78,20 @@ impl App {
         let Some(action) = action else {
             return false;
         };
-        if let Some((count, result)) = view.copy_action(
+        if let ViewAction::CopyCode(text) = &action {
+            let result =
+                tui.copy_transcript_selection(text, crate::clipboard_copy::CopyFormat::PlainText);
+            view.show_copy_feedback(&result, text.chars().count());
+            if let Some(redraw_after) = view.show_code_copy_result(&result) {
+                tui.frame_requester().schedule_frame_in(redraw_after);
+            }
+        } else if let Some((count, result)) = view.copy_action(
             tui,
             &companion.cells,
             &action,
             crate::clipboard_copy::CopyFormat::Markdown,
         ) {
-            self.transcript_view.show_copy_feedback(&result, count);
+            view.show_copy_feedback(&result, count);
         } else if let ViewAction::OpenLink(url) = action {
             self.open_url_in_browser(url);
         }

@@ -12,7 +12,7 @@ expression: "rendered_receipts.join(\"\\n\\n\")"
 
 › Ask Codex to do anything
 
-  gpt-test default · /tmp/project
+  gpt-test default · /tmp/project · → for outputs
 
 ── Steered ──
 ■ Conversation interrupted - use /feedback if something went wrong
@@ -30,7 +30,7 @@ expression: "rendered_receipts.join(\"\\n\\n\")"
 
 › Ask Codex to do anything
 
-  gpt-test default · /tmp/project
+  gpt-test default · /tmp/project · → for outputs
 
 ── Rejected ──
 ■ reply stream closed before submission
@@ -49,4 +49,4 @@ expression: "rendered_receipts.join(\"\\n\\n\")"
 
 › Ask Codex to do anything
 
-  gpt-test default · /tmp/project
+  gpt-test default · /tmp/project · → for outputs

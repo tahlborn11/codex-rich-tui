@@ -361,7 +361,7 @@
           "type": "boolean"
         },
         "model_async_compact_threshold_percent": {
-          "description": "Percentage of the model's full context window that starts background compaction. Defaults to 65; valid values are 1\u2013100, including when disabled.",
+          "description": "Percentage of the model's full context window that starts background compaction. Defaults to 65; valid values are 1–100, including when disabled.",
           "format": "uint8",
           "maximum": 100.0,
           "minimum": 1.0,
@@ -8807,7 +8807,7 @@
       "description": "Optional path to a file containing model instructions that will override the built-in instructions for the selected model. Users are STRONGLY DISCOURAGED from using this field, as deviating from the instructions sanctioned by Codex will likely degrade model performance."
     },
     "model_post_turn_compact_threshold_percent": {
-      "description": "Percentage of the usable context window that triggers compaction after a final response. Existing auto-compaction limits still apply. Omitted or zero disables turn-end compaction; valid values are 0\u2013100.",
+      "description": "Percentage of the usable context window that triggers compaction after a final response. Existing auto-compaction limits still apply. Omitted or zero disables turn-end compaction; valid values are 0–100.",
       "format": "uint8",
       "maximum": 100.0,
       "minimum": 0.0,

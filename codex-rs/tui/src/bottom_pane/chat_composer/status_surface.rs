@@ -193,7 +193,7 @@ impl ChatComposer {
         let content = if let Some(transition) = transition {
             transition
                 .render_line(line.map(FooterContent::into_hyperlink_line), width)
-                .map(FooterContent::HyperlinkLine)
+                .map(FooterContent::from)
         } else {
             line
         };

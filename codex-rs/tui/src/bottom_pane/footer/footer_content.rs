@@ -17,7 +17,7 @@ use crate::ui_tree::UiTree;
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum FooterContent {
     Line(Line<'static>),
-    HyperlinkLine(HyperlinkLine),
+    HyperlinkLine(Box<HyperlinkLine>),
     Extension { content: Arc<PreparedUiTree> },
 }
 
@@ -66,7 +66,7 @@ impl FooterContent {
     pub(crate) fn into_hyperlink_line(self) -> HyperlinkLine {
         match self {
             Self::Line(line) => line.into(),
-            Self::HyperlinkLine(line) => line,
+            Self::HyperlinkLine(line) => *line,
             Self::Extension { content } => {
                 with_syntax_theme(|theme| content.render_line(u16::MAX, theme))
             }
@@ -76,7 +76,7 @@ impl FooterContent {
 
 impl From<HyperlinkLine> for FooterContent {
     fn from(line: HyperlinkLine) -> Self {
-        Self::HyperlinkLine(line)
+        Self::HyperlinkLine(Box::new(line))
     }
 }
 

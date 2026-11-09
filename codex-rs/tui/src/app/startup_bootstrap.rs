@@ -30,7 +30,7 @@ pub(super) async fn bootstrap_server_owned_start(
     apply_managed_new_thread_defaults(
         config,
         app_server.managed_new_thread_defaults(),
-        server_defaults_read,
+        /*server_config_read*/ true,
         cli_kv_overrides,
         harness_overrides,
     );

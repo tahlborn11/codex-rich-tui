@@ -20,7 +20,7 @@ fn clipped_links_keep_their_cells_after_a_halfwidth_katakana_grapheme() {
         /*x*/ 0, /*y*/ 0, /*width*/ 10, /*height*/ 1,
     );
     let mut buf = Buffer::empty(area);
-    FooterContent::HyperlinkLine(line).render(area, &mut buf);
+    FooterContent::from(line).render(area, &mut buf);
     assert_eq!(buf[(0, 0)].symbol(), osc8_hyperlink(project_url, "ｶﾞ"));
     for (x, ch) in (2..5).zip(" · ".chars()) {
         assert_eq!(buf[(x, 0)].symbol(), ch.to_string());
@@ -44,7 +44,7 @@ fn arabic_prefix_keeps_link_on_the_painted_cells_at_exact_fit_and_overflow() {
     for (width, visible_link) in [(11, "PR #42"), (10, "PR #")] {
         let area = Rect::new(/*x*/ 0, /*y*/ 0, width, /*height*/ 1);
         let mut buf = Buffer::empty(area);
-        FooterContent::HyperlinkLine(line.clone()).render(area, &mut buf);
+        FooterContent::from(line.clone()).render(area, &mut buf);
         assert_eq!(buf[(4, 0)].symbol(), " ");
         for (x, ch) in (5..width).zip(visible_link.chars()) {
             assert_eq!(buf[(x, 0)].symbol(), osc8_hyperlink(url, &ch.to_string()));

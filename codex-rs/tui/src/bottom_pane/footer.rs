@@ -853,7 +853,7 @@ pub(crate) fn passive_footer_status_line(props: &FooterProps) -> Option<FooterCo
         .filter(|_| props.status_line_enabled);
     let mut line = match status {
         Some(FooterContent::Line(line)) => HyperlinkLine::from(line.clone()),
-        Some(FooterContent::HyperlinkLine(line)) => line.clone(),
+        Some(FooterContent::HyperlinkLine(line)) => line.as_ref().clone(),
         Some(content @ FooterContent::Extension { .. }) => return Some(content.clone()),
         None => HyperlinkLine::default(),
     };
@@ -866,7 +866,7 @@ pub(crate) fn passive_footer_status_line(props: &FooterProps) -> Option<FooterCo
             .push_span(STATUS_LINE_SEPARATOR.set_style(secondary_text_style()));
     }
     line.line.spans.extend(suffix.spans);
-    Some(FooterContent::HyperlinkLine(line))
+    Some(FooterContent::from(line))
 }
 
 fn passive_footer_suffix(props: &FooterProps, has_status: bool) -> Line<'static> {

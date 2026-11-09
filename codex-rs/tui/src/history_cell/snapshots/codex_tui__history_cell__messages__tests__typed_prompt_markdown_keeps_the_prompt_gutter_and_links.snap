@@ -9,7 +9,9 @@ width 64
 
   • Try the command
 
-  echo '*literal*'
+  ╭─ sh ─────────── ⎘ ╮
+  │ echo '*literal*'  │
+  ╰───────────────────╯
 
 width 20
 
@@ -22,4 +24,7 @@ width 20
 
   • Try the command
 
-  echo '*literal*'
+  ╭─ sh ───── ⎘ ╮
+  │ echo '*lit  │
+  │ eral*'      │
+  ╰─────────────╯

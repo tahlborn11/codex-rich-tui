@@ -375,12 +375,13 @@ mod tests {
 
     #[test]
     fn accepts_the_current_official_version_family() {
-        assert!(is_compatible_version("codex-cli 0.166.0-alpha.5.1\n"));
-        assert!(is_compatible_version("codex-cli 0.166.9"));
+        assert!(is_compatible_version("codex-cli 0.167.0-alpha.5.1\n"));
+        assert!(is_compatible_version("codex-cli 0.167.9"));
         assert!(!is_compatible_version("codex-rich 2026.11.03"));
         assert!(!is_compatible_version("codex-cli 0.164.0"));
-        assert!(!is_compatible_version("codex-cli 0.166.invalid"));
-        assert!(!is_compatible_version("codex-cli 0.166.0.1"));
+        assert!(!is_compatible_version("codex-cli 0.166.0"));
+        assert!(!is_compatible_version("codex-cli 0.167.invalid"));
+        assert!(!is_compatible_version("codex-cli 0.167.0.1"));
     }
 
     #[test]
@@ -391,7 +392,7 @@ mod tests {
             verified: Cell::new(0),
             versioned: Cell::new(0),
             signature_ok: false,
-            version: "codex-cli 0.166.0",
+            version: "codex-cli 0.167.0",
         };
         assert!(validate_candidate(candidate.path(), self_executable.path(), &verifier).is_err());
         assert_eq!(verifier.verified.get(), 1);
@@ -407,7 +408,7 @@ mod tests {
             verified: Cell::new(0),
             versioned: Cell::new(0),
             signature_ok: false,
-            version: "codex-cli 0.166.0",
+            version: "codex-cli 0.167.0",
         };
         assert!(
             resolve_candidates(
@@ -432,7 +433,7 @@ mod tests {
             verified: Cell::new(0),
             versioned: Cell::new(0),
             signature_ok: true,
-            version: "codex-cli 0.166.0",
+            version: "codex-cli 0.167.0",
         };
         assert!(validate_candidate(executable.path(), executable.path(), &verifier).is_err());
         assert_eq!(verifier.verified.get(), 0);
@@ -467,14 +468,14 @@ mod tests {
             backend: Some("pid".into()),
             managed_codex_path: None,
             socket_path: None,
-            app_server_version: Some("0.166.0".into()),
+            app_server_version: Some("0.167.0".into()),
         };
-        assert!(validate_running_identity(&daemon, "codex-cli 0.166.0").is_ok());
+        assert!(validate_running_identity(&daemon, "codex-cli 0.167.0").is_ok());
         daemon.backend = None;
-        assert!(validate_running_identity(&daemon, "codex-cli 0.166.0").is_err());
+        assert!(validate_running_identity(&daemon, "codex-cli 0.167.0").is_err());
         daemon.backend = Some("pid".into());
-        daemon.app_server_version = Some("0.166.0+rich".into());
-        assert!(validate_running_identity(&daemon, "codex-cli 0.166.0").is_err());
+        daemon.app_server_version = Some("0.167.0+rich".into());
+        assert!(validate_running_identity(&daemon, "codex-cli 0.167.0").is_err());
     }
 
     #[test]

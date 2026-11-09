@@ -311,13 +311,10 @@ async fn fresh_startup_uses_server_defaults_with_explicit_and_managed_precedence
     .into_iter()
     .chain(
         ["managed_embedded", "managed_daemon", "managed_remote"].map(|choice| {
-            (
-                choice,
-                true,
-                Some("managed-model"),
-                Some("medium"),
-                Some("openai"),
-            )
+            // Server-owned fresh bootstrap has already consumed config/read. Even for the
+            // embedded transport, the initial thread deliberately leaves model and effort on
+            // the server; the session assertions below verify the resolved saved values.
+            (choice, true, None, None, Some("openai"))
         }),
     ) {
         let client_home = tempdir()?;
@@ -494,11 +491,25 @@ requires_openai_auth = false
             launch_choices,
         )
         .await?;
-        if choice.starts_with("managed_") {
+        if choice == "managed" {
             assert_eq!(started.session.model, "managed-model");
             assert_eq!(
                 started.session.reasoning_effort,
                 Some(ReasoningEffortConfig::Medium)
+            );
+        }
+        if matches!(
+            choice,
+            "saved_managed" | "managed_embedded" | "managed_daemon" | "managed_remote"
+        ) {
+            assert_eq!(
+                started.session.model, "server-model",
+                "authoritative saved server model must precede managed defaults: {choice}"
+            );
+            assert_eq!(
+                started.session.reasoning_effort,
+                Some(ReasoningEffortConfig::High),
+                "authoritative saved server effort must precede managed defaults: {choice}"
             );
         }
         let starts = recorded_params(&requests, "thread/start");

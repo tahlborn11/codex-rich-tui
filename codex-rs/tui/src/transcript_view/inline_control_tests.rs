@@ -44,6 +44,8 @@ fn code_controls_copy_their_own_exact_blocks() {
         "{}",
         crate::transcript_view::tests::text(&buffer)
     );
+    assert!(view.has_inline_control_at(icons[1].x, icons[1].y));
+    assert!(!view.has_inline_control_at(icons[1].x.saturating_sub(1), icons[1].y));
 
     assert!(matches!(
         view.handle_mouse(
@@ -100,6 +102,50 @@ fn pending_code_copy_shows_check_only_after_confirmed_completion() {
     let mut confirmed = Buffer::empty(view.area);
     view.render(view.area, &mut confirmed, &cells);
     assert_eq!(confirmed[icon].symbol(), "✓");
+}
+
+#[test]
+fn code_copy_completion_for_a_hidden_pane_clears_only_its_pending_control() {
+    let (mut owner, cells, buffer) = transcript("```text\nowner\n```", /*width*/ 32);
+    let icon = icons(&buffer)[0];
+    owner.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), icon), &cells);
+    owner.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), icon), &cells);
+    assert_eq!(
+        owner.show_code_copy_result(&Ok(crate::clipboard_copy::CopyStatus::Pending(7))),
+        None
+    );
+
+    let (mut other, other_cells, other_buffer) =
+        transcript("```text\nother\n```", /*width*/ 32);
+    let other_icon = icons(&other_buffer)[0];
+    other.handle_mouse(
+        mouse(MouseEventKind::Down(MouseButton::Left), other_icon),
+        &other_cells,
+    );
+    other.handle_mouse(
+        mouse(MouseEventKind::Up(MouseButton::Left), other_icon),
+        &other_cells,
+    );
+    assert_eq!(
+        other.show_code_copy_result(&Ok(crate::clipboard_copy::CopyStatus::Pending(8))),
+        None
+    );
+
+    assert_eq!(
+        owner.finish_code_copy(
+            &(7, Ok(crate::clipboard_copy::CopyStatus::Confirmed)),
+            /*current*/ false,
+        ),
+        Some(std::time::Duration::ZERO)
+    );
+    assert_eq!(
+        other.finish_code_copy(
+            &(7, Ok(crate::clipboard_copy::CopyStatus::Confirmed)),
+            /*current*/ true,
+        ),
+        None,
+        "a completion may not confirm a different transcript's control"
+    );
 }
 
 #[test]

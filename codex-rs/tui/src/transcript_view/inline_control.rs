@@ -178,6 +178,19 @@ impl TranscriptView {
         Some(Duration::ZERO)
     }
 
+    /// Returns whether a click at this screen coordinate belongs to an inline control.
+    ///
+    /// Side conversation panes use this before changing focus so the control retains
+    /// ownership of its press and completion feedback.
+    pub(crate) fn has_inline_control_at(&self, column: u16, row: u16) -> bool {
+        self.inline_control_at(ScreenPosition::new(column, row))
+            .is_some()
+    }
+
+    pub(super) fn cancel_inline_control_press(&mut self) {
+        self.inline_control.pressed = None;
+    }
+
     fn inline_control_at(&self, point: ScreenPosition) -> Option<ControlTarget> {
         if !self.area.contains(point) {
             return None;

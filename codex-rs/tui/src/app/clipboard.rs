@@ -87,6 +87,8 @@ impl App {
                 {
                     companion.view.jump_to_latest();
                 }
+                redraw_after =
+                    redraw_after.or(companion.view.finish_code_copy(completion, visible));
             }
             let main_redraw_after = self.transcript_view.finish_code_copy(completion, current);
             redraw_after = redraw_after.or(main_redraw_after);
