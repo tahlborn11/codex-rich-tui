@@ -1983,10 +1983,10 @@ async fn read_only_history_hides_the_statusline_until_interactive_resume() -> Re
         .await?;
     assert!(app.chat_widget.statusline_state().is_none());
     let footer = render_bottom_popup(&app.chat_widget, /*width*/ 100);
-    insta::assert_snapshot!(footer, @r"
+    insta::assert_snapshot!(footer, @"
     › Ask Codex to do anything
 
-      ? for shortcuts
+      → for outputs · ? for shortcuts
     ");
 
     for window in [Some(100_000), None] {

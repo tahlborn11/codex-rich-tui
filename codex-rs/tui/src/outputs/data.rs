@@ -689,6 +689,8 @@ async fn refresh_descendants(
                 request_id: RequestId::String(Uuid::new_v4().to_string()),
                 params: ThreadListParams {
                     current_account_only: false,
+                    include_attached_threads: false,
+                    included_thread_ids: None,
                     excluded_thread_ids: None,
                     originators: None,
                     cursor: cursor.clone(),

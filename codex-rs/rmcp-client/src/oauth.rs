@@ -755,7 +755,7 @@ fn delete_oauth_tokens_from_secrets_keyring<K: KeyringStore + Clone + 'static>(
 ) -> Result<bool> {
     let _store_lock =
         OAuthStoreLock::acquire_for_write(OAuthStore::Secrets, OAuthStoreWriteOperation::Delete)?;
-    let codex_home = find_codex_home().map_err(anyhow::Error::from)?;
+    let codex_home = find_codex_home()?;
     let manager = SecretsManager::new_with_keyring_store_and_namespace(
         codex_home.to_path_buf(),
         SecretsBackendKind::Local,

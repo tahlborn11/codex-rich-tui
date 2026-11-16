@@ -23,6 +23,13 @@ fn composer() -> ChatComposer {
     composer
 }
 
+// Keep navigation hints out of tests that measure the status-only row budget.
+fn disable_outputs_navigation(composer: &mut ChatComposer) {
+    let keymap: codex_config::types::TuiKeymap =
+        toml::from_str("[editor]\nmove_right = 'ctrl-f'").unwrap();
+    composer.set_keymap_bindings(&crate::keymap::RuntimeKeymap::from_config(&keymap).unwrap());
+}
+
 #[test]
 fn extension_status_line_clips_links_to_footer_layout() {
     let mut composer = composer();
@@ -498,6 +505,7 @@ fn extension_status_keeps_its_rows_when_effort_changes() {
 #[test]
 fn native_status_wraps_links_within_the_host_budget() {
     let mut composer = composer();
+    disable_outputs_navigation(&mut composer);
     composer.set_collaboration_modes_enabled(/*enabled*/ true);
     let url = "https://example.com/pr/42";
     let mut status = HyperlinkLine::from("لا ");
@@ -551,6 +559,7 @@ fn native_status_wraps_links_within_the_host_budget() {
 #[test]
 fn native_wrap_tracks_agent_label_and_content_changes_at_the_same_width() {
     let mut composer = composer();
+    disable_outputs_navigation(&mut composer);
     composer.set_status_line(Some(Line::from("build ready").into()));
     let area = Rect::new(0, 0, 16, 14);
     composer.footer.toggle_shortcuts_key = None;
@@ -864,7 +873,7 @@ fn oversized_goal_yields_to_an_eligible_whole_hint_with_status_disabled() {
     composer.set_status_line_enabled(/*enabled*/ false);
     composer.set_context_window(Some(100), /*used_tokens*/ None);
     let (text, _) = render(&composer, /*width*/ 18, /*footer*/ None);
-    assert_eq!(text.lines().last().map(str::trim), Some("? for shortcuts"));
+    assert_eq!(text.lines().last().map(str::trim), Some("→ for outputs"));
     let (text, _) = render(&composer, /*width*/ 20, /*footer*/ None);
     assert_eq!(
         text.lines().last().map(str::trim),
@@ -874,7 +883,7 @@ fn oversized_goal_yields_to_an_eligible_whole_hint_with_status_disabled() {
     composer.set_context_window_hidden(/*hidden*/ true);
     composer.set_goal_status_indicator(Some(GoalStatusIndicator::Paused));
     let (text, _) = render(&composer, /*width*/ 18, /*footer*/ None);
-    assert_eq!(text.lines().last().map(str::trim), Some("? for shortcuts"));
+    assert_eq!(text.lines().last().map(str::trim), Some("→ for outputs"));
     let options = ComposerRenderOptions {
         separate_status_line: true,
         ..Default::default()

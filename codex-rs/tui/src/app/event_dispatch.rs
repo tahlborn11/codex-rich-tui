@@ -30,6 +30,7 @@ use codex_app_server_protocol::WindowsSandboxSetupMode;
 pub(super) const SHUTDOWN_FIRST_EXIT_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 2);
 
 impl App {
+    // Construct boxed arm futures outside the dispatcher poll frame to bound stack use.
     // Keep the existing dispatcher layout until it can be formatted separately.
     #[rustfmt::skip]
     pub(crate) async fn handle_event(
@@ -239,11 +240,11 @@ impl App {
                 return Ok(self.handle_exit_mode(app_server, ExitMode::Immediate).await);
             }
             AppEvent::UserVerificationApproved { thread_id, server_name, request_id } => {
-                Box::pin(self.start_user_verification(app_server, thread_id, server_name, request_id)).await?;
+                crate::boxed_future!(self.start_user_verification(app_server, thread_id, server_name, request_id)).await?;
             }
             AppEvent::UserVerificationFinished { thread_id, server_name, request_id, attempt_id, result } => {
                 // Keep this RPC future out of the event loop's stack frame.
-                Box::pin(self.finish_user_verification(app_server, thread_id, server_name, request_id, attempt_id, result)).await?;
+                crate::boxed_future!(self.finish_user_verification(app_server, thread_id, server_name, request_id, attempt_id, result)).await?;
             }
             AppEvent::ReviewMisalignment(review) => {
                 self.open_misalignment_review(tui, review);
@@ -2984,12 +2985,12 @@ impl App {
                     .await;
             }
             AppEvent::PersistDaybreakSelection { thread_id, enabled } => {
-                Box::pin(self.persist_daybreak_selection(app_server, thread_id, enabled)).await;
+                crate::boxed_future!(self.persist_daybreak_selection(app_server, thread_id, enabled)).await;
             }
             AppEvent::DisableUnavailableDaybreak { thread_id, model } => {
                 if self.chat_widget.current_model() == model
                     && self.chat_widget.should_disable_daybreak(&model)
-                    && Box::pin(self.persist_daybreak_selection(app_server, thread_id, /*enabled*/ false)).await
+                    && crate::boxed_future!(self.persist_daybreak_selection(app_server, thread_id, /*enabled*/ false)).await
                 {
                     self.chat_widget.add_info_message(
                         format!("Daybreak has been turned off for new turns because it is not available for {model} with your current account and server. Prior cybersecurity context in this thread may cause a refusal. You can switch back to a model where you have Daybreak access and use /daybreak to re-enable it."),
@@ -3347,7 +3348,7 @@ impl App {
                 }
             }
             AppEvent::NewAgentsOverviewSession { cwd, .. } => {
-                return Box::pin(self.new_agents_overview_session(tui, app_server, cwd)).await;
+                return crate::boxed_future!(self.new_agents_overview_session(tui, app_server, cwd)).await;
             }
             AppEvent::AgentsOverviewThreadsLoaded { request_id, result } => {
                 self.apply_agents_overview_thread_refresh(app_server, request_id, result);
@@ -3397,7 +3398,7 @@ impl App {
             }
             AppEvent::ForkAgentsOverviewThreadReady { .. } => unreachable!("normalized above"),
             AppEvent::NewAgentsOverviewWorktree { cwd, .. } => {
-                Box::pin(self.new_agents_overview_worktree(tui, app_server, cwd)).await;
+                crate::boxed_future!(self.new_agents_overview_worktree(tui, app_server, cwd)).await;
             }
             AppEvent::AgentsOverviewWorktreeCreated(result) => {
                 self.pending_managed_worktree_creation = false;
@@ -3409,7 +3410,7 @@ impl App {
                         };
                         let manager = pending.manager.clone();
                         let cwd = AbsolutePathBuf::try_from(checkout.cwd.clone())?;
-                        return Box::pin(self.start_agents_overview_session(tui, app_server, Some(cwd), Some((manager, checkout)), /*startup_draft*/ None)).await;
+                        return crate::boxed_future!(self.start_agents_overview_session(tui, app_server, Some(cwd), Some((manager, checkout)), /*startup_draft*/ None)).await;
                     }
                     Err(error) => self.add_agents_overview_error(error),
                 }
@@ -3535,7 +3536,7 @@ impl App {
                 user_message,
                 mode,
             } => {
-                return Box::pin(self.handle_start_side(tui, app_server, parent_thread_id, user_message, mode)).await;
+                return crate::boxed_future!(self.handle_start_side(tui, app_server, parent_thread_id, user_message, mode)).await;
             }
             AppEvent::SideCreated {
                 backend_id: _,
@@ -3543,7 +3544,7 @@ impl App {
                 request,
                 result,
             } => {
-                Box::pin(self.finish_side_creation(tui, app_server, parent, request, result)).await;
+                crate::boxed_future!(self.finish_side_creation(tui, app_server, parent, request, result)).await;
             }
             AppEvent::SideChatRemovalFinished { backend_id, target, request, action, result } => {
                 if backend_id == app_server.backend_id()
@@ -3579,7 +3580,7 @@ impl App {
                 }
             }
             AppEvent::SavedChatPrepared { target, request, result } => {
-                Box::pin(self.finish_saved_chat(tui, app_server, target, request, *result)).await?;
+                crate::boxed_future!(self.finish_saved_chat(tui, app_server, target, request, *result)).await?;
             }
             AppEvent::SavedChatReleased { target, request } => {
                 self.finish_saved_release(target, request);
@@ -3589,7 +3590,7 @@ impl App {
                     && target.backend_id == app_server.backend_id()
                     && self.wants_saved_chat(target)
                 {
-                    Box::pin(self.open_saved_chat(tui, app_server, target)).await?;
+                    crate::boxed_future!(self.open_saved_chat(tui, app_server, target)).await?;
                 }
             }
             AppEvent::SavedSideChatsLoaded { backend_id, parent, request, result } => {

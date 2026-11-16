@@ -1132,24 +1132,24 @@ mod tests {
             active_agent_label: Some("Robie [explorer]".to_string()),
         };
 
-        let Some(FooterContent::HyperlinkLine(line)) = passive_footer_status_line(&props) else {
+        let Some(line) = passive_footer_status_line(&props) else {
             panic!("contextual footer should preserve hyperlinks");
         };
         assert_eq!(
-            line_text(&line.line),
+            line_text(&line.as_native().expect("native contextual footer").line),
             "Robie [explorer] · ← for agents · → for outputs"
         );
         let props = FooterProps {
             active_agent_label: None,
             status_line_enabled: true,
-            status_line_value: Some(FooterContent::Line("status".into())),
+            status_line_value: Some(StatusLine::from("status")),
             ..props
         };
-        let Some(FooterContent::HyperlinkLine(line)) = passive_footer_status_line(&props) else {
+        let Some(line) = passive_footer_status_line(&props) else {
             panic!("status footer should preserve hyperlinks");
         };
         assert_eq!(
-            line_text(&line.line),
+            line_text(&line.as_native().expect("native status footer").line),
             "status · ← for agents · → for outputs"
         );
     }

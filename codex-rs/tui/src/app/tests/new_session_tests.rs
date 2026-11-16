@@ -505,7 +505,7 @@ async fn replacement_uses_server_defaults_and_preserves_explicit_launch_settings
             › Ask Codex to do anything
 
               server-model high · <PROJECT>
-              ← for agents · ? for shortcuts
+              ← for agents · → for outputs · ? for shortcuts
             ");
         }
         if explicit.starts_with("profile_summary") {
@@ -1975,7 +1975,7 @@ async fn replacement_uses_managed_defaults_when_config_read_is_unsupported() -> 
             app.start_fresh_session(
                 &mut tui,
                 &mut server,
-                /*session_start_source*/ None,
+                FreshSessionStart::PreserveCurrentView(None),
                 /*initial_user_message*/ None,
                 /*new_thread_name*/ None,
             )

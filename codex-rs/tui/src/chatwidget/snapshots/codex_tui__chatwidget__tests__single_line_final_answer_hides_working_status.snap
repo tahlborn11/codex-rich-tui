@@ -1,6 +1,5 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
-assertion_line: 2248
 expression: normalize_snapshot_paths(terminal.backend().vt100().screen().contents())
 ---
 › count to 1
@@ -12,4 +11,4 @@ expression: normalize_snapshot_paths(terminal.backend().vt100().screen().content
 › Ask Codex to do anything
 
   gpt-5 default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts

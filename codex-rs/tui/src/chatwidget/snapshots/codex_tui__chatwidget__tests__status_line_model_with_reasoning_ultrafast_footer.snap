@@ -7,4 +7,4 @@ expression: normalized_backend_snapshot(terminal.backend())
 "› Ask Codex to do anything                                                      "
 "                                                                                "
 "  gpt-5.4 xhigh ultrafast · Context 0% used · /tmp/project                      "
-"  ? for shortcuts                                                               "
+"  → for outputs · ? for shortcuts                                               "
