@@ -4,6 +4,21 @@ use super::tests::type_chars_humanlike;
 use super::*;
 use assert_matches::assert_matches;
 use pretty_assertions::assert_eq;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+
+fn rendered_rows(composer: &ChatComposer, width: u16, height: u16) -> Vec<String> {
+    let area = Rect::new(0, 0, width, height);
+    let mut buffer = Buffer::empty(area);
+    composer.render(area, &mut buffer);
+    (0..height)
+        .map(|y| {
+            (0..width)
+                .map(|x| buffer[(x, y)].symbol().chars().next().unwrap_or(' '))
+                .collect()
+        })
+        .collect()
+}
 
 #[test]
 fn parent_owned_thread_allows_local_commands() {
@@ -246,4 +261,39 @@ fn outputs_hint_matches_navigation_availability() {
     let runtime = crate::keymap::RuntimeKeymap::from_config(&config).unwrap();
     composer.set_keymap_bindings(&runtime);
     assert!(composer.footer_props().key_hints.outputs.is_none());
+}
+
+#[test]
+fn rendered_hints_order_outputs_between_agents_and_shortcuts() {
+    let (mut composer, _events) = new_test_composer();
+    composer.command_center_enabled = true;
+    let wide = rendered_rows(&composer, /*width*/ 80, /*height*/ 6).join("\n");
+    assert!(wide.contains("← for agents · → for outputs · ? for shortcuts"));
+
+    let narrow = rendered_rows(&composer, /*width*/ 40, /*height*/ 6).join("\n");
+    assert!(narrow.contains("← for agents"), "{narrow}");
+    assert!(!narrow.contains("for outputs"));
+    assert!(!narrow.contains("for shortcuts"));
+
+    composer.insert_str("draft");
+    let draft = rendered_rows(&composer, /*width*/ 80, /*height*/ 6).join("\n");
+    assert!(!draft.contains("for outputs"));
+
+    composer.clear_for_ctrl_c();
+    composer.set_remote_image_urls(vec!["https://example.com/image.png".into()]);
+    let attachment = rendered_rows(&composer, /*width*/ 80, /*height*/ 6).join("\n");
+    assert!(!attachment.contains("for outputs"));
+
+    composer.set_remote_image_urls(Vec::new());
+    composer.handle_key_event(KeyCode::Char('?').into());
+    let help = rendered_rows(&composer, /*width*/ 80, /*height*/ 8).join("\n");
+    assert!(!help.contains("for outputs"));
+    composer.handle_key_event(KeyCode::Esc.into());
+
+    let config: codex_config::types::TuiKeymap =
+        toml::from_str("[editor]\nmove_right = 'ctrl-f'").unwrap();
+    let runtime = crate::keymap::RuntimeKeymap::from_config(&config).unwrap();
+    composer.set_keymap_bindings(&runtime);
+    let remapped = rendered_rows(&composer, /*width*/ 80, /*height*/ 6).join("\n");
+    assert!(!remapped.contains("for outputs"));
 }

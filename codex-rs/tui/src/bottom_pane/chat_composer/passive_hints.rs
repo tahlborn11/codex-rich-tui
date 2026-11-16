@@ -16,6 +16,7 @@ use ratatui::style::Styled;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Kind {
     Agents,
+    Outputs,
     Shortcuts,
     Action,
     Side,
@@ -38,12 +39,14 @@ impl Kind {
     }
 
     fn left(self) -> bool {
-        matches!(self, Agents | Shortcuts | Action | Side | SideNav)
+        matches!(self, Agents | Outputs | Shortcuts | Action | Side | SideNav)
     }
 
     fn row(self, two_rows: bool) -> usize {
         usize::from(
-            two_rows && !self.is_input_mode() && !matches!(self, Agents | Shortcuts | SideNav),
+            two_rows
+                && !self.is_input_mode()
+                && !matches!(self, Agents | Outputs | Shortcuts | SideNav),
         )
     }
 }
@@ -141,6 +144,7 @@ impl Hints {
         let mut p = self.placement(two);
         for (kind, form) in [
             (Shortcuts, None),
+            (Outputs, None),
             (Plan, Some(1)),
             (Warning, Some(1)),
             (Ide, Some(1)),
@@ -177,7 +181,7 @@ impl Hints {
         }
         for kind in [
             Action, Side, Shell, Vim, Plan, Goal, Ide, Warning, Context, SideNav, AgentName,
-            Agents, Shortcuts,
+            Agents, Outputs, Shortcuts,
         ] {
             if !overflow[kind.row(two)] {
                 continue;
@@ -320,6 +324,15 @@ impl ChatComposer {
                     [shortcut(
                         key_hint::plain(KeyCode::Left).into(),
                         " for agents",
+                    )],
+                );
+            }
+            if self.outputs_navigation_available() {
+                hints.add(
+                    Outputs,
+                    [shortcut(
+                        key_hint::plain(KeyCode::Right).into(),
+                        " for outputs",
                     )],
                 );
             }

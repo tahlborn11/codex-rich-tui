@@ -1,6 +1,5 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
-assertion_line: 4346
 expression: normalized_backend_snapshot(terminal.backend())
 ---
 "                                                                                "
@@ -8,4 +7,4 @@ expression: normalized_backend_snapshot(terminal.backend())
 "› Ask Codex to do anything                                                      "
 "                                                                                "
 "  GPT-5.5                                                                       "
-"  ? for shortcuts                                     Pursuing goal (40K / 50K) "
+"  → for outputs · ? for shortcuts                     Pursuing goal (40K / 50K) "

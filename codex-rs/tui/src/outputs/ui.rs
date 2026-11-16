@@ -148,7 +148,6 @@ pub(crate) struct OutputsView {
     notice: Option<String>,
     generation: u64,
     detail_generation: u64,
-    chord_hint: Option<Vec<(String, String)>>,
     pending_copy: Option<u64>,
     loads: Vec<JoinHandle<()>>,
     load_tx: mpsc::UnboundedSender<LoadResult>,
@@ -240,7 +239,6 @@ impl OutputsView {
             notice: None,
             generation: 0,
             detail_generation: 0,
-            chord_hint: None,
             pending_copy: None,
             loads: Vec::new(),
             load_tx,
@@ -297,9 +295,6 @@ impl OutputsView {
     #[cfg(test)]
     fn generation(&self) -> u64 {
         self.generation
-    }
-    pub(crate) fn set_chord_hint(&mut self, hint: Option<Vec<(String, String)>>) {
-        self.chord_hint = hint;
     }
     pub(crate) fn cancel_loads(&mut self) {
         self.clear_list_click();
@@ -2562,9 +2557,6 @@ impl OutputsView {
         if let Some(notice) = &self.notice {
             text.push_str(" · ");
             text.push_str(notice);
-        }
-        if self.chord_hint.is_some() {
-            text.push_str(" · waiting for key chord");
         }
         Paragraph::new(
             crate::history_cell::sanitize_user_text(text.into())

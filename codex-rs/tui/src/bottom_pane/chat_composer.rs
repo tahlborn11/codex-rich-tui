@@ -944,7 +944,7 @@ impl ChatComposer {
             });
             if let Some(previous) = previous {
                 self.effort_status_line_transition =
-                    Some(EffortStatusLineTransition::new(tier, *previous));
+                    Some(EffortStatusLineTransition::new(tier, previous));
             }
             if let Some(frame_requester) = &self.frame_requester {
                 frame_requester.schedule_frame();

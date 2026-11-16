@@ -4,7 +4,7 @@ expression: "frames.join(\"\\n---\\n\")"
 ---
 fullscreen 120×2 empty
   Build ready
-  ← for agents · ? for shortcuts      Vim: Normal · Plan mode (⇧tab to cycle) · IDE context · ⚠ 2 warnings · f2 to view
+  ← for agents · → for outputs        Vim: Normal · Plan mode (⇧tab to cycle) · IDE context · ⚠ 2 warnings · f2 to view
 ---
 fullscreen 60×2 empty
   Build ready

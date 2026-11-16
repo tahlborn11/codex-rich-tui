@@ -1,6 +1,5 @@
 ---
 source: tui/src/chatwidget/tests/popups_and_settings.rs
-assertion_line: 4101
 expression: snapshot
 ---
 "                                                                                "
@@ -8,4 +7,4 @@ expression: snapshot
 "› Ask Codex to do anything                                                      "
 "                                                                                "
 "  GPT-5.5 max                                                                   "
-"  ? for shortcuts                                     Plan mode (⇧tab to cycle) "
+"  → for outputs · ? for shortcuts                     Plan mode (⇧tab to cycle) "

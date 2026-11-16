@@ -2260,9 +2260,12 @@ async fn token_usage_update_refreshes_status_line_with_runtime_context_window() 
                 .is_some_and(|status| status.as_native().is_some())
         );
         let rendered = render_bottom_popup(&app.chat_widget, /*width*/ 60);
-        let expected = format!("{expected} · → for outputs");
         assert!(
             rendered.lines().any(|row| row.trim() == expected),
+            "{rendered}"
+        );
+        assert!(
+            rendered.lines().any(|row| row.contains("→ for outputs")),
             "{rendered}"
         );
     }
