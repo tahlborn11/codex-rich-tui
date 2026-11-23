@@ -268,7 +268,7 @@ async fn cloud_fresh_session_refreshes_account_without_project_config() -> Resul
             .join("\n");
         insta::allow_duplicates! {
             insta::assert_snapshot!(normalize_snapshot_paths(history).trim(), @"
-            >_ OpenAI Codex (v0.0.0)
+            >_ OpenAI Codex (v0.171.0+rich)
                  /tmp/project
             ");
         }

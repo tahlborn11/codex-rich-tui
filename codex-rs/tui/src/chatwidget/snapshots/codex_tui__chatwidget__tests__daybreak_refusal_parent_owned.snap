@@ -1,6 +1,5 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
-assertion_line: 196
 expression: "normalize_snapshot_paths(format!(\"{}\\n{}\",\nlines_to_single_string(cells.last().unwrap()),\nrender_bottom_popup(&chat, 80)))"
 ---
 ⓘ This content can’t be shown
@@ -11,4 +10,4 @@ expression: "normalize_snapshot_paths(format!(\"{}\\n{}\",\nlines_to_single_stri
 › Viewing sub-agent — direct input is disabled
 
   GPT-6.2-Sol default · /tmp/project
-  ? for shortcuts
+  → for outputs · ? for shortcuts

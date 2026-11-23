@@ -173,14 +173,14 @@ async fn document_preview_scenario() -> Result<()> {
             screen
                 .lines()
                 .map(str::trim)
-                .filter(|row| row.ends_with("# Guide") || row.ends_with("First section."))
+                .filter(|row| row.ends_with("Guide") || row.ends_with("First section."))
                 .map(|row| row.rsplit('│').next().unwrap_or(row).trim()),
         )
         .collect::<Vec<_>>()
         .join("\n");
     insta::assert_snapshot!(visible, @"
     guide.md × +
-    # Guide
+    Guide
     First section.
     ");
     let sidebar = app.conversation_frame.panel_area().expect("document panel");
@@ -199,7 +199,12 @@ async fn document_preview_scenario() -> Result<()> {
         app.keymap.pager.scroll_down = vec![KeyBinding::from_event(key)];
         Box::pin(app.handle_tui_event(&mut tui, &mut server, TuiEvent::Key(key))).await?;
         let scrolled = side_frame(&mut app, &mut tui, size)?;
-        assert!(!scrolled.contains("# Guide"), "{scrolled}");
+        let preview = app.conversation_frame.panel_area().expect("document panel");
+        assert!(
+            (preview.y..preview.bottom())
+                .all(|row| visible_sidebar_row(&tui, preview, row) != "Guide"),
+            "{scrolled}"
+        );
         assert!(!scrolled.contains("Back to bottom"), "{scrolled}");
         Box::pin(app.handle_tui_event(&mut tui, &mut server, TuiEvent::Key(KeyCode::Home.into())))
             .await?;
@@ -369,7 +374,7 @@ async fn document_preview_scenario() -> Result<()> {
             .any(|line| line.contains("guide.md") && line.contains("notes.md")),
         "{two}"
     );
-    assert!(two.contains("# Notes"), "{two}");
+    assert!(two.contains("Notes"), "{two}");
     Box::pin(app.handle_tui_event(&mut tui, &mut server, TuiEvent::Key(KeyCode::Esc.into())))
         .await?;
     let returned = side_frame(&mut app, &mut tui, size)?;

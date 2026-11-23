@@ -54,11 +54,11 @@ use crate::render::line_utils::line_to_static;
 use crate::style::accent_color;
 use crate::style::table_separator_style;
 use crate::terminal_hyperlinks::HyperlinkLine;
-use crate::terminal_hyperlinks::TerminalHyperlink;
-use crate::terminal_hyperlinks::markdown_destination;
 use crate::terminal_hyperlinks::LineControl;
 use crate::terminal_hyperlinks::LineControlAction;
 use crate::terminal_hyperlinks::LinePanel;
+use crate::terminal_hyperlinks::TerminalHyperlink;
+use crate::terminal_hyperlinks::markdown_destination;
 use crate::terminal_hyperlinks::remap_wrapped_line;
 use crate::terminal_hyperlinks::source_span_width;
 use crate::terminal_hyperlinks::visible_lines;
@@ -82,8 +82,8 @@ use ratatui::text::Text;
 use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
-use unicode_segmentation::UnicodeSegmentation;
 use std::sync::Arc;
+use unicode_segmentation::UnicodeSegmentation;
 
 mod code_panel;
 mod inline_directives;
@@ -1489,51 +1489,51 @@ impl<'a, 'policy> Writer<'a, 'policy> {
         let code: Arc<str> = std::mem::take(&mut self.code_block_buffer).into();
         let copy_code: Arc<str> = std::mem::take(&mut self.code_block_copy_buffer).into();
         // Completed Mermaid fences can replace source with a diagram; other blocks keep highlighting.
-        if let Some(lang) = self.code_block_lang.take() {
-            if !code.is_empty() {
-                // Disabled Markdown tables are rendered with the opening fence in the text
-                // event. Ordinary fenced code text starts after the opening fence.
-                let literal_markdown_fence = self.code_block_content.start == range.start
-                    && crate::table_detect::is_markdown_fence_info(&lang, /*marker_len*/ 0);
-                let diagram = if preferences::current().mermaid
-                    && lang == "mermaid"
-                    && mermaid::has_closing_fence(self.input, range, self.code_block_content.end)
-                {
-                    let indent =
-                        Self::spans_display_width(&self.prefix_spans(self.pending_marker_line));
-                    Some(mermaid::render(
-                        &code,
-                        self.wrap_width.map(|width| width.saturating_sub(indent)),
-                        &current_syntax_theme(),
-                    ))
-                } else {
-                    None
-                };
-                let code_language: Option<std::sync::Arc<str>> = diagram
-                    .is_none()
-                    .then(|| lang.split('`').next().unwrap_or_default().into());
-                let highlighted = match diagram {
-                    Some(diagram) => diagram,
-                    None => highlight_code_to_lines(&code, &lang),
-                };
-                self.resize_code_panel_for_rendered_lines(&lang, &highlighted);
-                let source = if literal_markdown_fence
-                    && let Some(crate::markdown::CopyTarget::Code { content, .. }) =
-                        crate::markdown::extract_copy_targets(&copy_code)
-                            .into_iter()
-                            .next()
-                {
-                    content
-                } else {
-                    Arc::clone(&copy_code)
-                };
-                for hl_line in highlighted {
-                    self.push_line(Line::default());
-                    self.copy_line.code_source = Some(std::sync::Arc::clone(&source));
-                    self.copy_line.code_language = code_language.clone();
-                    for span in hl_line.spans {
-                        self.push_span(span);
-                    }
+        if let Some(lang) = self.code_block_lang.take()
+            && !code.is_empty()
+        {
+            // Disabled Markdown tables are rendered with the opening fence in the text
+            // event. Ordinary fenced code text starts after the opening fence.
+            let literal_markdown_fence = self.code_block_content.start == range.start
+                && crate::table_detect::is_markdown_fence_info(&lang, /*marker_len*/ 0);
+            let diagram = if preferences::current().mermaid
+                && lang == "mermaid"
+                && mermaid::has_closing_fence(self.input, range, self.code_block_content.end)
+            {
+                let indent =
+                    Self::spans_display_width(&self.prefix_spans(self.pending_marker_line));
+                Some(mermaid::render(
+                    &code,
+                    self.wrap_width.map(|width| width.saturating_sub(indent)),
+                    &current_syntax_theme(),
+                ))
+            } else {
+                None
+            };
+            let code_language: Option<std::sync::Arc<str>> = diagram
+                .is_none()
+                .then(|| lang.split('`').next().unwrap_or_default().into());
+            let highlighted = match diagram {
+                Some(diagram) => diagram,
+                None => highlight_code_to_lines(&code, &lang),
+            };
+            self.resize_code_panel_for_rendered_lines(&lang, &highlighted);
+            let source = if literal_markdown_fence
+                && let Some(crate::markdown::CopyTarget::Code { content, .. }) =
+                    crate::markdown::extract_copy_targets(&copy_code)
+                        .into_iter()
+                        .next()
+            {
+                content
+            } else {
+                Arc::clone(&copy_code)
+            };
+            for hl_line in highlighted {
+                self.push_line(Line::default());
+                self.copy_line.code_source = Some(std::sync::Arc::clone(&source));
+                self.copy_line.code_language = code_language.clone();
+                for span in hl_line.spans {
+                    self.push_span(span);
                 }
             }
         }

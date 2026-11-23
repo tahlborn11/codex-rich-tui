@@ -1062,6 +1062,27 @@ impl App {
             }
         }
         if let TuiEvent::Mouse(mouse) = &event
+            && mouse.kind == MouseEventKind::Moved
+            && self.conversation_focus_available(tui)
+            && let Some(painted) = self.conversation_frame.side_pane()
+        {
+            let size = tui.prepare_draw_size()?;
+            if let Some(current) = side_pane::layout(self, tui, size.into())
+                && current.passive_thread == painted.passive_thread
+                && painted.passive.union(painted.focused) == self.workspace_chat_area(size.into())
+            {
+                // Update both views before the Command Center can consume pointer movement.
+                if self
+                    .transcript_view
+                    .handle_mouse(*mouse, &self.transcript_cells)
+                    .is_some()
+                {
+                    tui.frame_requester().schedule_frame();
+                }
+                self.handle_passive_transcript_event(tui, current.passive_thread, &event);
+            }
+        }
+        if let TuiEvent::Mouse(mouse) = &event
             && self.handle_workspace_mouse(tui, *mouse)
         {
             return Ok(AppRunControl::Continue);
@@ -1222,20 +1243,6 @@ impl App {
         }
         if !composer_paste && Box::pin(self.handle_sidebar_input(tui, app_server, &event)).await {
             return Ok(AppRunControl::Continue);
-        }
-        if let TuiEvent::Mouse(mouse) = &event
-            && mouse.kind == MouseEventKind::Moved
-            && self.conversation_focus_available(tui)
-            && let Some(painted) = self.conversation_frame.side_pane()
-        {
-            let size = tui.prepare_draw_size()?;
-            if let Some(current) = side_pane::layout(self, tui, size.into())
-                && current.passive_thread == painted.passive_thread
-                && painted.passive.union(painted.focused) == Rect::from(size)
-            {
-                // Both views need the pointer update so leaving either control clears its hover.
-                self.handle_passive_transcript_event(tui, current.passive_thread, &event);
-            }
         }
         if let TuiEvent::Mouse(press) = &event
             && press.kind == MouseEventKind::Down(MouseButton::Left)

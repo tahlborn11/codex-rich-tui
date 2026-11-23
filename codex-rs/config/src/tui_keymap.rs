@@ -634,6 +634,7 @@ impl Clone for TuiKeymap {
             vim_text_object: self.vim_text_object.clone(),
             pager: self.pager.clone(),
             list: self.list.clone(),
+            outputs: self.outputs.clone(),
             agents: self.agents.clone(),
             approval: self.approval.clone(),
         }

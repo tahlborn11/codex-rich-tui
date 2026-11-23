@@ -26,6 +26,15 @@ fn mouse(kind: MouseEventKind, column: u16, row: u16) -> TuiEvent {
 
 #[tokio::test]
 async fn passive_code_control_copies_without_switching_focus() -> Result<()> {
+    check_passive_code_control(false).await
+}
+
+#[tokio::test]
+async fn passive_code_control_copies_beside_docked_command_center() -> Result<()> {
+    check_passive_code_control(true).await
+}
+
+async fn check_passive_code_control(docked_center: bool) -> Result<()> {
     let mut app = make_test_app().await;
     enable_side_retention(&mut app)?;
     app.local_settings.tui.animations = false;
@@ -38,7 +47,7 @@ async fn passive_code_control_copies_without_switching_focus() -> Result<()> {
         Path::new("/"),
     ))];
     app.side_threads.insert(child, SideThreadState::new(parent));
-    let mut companion = SideCompanion::empty(app.config.cwd.clone());
+    let mut companion = SideCompanion::empty(app.config.cwd.to_path_buf());
     companion.cells = vec![Arc::new(AgentMarkdownCell::new(
         "```rust\nlet passive = true;\n```".into(),
         Path::new("/"),
@@ -49,7 +58,10 @@ async fn passive_code_control_copies_without_switching_focus() -> Result<()> {
         .or_default()
         .show(SidebarContent::Chat(child), PaneFocus::Main);
 
-    let size = Size::new(/*width*/ 120, /*height*/ 20);
+    let size = Size::new(
+        /*width*/ if docked_center { 160 } else { 120 },
+        /*height*/ 20,
+    );
     let mut tui = crate::tui::test_support::make_test_tui()?;
     tui.terminal = crate::custom_terminal::Terminal::with_screen_size_and_cursor_position_for_test(
         ratatui::backend::CrosstermBackend::new(std::io::stdout()),
@@ -57,12 +69,19 @@ async fn passive_code_control_copies_without_switching_focus() -> Result<()> {
         ratatui::layout::Position::new(0, 0),
     );
     tui.set_owned_screen(/*owned*/ true)?;
+    if docked_center {
+        app.agents_overview.workspace.focus_center();
+        app.focus_workspace_composer(&mut tui);
+    }
     let mut app_server = crate::start_embedded_app_server_for_picker(&app.config).await?;
     side_frame(&mut app, &mut tui, size)?;
     let panes = app
         .conversation_frame
         .side_pane()
         .expect("side pane should be painted");
+    if docked_center {
+        assert_ne!(panes.passive.union(panes.focused), Rect::from(size));
+    }
     let buffer = tui.terminal.previous_buffer();
     let (column, row) = (panes.passive.top()..panes.passive.bottom())
         .flat_map(|row| {
@@ -89,6 +108,21 @@ async fn passive_code_control_copies_without_switching_focus() -> Result<()> {
             .contains(ratatui::style::Modifier::REVERSED)
     );
 
+    if docked_center {
+        app.handle_tui_event(
+            &mut tui,
+            &mut app_server,
+            mouse(MouseEventKind::Moved, 0, 0),
+        )
+        .await?;
+        side_frame(&mut app, &mut tui, size)?;
+        assert!(
+            !tui.terminal.previous_buffer()[(main_column, main_row)]
+                .modifier
+                .contains(ratatui::style::Modifier::REVERSED),
+            "entering Command Center must clear the focused control hover"
+        );
+    }
     app.handle_tui_event(
         &mut tui,
         &mut app_server,
@@ -177,6 +211,9 @@ async fn passive_code_control_copies_without_switching_focus() -> Result<()> {
         .conversation_frame
         .side_pane()
         .expect("side pane should be repainted");
+    if docked_center {
+        assert_ne!(panes.passive.union(panes.focused), Rect::from(size));
+    }
     let buffer = tui.terminal.previous_buffer();
     let (column, row) = (panes.passive.top()..panes.passive.bottom())
         .flat_map(|row| {

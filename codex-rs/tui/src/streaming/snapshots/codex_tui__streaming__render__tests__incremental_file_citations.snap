@@ -4,9 +4,7 @@ expression: rendered_cases.map(visible_lines)
 ---
 [
     [
-        Line::from_iter([
-            Span::from("Output").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
-        ]),
+        Line::from(Span::from("Output").fg(Color::Rgb(243, 139, 168)).bold().underlined()),
         Line::default(),
         Line::from_iter([
             Span::from("• ").fg(Color::Rgb(148, 226, 213)),
@@ -16,9 +14,7 @@ expression: rendered_cases.map(visible_lines)
         Line::from("Continue."),
     ],
     [
-        Line::from_iter([
-            Span::from("Output").fg(Color::Rgb(243, 139, 168)).bold().underlined(),
-        ]),
+        Line::from(Span::from("Output").fg(Color::Rgb(243, 139, 168)).bold().underlined()),
         Line::default(),
         Line::from_iter([
             Span::from("• ").fg(Color::Rgb(148, 226, 213)),

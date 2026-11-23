@@ -3,9 +3,9 @@ source: tui/src/app/sidebar_agent_status_tests.rs
 expression: "crate::chatwidget::tests::helpers::normalize_agent_center_snapshot(screen.replace(&child.to_string(),\n\"[agent id]\"))"
 ---
                                                                                                                        │ reviewer      ×                                         +
-  >_ OpenAI Codex (v0.0.0)                                                                                             │esc back to agents · Watch only
+  >_ OpenAI Codex (v0.171.0+rich)                                                                                      │esc back to agents · Watch only
      /tmp/project                                                                                                      │
-                                                                                                                       │  >_ OpenAI Codex (v0.0.0)
+                                                                                                                       │  >_ OpenAI Codex (v0.171.0+rich)
   To get started, describe a task or try one of these commands:                                                        │     /
                                                                                                                        │
   /init - create an AGENTS.md file with instructions for Codex                                                         │
